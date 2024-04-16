@@ -1,0 +1,19 @@
+.page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100vw;
+    height: 100vh;
+    background-color: black;
+    position: absolute;
+}
+
+.containerImage {
+    z-index: 3;
+}
+
+.image {
+    object-fit: cover;
+    border-radius: 50%;
+}
+ 
