@@ -9,13 +9,12 @@ import SagittarusA from '../components/SagittarusA';
 import Sun from '../components/Sun';
 import Planet from '../components/Planet';
 import Informations from '../components/Informations';
-import CursorFollower from '../components/CursorFollower';
+import CursorFollower from '../components/utils/CursorFollower';
 import Separateur from '../components/utils/Separateur';
 
 export default function HomePage() {
 
     let nOrb = 0;
-
 
     // Navigation
     const [navigation, setNavigation] = useState('')
@@ -34,8 +33,8 @@ export default function HomePage() {
     // Gestion des planètes
     const [planets, setPlanets] = useState([]);
     const [planetStates, setPlanetStates] = useState({
-        milkyWaySize: 600, sagittarusA: 0,
-        sunSize: 0, indexSun: 0,
+        milkyWaySize: 800, sagittarusA: 0,
+        sunSize: 16, indexSun: 2, sunOrbit: 210,
         mercuryOrbit: 0, mercurySize: 0.5,
         venusOrbit: 0, venusSize: 0.5,
         earthOrbit: 0, earthSize: 0.8,
@@ -51,12 +50,6 @@ export default function HomePage() {
     const [moons, setMoons] = useState([]);
     const [nbMoons, setNbMoons] = useState(4)
     const [selectedMoon, setSelectedMoon] = useState(null)
-
-
-    // Gestion des menus
-    const [menuPlanet, setMenuPlanet] = useState(false);
-    const [menuMoons, setMenuMoons] = useState(false);
-
 
     // Initialisation, récupération des planètes
     useEffect(() => {
@@ -83,8 +76,8 @@ export default function HomePage() {
 
     const focusMilkyWay = () => {
         setPlanetStates({
-            milkyWaySize: 600, sagittarusA: 0,
-            sunSize: 0, indexSun: 0,
+            milkyWaySize: 800, sagittarusA: 0,
+            sunSize: 16, indexSun: 2, sunOrbit: 210,
             mercuryOrbit: 0, mercurySize: 0.5,
             venusOrbit: 0, venusSize: 0.5,
             earthOrbit: 0, earthSize: 0.8,
@@ -97,13 +90,19 @@ export default function HomePage() {
         });
 
         setNavigation('MilkyWay')
+        // Stackage de la planète et moon selectionnée 
+        setSelectedPlanet(null)
+        setSelectedMoon(null)
+        setFocus(false)
+        setFocusOneMoon(false)
+
 
     }
 
     const focusSagittarusA = () => {
         setPlanetStates({
             milkyWaySize: 0, sagittarusA: 800,
-            sunSize: 0, indexSun: 0,
+            sunSize: 0, indexSun: 0, sunOrbit: 0,
             mercuryOrbit: 0, mercurySize: 0.5,
             venusOrbit: 0, venusSize: 0.5,
             earthOrbit: 0, earthSize: 0.8,
@@ -119,7 +118,7 @@ export default function HomePage() {
     const focusSolarSytem = () => {
         setPlanetStates({
             milkyWaySize: 0, sagittarusA: 0,
-            sunSize: 120, indexSun: 2,
+            sunSize: 120, indexSun: 100, sunOrbit: 0,
             mercuryOrbit: 160, mercurySize: 0.5,
             venusOrbit: 240, venusSize: 0.5,
             earthOrbit: 320, earthSize: 0.8,
@@ -148,10 +147,12 @@ export default function HomePage() {
 
     const focusPlanet = async (planetName) => {
 
+        console.log(planetName)
+        
         // Modification des orbites et tailles pour focus sur la planète dans le systeme solaire
         setPlanetStates({
             milkyWaySize: 0, sagittarusA: 0,
-            sunSize: 200, indexSun: 0,
+            sunSize: 250, indexSun: 100, sunOrbit: 0,
             mercuryOrbit: planetName === 'mercure' ? 600 : 0, mercurySize: planetName === 'mercure' ? 2 : 0.5,
             venusOrbit: planetName === 'venus' ? 600 : 0, venusSize: planetName === 'venus' ? 2 : 0.5,
             earthOrbit: planetName === 'terre' ? 600 : 0, earthSize: planetName === 'terre' ? 2 : 0.8,
@@ -185,7 +186,7 @@ export default function HomePage() {
 
         setPlanetStates({
             milkyWaySize: 0, sagittarusA: 0,
-            sunSize: 0, indexSun: 0,
+            sunSize: 0, indexSun: 0, sunOrbit: 0,
             mercuryOrbit: planetName === 'mercure' ? 1 : 0, mercurySize: planetName === 'mercure' ? 15 : 0,
             venusOrbit: planetName === 'venus' ? 1 : 0, venusSize: planetName === 'venus' ? 15 : 0,
             earthOrbit: planetName === 'terre' ? 1 : 0, earthSize: planetName === 'terre' ? 15 : 0,
@@ -211,7 +212,7 @@ export default function HomePage() {
 
         setPlanetStates({
             milkyWaySize: 0, sagittarusA: 0,
-            sunSize: 0, indexSun: 0,
+            sunSize: 0, indexSun: 0, sunOrbit: 0,
             mercuryOrbit: planetName === 'mercure' ? 1 : 0, mercurySize: planetName === 'mercure' ? 10 : 0,
             venusOrbit: planetName === 'venus' ? 1 : 0, venusSize: planetName === 'venus' ? 10 : 0,
             earthOrbit: planetName === 'terre' ? 1 : 0, earthSize: planetName === 'terre' ? 10 : 0,
@@ -238,7 +239,7 @@ export default function HomePage() {
 
         setPlanetStates({
             milkyWaySize: 0, sagittarusA: 0,
-            sunSize: 0, indexSun: 0,
+            sunSize: 0, indexSun: 0, sunOrbit: 0,
             mercuryOrbit: 0, mercurySize: 0,
             venusOrbit: 0, venusSize: 0,
             earthOrbit: 1, earthSize: 0,
@@ -273,15 +274,17 @@ export default function HomePage() {
         return (
 
             <Planet
+                style={{ cursor: 'pointer', position: 'relative', zIndex: '12' }}
                 key={index}
                 name={item.id}
                 orbitSize={planetStates[`${item.englishName.toLowerCase()}Orbit`]}
                 nOrb={nOrb}
                 planetSize={planetStates[`${item.englishName.toLowerCase()}Size`]}
-                vitesse={(item.sideralOrbit / 10)}
+                vitesse={(item.sideralOrbit)}
                 moonSelected={selectedMoon}
                 nbMoons={nbMoons}
                 focus={focusOneMoon}
+                focusPlanet={focusPlanet}
             />
 
         )
@@ -297,7 +300,8 @@ export default function HomePage() {
                 color: isActive ? 'black' : '',
             }}
                 className={styles.secondaryButton}
-                onClick={() => focusPlanet(item.id)} >
+                onClick={() => focusPlanet(item.id)}
+            >
                 {item.englishName}
             </div>
         )
@@ -315,7 +319,7 @@ export default function HomePage() {
                 }}
                 className={styles.secondaryButton}
                 onClick={() => focusMoon(selectedPlanet, item.id)}>
-                {item.name}
+                {item.englishName}
             </div>
         )
     });
@@ -329,12 +333,15 @@ export default function HomePage() {
                         {'Galaxy'}
                     </div>
                     <Separateur />
-                    <div className={styles.button} onClick={() => focusSolarSytem()}>
+                    <div className={styles.button}
+                        onClick={() => focusSolarSytem()}
+                        onMouseEnter={() => infoObjet('soleil')}
+                        onMouseLeave={() => infoObjet('')}>
                         {'Sun'}
                     </div>
 
 
-                    {navigation === 'SolarSystem' &&
+                    {navigation == 'SolarSystem' &&
                         <>
                             <Separateur />
                             <div className={styles.button}>
@@ -367,14 +374,21 @@ export default function HomePage() {
                     <div className={styles.menuTitle}>
                         {'Moons'}
                     </div>
-                    {buttonsMoons}
+                    <div style={{ overflow: 'auto' }}>
+                        {buttonsMoons}
+                    </div>
+
                 </div>}
 
-
                 <div className={styles.container} >
+
                     <MilkyWay size={planetStates.milkyWaySize} />
-                    <Sun sunSize={planetStates.sunSize} indexSun={planetStates.indexSun} />
+
                     {planetsFetch}
+
+                    <div onClick={() => focusSolarSytem()} style={{ cursor: 'pointer', position: 'fixed', zIndex: '10' }}>
+                        <Sun sunSize={planetStates.sunSize} indexSun={planetStates.indexSun} orbit={planetStates.sunOrbit} />
+                    </div>
                 </div>
 
                 {infos && <div className={styles.rightContainer}>

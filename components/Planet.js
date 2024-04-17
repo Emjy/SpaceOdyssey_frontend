@@ -67,21 +67,24 @@ export default function Planet(props) {
     });
 
     return (
-        <div style={{
-            width: `${props.orbitSize}px`,
-            height: `${props.orbitSize}px`,
-            borderTop: 'solid rgba(255, 255, 255, 0.2) 1px',
-            boxSizing: 'border-box',
-            borderRadius: '50%',
-            position: 'absolute',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            animation: `orbit${props.nOrb} ${props.vitesse}s linear infinite`,
-            transition: `width 0.2s ease-in, height 0.2s ease-in, opacity 0.2s ease-out`,
-            opacity: props.orbitSize,
-
-        }}>
+        <div
+            style={{
+                width: `${props.orbitSize}px`,
+                height: `${props.orbitSize}px`,
+                borderTop: 'solid rgba(255, 255, 255, 0.2) 1px',
+                boxSizing: 'border-box',
+                borderRadius: '50%',
+                position: 'absolute',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                animation: `orbit${props.nOrb} ${props.vitesse}s linear infinite`,
+                transition: `width 0.2s ease-in, height 0.2s ease-in, opacity 0.2s ease-out`,
+                opacity: props.orbitSize,
+                cursor:'pointer', 
+            }}
+            onClick={() => props.focusPlanet(props.name)}
+        >
             <div style={{
                 transform: `translate(-50%, -50%) translateX(${props.orbitSize / 2}px)`,
                 borderRadius: '50%',
@@ -92,18 +95,23 @@ export default function Planet(props) {
                 top: '50%',
                 transition: `transform 2s ease-in, width 2s ease-in, height 2s ease-in`,
 
+
+
             }}>
+
                 <img src={`planets/${props.name}.png`}
                     style={{
                         width: '100%',
                         height: '100%',
                         objectFit: 'cover',
-                        zIndex: '0',
+                        zIndex: '1',
+                    }}
+                />
 
-                    }} />
 
                 {selectedMoons}
 
             </div>
-        </div >)
+        </div >
+    )
 }

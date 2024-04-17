@@ -7,7 +7,6 @@ export default function Moon(props) {
 
     useEffect(() => {
         setImageError(false)
-
     }, [props])
 
     return (
@@ -15,7 +14,7 @@ export default function Moon(props) {
             {props.focus === false ?
                 <>
                     <div style={{
-                        borderTop: 'solid rgba(255, 255, 255, 0.2) 1px',
+                        borderTop: `solid rgba(255, 255, 255, ${props.moonSize < 0.4 ? 0.08 : 0.2}) 1px`,
                         boxSizing: 'border-box',
                         borderRadius: '50%',
                         position: 'absolute',
