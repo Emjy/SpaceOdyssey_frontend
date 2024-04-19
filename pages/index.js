@@ -1,4 +1,5 @@
-import HomePage from "./HomePage";
+import HomePage from '../page/homePage';
+
 function Index() {
   return <HomePage />;
 }
