@@ -33,8 +33,10 @@ export default function Sun(props) {
                 alignItems: 'center',
                 animation: `orbit4 500s linear infinite`,
                 transition: `width 2s ease-in, height 2s ease-in, opacity 2s ease-out`,
-                zIndex: props.indexSun
-            }}>
+                zIndex: props.indexSun,
+                cursor: 'pointer'
+            }}
+        >
 
             <div
                 className={styles.sunStyle}
@@ -48,7 +50,10 @@ export default function Sun(props) {
                     top: '50%',
                     transition: `transform 2s ease-in, width 2s ease-in, height 2s ease-in`,
 
-                }}>
+                }}
+
+                onClick={() => props.focusSolarSystem()}
+            >
                 <video
                     src="sun.mp4"
                     className={styles.video}

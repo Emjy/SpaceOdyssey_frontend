@@ -24,9 +24,6 @@ export default function Informations(props) {
         setContentWidth(contentRef.current.clientWidth);
     }, [props.infos]);
 
-
-    console.log(contentWidth, contentHeight)
-
     return (
         <div
             className={styles.container}
@@ -35,7 +32,7 @@ export default function Informations(props) {
                 flexDirection: 'column',
                 alignItems: 'flex-start',
                 width: `300px`,
-                height: `${contentHeight + 32}px`,
+                height: `${contentHeight + 35}px`,
                 opacity: `${contentHeight}`,
                 color: 'rgba(255,255,255, 0.5)',
                 borderRadius: '32px',
@@ -48,6 +45,8 @@ export default function Informations(props) {
                 <div className={styles.title}>
                     {props.infos.englishName + ' - ' + props.infos.bodyType}
                 </div>
+
+                <div className={styles.content}>
 
                 {props.infos.mass &&
                     <div className={styles.element}>
@@ -68,7 +67,7 @@ export default function Informations(props) {
                 {props.infos.gravity > 0 &&
                     <div className={styles.element}>
                         <div className={styles.icon}>
-                            <PlayForWorkRoundedIcon />
+                                <PlayForWorkRoundedIcon />
                         </div>
                         {props.infos.gravity + ' m.s-2'}
                     </div>
@@ -99,7 +98,9 @@ export default function Informations(props) {
                         </div>
                         {(props.infos.sideralOrbit / 365.242190).toFixed(2) + ' an(s)'}
                     </div>
-                }
+                    }
+                </div>
+
             </div>
 
         </div>

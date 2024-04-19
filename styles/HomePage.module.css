@@ -19,52 +19,38 @@
     align-items: center;
 }
 
-.menuTitle {
-    color: white;
-    padding: 8px;
-}
-
-.buttons {
+.menu {
     display: flex;
-    align-items: center;
     position: absolute;
     top: 2em;
     left: 2em;
+    gap: 1em;
+    z-index: 100;
+}
+
+.menuTitle {
+    text-align: center;
+    color: white;
+    padding: 8px;
+    cursor: pointer;
+}
+
+.buttons {
     background-color: rgba(255, 255, 255, 0.08);
     padding: 8px;
     border-radius: 32px;
-    z-index: 5;
+    z-index: 100;
 }
 
 .secondaryButtons {
-    display: flex;
-    align-items: center;
-    flex-direction: column;
-    position: absolute;
-    top: 8em;
-    left: 2em;
     padding: 8px;
+    width: 10em;
     border-radius: 24px;
-    z-index: 5;
     background: rgba(236, 243, 233, 0.08);
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
-}
-
-.tertiaryButtons {
-    display: flex;
-    width: auto;
-    align-items: center;
-    flex-direction: column;
-    position: absolute;
-    top: 8em;
-    left: 10em;
-    padding: 8px;
-    border-radius: 24px;
-    z-index: 10;
-    background: rgba(236, 243, 233, 0.08);
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
+    z-index: 100;
+    transition: max-height 0.3s ease, height 0.3s ease;
 }
 
 
@@ -76,7 +62,7 @@
     padding: 8px;
     border-radius: 16px;
     font-size: 16px;
-    z-index: 4;
+    z-index: 101;
     width: auto;
     /* Réglez la largeur sur auto ou une valeur appropriée */
 }
@@ -84,7 +70,6 @@
 .secondaryButton {
     display: flex;
     justify-content: center;
-    gap: 100px;
     padding: 8px;
     border-radius: 16px;
     font-size: 16px;
@@ -92,6 +77,32 @@
     bottom: 2em;
     width: 100%;
     /* Réglez la largeur sur auto ou une valeur appropriée */
+    cursor: pointer;
+    animation: slideDown 0.8s ease-out forwards;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateX(-30px);
+        transform: translateY(-30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+        transform: translateY(0);
+    }
+}
+
+@keyframes openWindow {
+    from {
+        transform: height(0px);
+    }
+
+    to {
+        transform: height(346px);
+    }
 }
 
 .focusButton {
@@ -105,7 +116,19 @@
     z-index: 5;
 }
 
-.button:hover,
+.secondaryButton :hover {
+    background-color: lightgrey;
+    color: black;
+}
+
+.secondaryButtons :hover>:not(:hover) {
+    background-color: none;
+    color: none;
+    opacity: 0.5;
+    cursor: 'pointer';
+}
+
+/* .button:hover,
 .secondaryButton:hover {
     display: flex;
     background: lightgrey;
@@ -114,6 +137,7 @@
     cursor: pointer;
 }
 
+*/
 
 .rightContainer {
     display: flex;
@@ -121,5 +145,5 @@
     flex-direction: column;
     position: absolute;
     right: 2em;
-    top: 8em;
+    top: 2em;
 }

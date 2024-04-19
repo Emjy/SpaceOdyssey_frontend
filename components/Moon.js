@@ -24,7 +24,7 @@ export default function Moon(props) {
                         top: `calc(50% - ${props.moonOrbit / 2}px)`,
                         animation: `orbit${props.nOrb} ${props.vitesseMoon}s linear infinite`,
                         transition: `width 2s ease-in, height 2s ease-in, opacity 2s ease-out`,
-
+                        zIndex: `${20 - props.nOrb}`,
                     }}>
                         <div style={{
                             borderRadius: '50%',
@@ -35,6 +35,9 @@ export default function Moon(props) {
                             top: '50%',
                             transform: `translate(-50%, -50%) translateX(${props.moonOrbit * 0.5}px)`,
                             transition: `width 2s ease-in, height 2s ease-in, opacity 2s ease-out`,
+                            zIndex: `${20 - props.nOrb}`,
+                            cursor: 'pointer',
+
                         }}>
 
                             <img
@@ -43,7 +46,6 @@ export default function Moon(props) {
                                     width: '100%',
                                     height: '100%',
                                     objectFit: 'cover',
-                                    zIndex: '0',
                                     transition: `width 2s ease-in, height 2s ease-in, opacity 2s ease-out`,
                                     opacity: imageError ? 0.2 : 1
 

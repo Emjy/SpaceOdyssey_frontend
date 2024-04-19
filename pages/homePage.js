@@ -3,6 +3,9 @@ import React, { useState, useEffect, useRef } from 'react';
 //Style 
 import styles from '../styles/HomePage.module.css';
 
+// Fonctions
+import { infoObjet } from '../functions/utils';
+
 // composants 
 import MilkyWay from '../components/MilkyWay';
 import SagittarusA from '../components/SagittarusA';
@@ -16,15 +19,17 @@ export default function HomePage() {
 
     let nOrb = 0;
 
-    // Navigation
-    const [navigation, setNavigation] = useState('')
+    // Gestion menu
+    const [planetMenu, setPlanetMenu] = useState(false)
+    const [moonMenu, setMoonMenu] = useState(false)
 
     // Adaptation de la taille des fenetres 
     const secondaryButtonsRef = useRef(null);
     const [secondaryButtonsHeight, setSecondaryButtonsHeight] = useState(0)
 
     // Focus sur les objets
-    const [focus, setFocus] = useState(false);
+    const [focusSolarSystem, setFocusSolarSystem] = useState(true);
+    const [focusOnPlanet, setFocusOnPlanet] = useState(false);
     const [focusOneMoon, setFocusOneMoon] = useState(true);
 
     // Sctokage des informations
@@ -34,15 +39,15 @@ export default function HomePage() {
     const [planets, setPlanets] = useState([]);
     const [planetStates, setPlanetStates] = useState({
         milkyWaySize: 800, sagittarusA: 0,
-        sunSize: 16, indexSun: 2, sunOrbit: 210,
-        mercuryOrbit: 0, mercurySize: 0.5,
-        venusOrbit: 0, venusSize: 0.5,
-        earthOrbit: 0, earthSize: 0.8,
-        marsOrbit: 0, marsSize: 0.8,
-        jupiterOrbit: 0, jupiterSize: 3,
-        saturnOrbit: 0, saturnSize: 2,
-        uranusOrbit: 0, uranusSize: 2,
-        neptuneOrbit: 0, neptuneSize: 2
+        sunSize: 16, indexSun: 10, sunOrbit: 210,
+        mercuryOrbit: 0, mercurySize: 0.5, mercuryIndex: 9,
+        venusOrbit: 0, venusSize: 0.5, venusIndex: 8,
+        earthOrbit: 0, earthSize: 0.8, earthIndex: 7,
+        marsOrbit: 0, marsSize: 0.8, marsIndex: 6,
+        jupiterOrbit: 0, jupiterSize: 3, jupiterIndex: 5,
+        saturnOrbit: 0, saturnSize: 2, saturnIndex: 4,
+        uranusOrbit: 0, uranusSize: 2, uranusIndex: 3,
+        neptuneOrbit: 0, neptuneSize: 2, neptuneIndex: 2,
     });
     const [selectedPlanet, setSelectedPlanet] = useState(null)
 
@@ -53,7 +58,7 @@ export default function HomePage() {
 
     // Initialisation, récupération des planètes
     useEffect(() => {
-        fetch(`http://localhost:3000/bodies/planets`)
+        fetch(`https://space-odyssey-backend.vercel.app/bodies/planets`)
             .then((response) => response.json())
             .then((data) => {
                 if (data.result) {
@@ -62,40 +67,28 @@ export default function HomePage() {
             });
     }, []);
 
-
-    const fetchMoons = async (planetId) => {
-
-        fetch(`http://localhost:3000/bodies/moons/${planetId}`)
-            .then((response) => response.json())
-            .then((data) => {
-                if (data.result) {
-                    setMoons(data.moons)
-                }
-            });
-    };
+    console.log(secondaryButtonsHeight)
 
     const focusMilkyWay = () => {
+
         setPlanetStates({
             milkyWaySize: 800, sagittarusA: 0,
-            sunSize: 16, indexSun: 2, sunOrbit: 210,
-            mercuryOrbit: 0, mercurySize: 0.5,
-            venusOrbit: 0, venusSize: 0.5,
-            earthOrbit: 0, earthSize: 0.8,
-            marsOrbit: 0, marsSize: 0.8,
-            jupiterOrbit: 0, jupiterSize: 1.9,
-            saturnOrbit: 0, saturnSize: 1.9,
-            uranusOrbit: 0, uranusSize: 1.9,
-            neptuneOrbit: 0, neptuneSize: 1.9
+            sunSize: 16, indexSun: 10, sunOrbit: 210,
+            mercuryOrbit: 0, mercurySize: 0.5, mercuryIndex: 0,
+            venusOrbit: 0, venusSize: 0.5, venusIndex: 0,
+            earthOrbit: 0, earthSize: 0.8, earthIndex: 0,
+            marsOrbit: 0, marsSize: 0.8, marsIndex: 0,
+            jupiterOrbit: 0, jupiterSize: 1.9, jupiterIndex: 0,
+            saturnOrbit: 0, saturnSize: 1.9, saturnIndexIndex: 0,
+            uranusOrbit: 0, uranusSize: 1.9, uranusIndex: 0,
+            neptuneOrbit: 0, neptuneSize: 1.9, neptuneIndex: 0,
 
         });
 
-        setNavigation('MilkyWay')
         // Stackage de la planète et moon selectionnée 
-        setSelectedPlanet(null)
         setSelectedMoon(null)
-        setFocus(false)
+        setFocusOnPlanet(false)
         setFocusOneMoon(false)
-
 
     }
 
@@ -115,71 +108,77 @@ export default function HomePage() {
         });
     }
 
-    const focusSolarSytem = () => {
+    const focusOnSolarSystem = () => {
+
         setPlanetStates({
             milkyWaySize: 0, sagittarusA: 0,
-            sunSize: 120, indexSun: 100, sunOrbit: 0,
-            mercuryOrbit: 160, mercurySize: 0.5,
-            venusOrbit: 240, venusSize: 0.5,
-            earthOrbit: 320, earthSize: 0.8,
-            marsOrbit: 400, marsSize: 0.8,
-            jupiterOrbit: 560, jupiterSize: 1.9,
-            saturnOrbit: 680, saturnSize: 1.9,
-            uranusOrbit: 800, uranusSize: 1.9,
-            neptuneOrbit: 920, neptuneSize: 1.9
+            sunSize: 120, indexSun: 10, sunOrbit: 0,
+            mercuryOrbit: 160, mercurySize: 0.5, mercuryIndex: 9,
+            venusOrbit: 240, venusSize: 0.5, venusIndex: 8,
+            earthOrbit: 320, earthSize: 0.8, earthIndex: 7,
+            marsOrbit: 400, marsSize: 0.8, marsIndex: 6,
+            jupiterOrbit: 560, jupiterSize: 1.9, jupiterIndex: 5,
+            saturnOrbit: 680, saturnSize: 1.9, saturnIndex: 4,
+            uranusOrbit: 800, uranusSize: 1.9, uranusIndex: 3,
+            neptuneOrbit: 920, neptuneSize: 1.9, neptuneIndex: 2,
 
         });
 
+        setFocusSolarSystem(!focusSolarSystem)
+        // Permet le focus sur la planète
+        if (!focusSolarSystem && !focusOnPlanet && !focusOneMoon) {
+            setInfos(null)
+            focusMilkyWay()
+        } else {
+            // Récupération des informations
+            infoObjet('soleil', setInfos)
+        }
 
-        setFocus(false)
+        setFocusOnPlanet(false)
         setFocusOneMoon(false)
         setMoons([])
         setNbMoons(4)
-        setSelectedPlanet(null)
         setSelectedMoon(null)
 
-        // Récupération des informations
-        infoObjet('soleil')
-
-        setNavigation('SolarSystem')
 
     }
 
     const focusPlanet = async (planetName) => {
 
-        console.log(planetName)
-        
         // Modification des orbites et tailles pour focus sur la planète dans le systeme solaire
         setPlanetStates({
             milkyWaySize: 0, sagittarusA: 0,
-            sunSize: 250, indexSun: 100, sunOrbit: 0,
-            mercuryOrbit: planetName === 'mercure' ? 600 : 0, mercurySize: planetName === 'mercure' ? 2 : 0.5,
-            venusOrbit: planetName === 'venus' ? 600 : 0, venusSize: planetName === 'venus' ? 2 : 0.5,
-            earthOrbit: planetName === 'terre' ? 600 : 0, earthSize: planetName === 'terre' ? 2 : 0.8,
-            marsOrbit: planetName === 'mars' ? 600 : 0, marsSize: planetName === 'mars' ? 2 : 0.8,
-            jupiterOrbit: planetName === 'jupiter' ? 700 : 0, jupiterSize: planetName === 'jupiter' ? 4 : 1.9,
-            saturnOrbit: planetName === 'saturne' ? 700 : 0, saturnSize: planetName === 'saturne' ? 4 : 1.9,
-            uranusOrbit: planetName === 'uranus' ? 700 : 0, uranusSize: planetName === 'uranus' ? 4 : 1.9,
-            neptuneOrbit: planetName === 'neptune' ? 700 : 0, neptuneSize: planetName === 'neptune' ? 4 : 1.9
+            sunSize: 250, indexSun: 11, sunOrbit: 0,
+            mercuryOrbit: planetName === 'mercure' ? 600 : 0, mercurySize: planetName === 'mercure' ? 2 : 0, mercuryIndex: planetName === 'mercure' ? 10 : 0,
+            venusOrbit: planetName === 'venus' ? 600 : 0, venusSize: planetName === 'venus' ? 2 : 0, venusIndex: planetName === 'venus' ? 10 : 0,
+            earthOrbit: planetName === 'terre' ? 600 : 0, earthSize: planetName === 'terre' ? 2 : 0, earthIndex: planetName === 'terre' ? 10 : 0,
+            marsOrbit: planetName === 'mars' ? 600 : 0, marsSize: planetName === 'mars' ? 2 : 0, marsIndex: planetName === 'mars' ? 10 : 0,
+            jupiterOrbit: planetName === 'jupiter' ? 700 : 0, jupiterSize: planetName === 'jupiter' ? 4 : 0, jupiterIndex: planetName === 'jupiter' ? 10 : 0,
+            saturnOrbit: planetName === 'saturne' ? 700 : 0, saturnSize: planetName === 'saturne' ? 4 : 0, saturnIndex: planetName === 'saturne' ? 10 : 0,
+            uranusOrbit: planetName === 'uranus' ? 700 : 0, uranusSize: planetName === 'uranus' ? 4 : 0, uranusIndex: planetName === 'uranus' ? 10 : 0,
+            neptuneOrbit: planetName === 'neptune' ? 700 : 0, neptuneSize: planetName === 'neptune' ? 4 : 0, neptuneIndex: planetName === 'neptune' ? 10 : 0,
         });
 
         // Récupération des lunes de la planète
-        await fetchMoons(planetName);
+        await fetch(`https://space-odyssey-backend.vercel.app/bodies/moons/${planetName}`)
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.result) {
+                    setMoons(data.moons)
+                }
+            });
 
         // Nombre de lunes affichées 
         setNbMoons(5);
 
-        // Stackage de la planète et moon selectionnée 
-        setSelectedPlanet(planetName)
         setSelectedMoon(null)
 
-        setFocus(true)
         setFocusOneMoon(false)
+
         setSecondaryButtonsHeight(secondaryButtonsRef.current.offsetHeight)
 
-        infoObjet(planetName)
+        infoObjet(planetName, setInfos)
 
-        setNavigation('Planet')
     }
 
     const focusMoon = (planetName, moonName) => {
@@ -187,14 +186,14 @@ export default function HomePage() {
         setPlanetStates({
             milkyWaySize: 0, sagittarusA: 0,
             sunSize: 0, indexSun: 0, sunOrbit: 0,
-            mercuryOrbit: planetName === 'mercure' ? 1 : 0, mercurySize: planetName === 'mercure' ? 15 : 0,
-            venusOrbit: planetName === 'venus' ? 1 : 0, venusSize: planetName === 'venus' ? 15 : 0,
-            earthOrbit: planetName === 'terre' ? 1 : 0, earthSize: planetName === 'terre' ? 15 : 0,
-            marsOrbit: planetName === 'mars' ? 1 : 0, marsSize: planetName === 'mars' ? 15 : 0,
-            jupiterOrbit: planetName === 'jupiter' ? 1 : 0, jupiterSize: planetName === 'jupiter' ? 15 : 0,
-            saturnOrbit: planetName === 'saturne' ? 1 : 0, saturnSize: planetName === 'saturne' ? 15 : 0,
-            uranusOrbit: planetName === 'uranus' ? 1 : 0, uranusSize: planetName === 'uranus' ? 15 : 0,
-            neptuneOrbit: planetName === 'neptune' ? 1 : 0, neptuneSize: planetName === 'neptune' ? 15 : 0
+            mercuryOrbit: planetName === 'mercure' ? 1 : 0, mercurySize: planetName === 'mercure' ? 15 : 0, mercuryIndex: planetName === 'mercure' ? 10 : 0,
+            venusOrbit: planetName === 'venus' ? 1 : 0, venusSize: planetName === 'venus' ? 15 : 0, venusIndex: planetName === 'venus' ? 10 : 0,
+            earthOrbit: planetName === 'terre' ? 1 : 0, earthSize: planetName === 'terre' ? 15 : 0, earthIndex: planetName === 'terre' ? 10 : 0,
+            marsOrbit: planetName === 'mars' ? 1 : 0, marsSize: planetName === 'mars' ? 15 : 0, marsIndex: planetName === 'mars' ? 10 : 0,
+            jupiterOrbit: planetName === 'jupiter' ? 1 : 0, jupiterSize: planetName === 'jupiter' ? 15 : 0, jupiterIndex: planetName === 'jupiter' ? 10 : 0,
+            saturnOrbit: planetName === 'saturne' ? 1 : 0, saturnSize: planetName === 'saturne' ? 15 : 0, saturnIndex: planetName === 'saturne' ? 10 : 0,
+            uranusOrbit: planetName === 'uranus' ? 1 : 0, uranusSize: planetName === 'uranus' ? 15 : 0, uranusIndex: planetName === 'uranus' ? 10 : 0,
+            neptuneOrbit: planetName === 'neptune' ? 1 : 0, neptuneSize: planetName === 'neptune' ? 15 : 0, neptuneIndex: planetName === 'neptune' ? 10 : 0
         });
 
         setFocusOneMoon(false)
@@ -202,33 +201,43 @@ export default function HomePage() {
         setSelectedMoon(moonName)
 
         // Recupération des infos 
-        infoObjet(moonName)
-
-        setNavigation('Moon')
+        infoObjet(moonName, setInfos)
 
     }
 
-    const zoomPlanet = (planetName) => {
+    const zoomPlanet = async (planetName) => {
+
+        setSelectedPlanet(planetName)
 
         setPlanetStates({
             milkyWaySize: 0, sagittarusA: 0,
             sunSize: 0, indexSun: 0, sunOrbit: 0,
-            mercuryOrbit: planetName === 'mercure' ? 1 : 0, mercurySize: planetName === 'mercure' ? 10 : 0,
-            venusOrbit: planetName === 'venus' ? 1 : 0, venusSize: planetName === 'venus' ? 10 : 0,
-            earthOrbit: planetName === 'terre' ? 1 : 0, earthSize: planetName === 'terre' ? 10 : 0,
-            marsOrbit: planetName === 'mars' ? 1 : 0, marsSize: planetName === 'mars' ? 10 : 0,
-            jupiterOrbit: planetName === 'jupiter' ? 1 : 0, jupiterSize: planetName === 'jupiter' ? 10 : 0,
-            saturnOrbit: planetName === 'saturne' ? 1 : 0, saturnSize: planetName === 'saturne' ? 10 : 0,
-            uranusOrbit: planetName === 'uranus' ? 1 : 0, uranusSize: planetName === 'uranus' ? 10 : 0,
-            neptuneOrbit: planetName === 'neptune' ? 1 : 0, neptuneSize: planetName === 'neptune' ? 10 : 0
+            mercuryOrbit: planetName === 'mercure' ? 1 : 0, mercurySize: planetName === 'mercure' ? 10 : 0, mercuryIndex: planetName === 'mercure' ? 10 : 0,
+            venusOrbit: planetName === 'venus' ? 1 : 0, venusSize: planetName === 'venus' ? 10 : 0, venusIndex: planetName === 'venus' ? 10 : 0,
+            earthOrbit: planetName === 'terre' ? 1 : 0, earthSize: planetName === 'terre' ? 10 : 0, earthIndex: planetName === 'terre' ? 10 : 0,
+            marsOrbit: planetName === 'mars' ? 1 : 0, marsSize: planetName === 'mars' ? 10 : 0, marsIndex: planetName === 'mars' ? 10 : 0,
+            jupiterOrbit: planetName === 'jupiter' ? 1 : 0, jupiterSize: planetName === 'jupiter' ? 10 : 0, jupiterIndex: planetName === 'jupiter' ? 10 : 0,
+            saturnOrbit: planetName === 'saturne' ? 1 : 0, saturnSize: planetName === 'saturne' ? 10 : 0, saturnIndex: planetName === 'saturne' ? 10 : 0,
+            uranusOrbit: planetName === 'uranus' ? 1 : 0, uranusSize: planetName === 'uranus' ? 10 : 0, uranusIndex: planetName === 'uranus' ? 10 : 0,
+            neptuneOrbit: planetName === 'neptune' ? 1 : 0, neptuneSize: planetName === 'neptune' ? 10 : 0, neptuneIndex: planetName === 'neptune' ? 10 : 0
         });
 
-        setFocus(!focus)
-        // Pour unfocus, obligé de refecth la planète 
-        if (!focus) {
+        // Récupération des lunes de la planète
+        await fetch(`https://space-odyssey-backend.vercel.app/bodies/moons/${planetName}`)
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.result) {
+                    setMoons(data.moons)
+                }
+            });
+
+        // Permet le focus sur la planète
+        if (!focusOnPlanet) {
+            setFocusOnPlanet(true)
             focusPlanet(planetName)
         }
 
+        setFocusOnPlanet(!focusOnPlanet)
         setNbMoons(8)
         setFocusOneMoon(false)
         setSelectedMoon(null)
@@ -242,7 +251,7 @@ export default function HomePage() {
             sunSize: 0, indexSun: 0, sunOrbit: 0,
             mercuryOrbit: 0, mercurySize: 0,
             venusOrbit: 0, venusSize: 0,
-            earthOrbit: 1, earthSize: 0,
+            earthOrbit: 0, earthSize: 0,
             marsOrbit: 0, marsSize: 0,
             jupiterOrbit: 0, jupiterSize: 0,
             saturnOrbit: 0, saturnSize: 0,
@@ -256,18 +265,6 @@ export default function HomePage() {
 
     }
 
-    const infoObjet = (objectName) => {
-
-        fetch(`http://localhost:3000/bodies/body/${objectName}`)
-            .then((response) => response.json())
-            .then((data) => {
-                if (data.result) {
-                    setInfos(data.body)
-                }
-            });
-
-    }
-
     const planetsFetch = planets.map((item, index) => {
         nOrb += 1;
 
@@ -278,13 +275,14 @@ export default function HomePage() {
                 key={index}
                 name={item.id}
                 orbitSize={planetStates[`${item.englishName.toLowerCase()}Orbit`]}
+                index={planetStates[`${item.englishName.toLowerCase()}Index`]}
                 nOrb={nOrb}
                 planetSize={planetStates[`${item.englishName.toLowerCase()}Size`]}
                 vitesse={(item.sideralOrbit)}
                 moonSelected={selectedMoon}
                 nbMoons={nbMoons}
                 focus={focusOneMoon}
-                focusPlanet={focusPlanet}
+                zoomPlanet={zoomPlanet}
             />
 
         )
@@ -295,12 +293,16 @@ export default function HomePage() {
         const isActive = selectedPlanet === item.id;
 
         return (
-            <div key={item.id} style={{
-                backgroundColor: isActive ? 'lightgrey' : '',
-                color: isActive ? 'black' : '',
-            }}
+            <div key={item.id}
+                style={{
+                    backgroundColor: isActive ? 'rgba(236, 243, 233, 0.08)' : '',
+                    color: isActive ? 'white' : ''
+                }}
                 className={styles.secondaryButton}
-                onClick={() => focusPlanet(item.id)}
+                onClick={() => {
+                    setFocusOnPlanet(true)
+                    zoomPlanet(item.id)
+                }}
             >
                 {item.englishName}
             </div>
@@ -314,11 +316,15 @@ export default function HomePage() {
         return (
             <div key={item.id}
                 style={{
-                    backgroundColor: isActive ? 'lightgrey' : '',
-                    color: isActive ? 'black' : ''
+                    backgroundColor: isActive ? 'rgba(236, 243, 233, 0.08)' : '',
+                    color: isActive ? 'white' : ''
                 }}
                 className={styles.secondaryButton}
-                onClick={() => focusMoon(selectedPlanet, item.id)}>
+                onClick={() => {
+                    setMoonMenu(true)
+                    focusMoon(selectedPlanet, item.id)
+                }}
+                    >
                 {item.englishName}
             </div>
         )
@@ -328,90 +334,63 @@ export default function HomePage() {
         <>
             <div className={styles.pageBackground}>
 
-                <div className={styles.buttons}>
-                    <div className={styles.button} onClick={() => focusMilkyWay()}>
-                        {'Galaxy'}
-                    </div>
-                    <Separateur />
-                    <div className={styles.button}
-                        onClick={() => focusSolarSytem()}
-                        onMouseEnter={() => infoObjet('soleil')}
-                        onMouseLeave={() => infoObjet('')}>
-                        {'Sun'}
-                    </div>
+                <div className={styles.menu}>
 
-
-                    {navigation == 'SolarSystem' &&
-                        <>
-                            <Separateur />
-                            <div className={styles.button}>
-                                {'Planets'}
+                    <div className={styles.menuItem}>
+                        <div className={styles.buttons}>
+                            <div className={styles.menuTitle} onClick={() => focusMilkyWay()}>
+                                {'Milky Way '}
                             </div>
-                        </>
-                    }
-
-                    {selectedPlanet &&
-                        <>
-                            <Separateur />
-                            <div className={styles.button} >
-                                {'Moons'}
-                            </div>
-                        </>
-                    }
-
-                </div>
-
-                {
-                    <div ref={secondaryButtonsRef} className={styles.secondaryButtons}>
-                        <div className={styles.menuTitle}>
-                            {'Planets'}
                         </div>
-                        {buttonsPlanets}
-                    </div>
-                }
-
-                {moons.length > 0 && <div className={styles.tertiaryButtons} style={{ maxHeight: `${secondaryButtonsHeight}px` }}>
-                    <div className={styles.menuTitle}>
-                        {'Moons'}
-                    </div>
-                    <div style={{ overflow: 'auto' }}>
-                        {buttonsMoons}
                     </div>
 
-                </div>}
+                    <div className={styles.menuItem}>
+
+                        <div className={styles.buttons} style={{ left: '10em' }} onClick={() => focusOnSolarSystem()}>
+                            <div className={styles.menuTitle}>
+                                {'Solar System'}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className={styles.menuItem}>
+                        {selectedPlanet &&
+                            <div ref={secondaryButtonsRef} style={{ maxHeight: `346px`, height: planetMenu ? `346px` : '3.3em' }} className={styles.secondaryButtons} onClick={() => setPlanetMenu(!planetMenu)} >
+                                <div className={styles.menuTitle}>
+                                    {!planetMenu ? selectedPlanet[0].toUpperCase() + selectedPlanet.slice(1) : 'Planets'}
+                                </div>
+                                <div>
+                                    {planetMenu && buttonsPlanets}
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div className={styles.menuItem}>
+                        {moons.length > 0 &&
+                            <div className={styles.secondaryButtons} style={{ maxHeight: moonMenu ? `346px` : '3.3em' }} onClick={() => setMoonMenu(!moonMenu)} >
+                                <div className={styles.menuTitle}>
+                                    {!moonMenu && selectedMoon ? selectedMoon[0].toUpperCase() + selectedMoon.slice(1) : 'Moons'}
+                                </div>
+                                <div style={{ maxHeight: `300px`, overflow: 'auto' }}>
+                                    {moonMenu && buttonsMoons}
+                                </div>
+
+                            </div>}
+                    </div>
+                </div>
 
                 <div className={styles.container} >
 
                     <MilkyWay size={planetStates.milkyWaySize} />
-
+                    <Sun sunSize={planetStates.sunSize} indexSun={planetStates.indexSun} orbit={planetStates.sunOrbit} focusSolarSystem={focusOnSolarSystem} />
                     {planetsFetch}
 
-                    <div onClick={() => focusSolarSytem()} style={{ cursor: 'pointer', position: 'fixed', zIndex: '10' }}>
-                        <Sun sunSize={planetStates.sunSize} indexSun={planetStates.indexSun} orbit={planetStates.sunOrbit} />
-                    </div>
                 </div>
 
                 {infos && <div className={styles.rightContainer}>
                     <Informations infos={infos} />
                 </div>}
-
-                <div className={styles.focusButton}>
-                    {selectedPlanet &&
-                        <>
-                            <div className={styles.button} onClick={() => zoomPlanet(selectedPlanet)}>
-                                {focus ? 'Focus Planet' : 'Unfocus Planet'}
-                            </div>
-                        </>
-
-                    }
-                    {selectedMoon && !focusOneMoon &&
-                        <>
-                            <div className={styles.button} onClick={() => zoomMoon(selectedMoon)}>
-                                {'Focus Moon'}
-                            </div>
-                        </>
-                    }
-                </div>
 
             </div>
 

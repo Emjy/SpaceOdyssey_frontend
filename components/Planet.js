@@ -29,7 +29,7 @@ export default function Planet(props) {
 
     useEffect(() => {
 
-        fetch(`http://localhost:3000/bodies/moons/${props.name}`)
+        fetch(`https://space-odyssey-backend.vercel.app/bodies/moons/${props.name}`)
             .then((response) => response.json())
             .then((data) => {
                 if (data.result) {
@@ -50,7 +50,7 @@ export default function Planet(props) {
             vitesse = item.sideralOrbit * 10;
         }
         if (props.nbMoons === 1) {
-            vitesse = item.sideralOrbit * 100;
+            vitesse = item.sideralOrbit * 10;
         }
 
         return (
@@ -81,9 +81,9 @@ export default function Planet(props) {
                 animation: `orbit${props.nOrb} ${props.vitesse}s linear infinite`,
                 transition: `width 0.2s ease-in, height 0.2s ease-in, opacity 0.2s ease-out`,
                 opacity: props.orbitSize,
-                cursor:'pointer', 
+                zIndex: props.index,
             }}
-            onClick={() => props.focusPlanet(props.name)}
+
         >
             <div style={{
                 transform: `translate(-50%, -50%) translateX(${props.orbitSize / 2}px)`,
@@ -94,10 +94,11 @@ export default function Planet(props) {
                 left: '50%',
                 top: '50%',
                 transition: `transform 2s ease-in, width 2s ease-in, height 2s ease-in`,
-
-
-
-            }}>
+                cursor: 'pointer',
+                zIndex: props.index,
+            }}
+                onClick={() => props.zoomPlanet(props.name)} // Appelle la fonction de mise au point de la planète
+            >
 
                 <img src={`planets/${props.name}.png`}
                     style={{
