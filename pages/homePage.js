@@ -110,26 +110,27 @@ export default function HomePage() {
 
     const focusOnSolarSystem = () => {
 
-        setPlanetStates({
-            milkyWaySize: 0, sagittarusA: 0,
-            sunSize: 120, indexSun: 10, sunOrbit: 0,
-            mercuryOrbit: 160, mercurySize: 0.5, mercuryIndex: 9,
-            venusOrbit: 240, venusSize: 0.5, venusIndex: 8,
-            earthOrbit: 320, earthSize: 0.8, earthIndex: 7,
-            marsOrbit: 400, marsSize: 0.8, marsIndex: 6,
-            jupiterOrbit: 560, jupiterSize: 1.9, jupiterIndex: 5,
-            saturnOrbit: 680, saturnSize: 1.9, saturnIndex: 4,
-            uranusOrbit: 800, uranusSize: 1.9, uranusIndex: 3,
-            neptuneOrbit: 920, neptuneSize: 1.9, neptuneIndex: 2,
-
-        });
-
         setFocusSolarSystem(!focusSolarSystem)
+
         // Permet le focus sur la planète
         if (!focusSolarSystem && !focusOnPlanet && !focusOneMoon) {
             setInfos(null)
             focusMilkyWay()
         } else {
+
+            setPlanetStates({
+                milkyWaySize: 0, sagittarusA: 0,
+                sunSize: 120, indexSun: 10, sunOrbit: 0,
+                mercuryOrbit: 160, mercurySize: 0.5, mercuryIndex: 9,
+                venusOrbit: 240, venusSize: 0.5, venusIndex: 8,
+                earthOrbit: 320, earthSize: 0.8, earthIndex: 7,
+                marsOrbit: 400, marsSize: 0.8, marsIndex: 6,
+                jupiterOrbit: 560, jupiterSize: 1.9, jupiterIndex: 5,
+                saturnOrbit: 680, saturnSize: 1.9, saturnIndex: 4,
+                uranusOrbit: 800, uranusSize: 1.9, uranusIndex: 3,
+                neptuneOrbit: 920, neptuneSize: 1.9, neptuneIndex: 2,
+
+            });
             // Récupération des informations
             infoObjet('soleil', setInfos)
         }
@@ -209,19 +210,6 @@ export default function HomePage() {
 
         setSelectedPlanet(planetName)
 
-        setPlanetStates({
-            milkyWaySize: 0, sagittarusA: 0,
-            sunSize: 0, indexSun: 0, sunOrbit: 0,
-            mercuryOrbit: planetName === 'mercure' ? 1 : 0, mercurySize: planetName === 'mercure' ? 10 : 0, mercuryIndex: planetName === 'mercure' ? 10 : 0,
-            venusOrbit: planetName === 'venus' ? 1 : 0, venusSize: planetName === 'venus' ? 10 : 0, venusIndex: planetName === 'venus' ? 10 : 0,
-            earthOrbit: planetName === 'terre' ? 1 : 0, earthSize: planetName === 'terre' ? 10 : 0, earthIndex: planetName === 'terre' ? 10 : 0,
-            marsOrbit: planetName === 'mars' ? 1 : 0, marsSize: planetName === 'mars' ? 10 : 0, marsIndex: planetName === 'mars' ? 10 : 0,
-            jupiterOrbit: planetName === 'jupiter' ? 1 : 0, jupiterSize: planetName === 'jupiter' ? 10 : 0, jupiterIndex: planetName === 'jupiter' ? 10 : 0,
-            saturnOrbit: planetName === 'saturne' ? 1 : 0, saturnSize: planetName === 'saturne' ? 10 : 0, saturnIndex: planetName === 'saturne' ? 10 : 0,
-            uranusOrbit: planetName === 'uranus' ? 1 : 0, uranusSize: planetName === 'uranus' ? 10 : 0, uranusIndex: planetName === 'uranus' ? 10 : 0,
-            neptuneOrbit: planetName === 'neptune' ? 1 : 0, neptuneSize: planetName === 'neptune' ? 10 : 0, neptuneIndex: planetName === 'neptune' ? 10 : 0
-        });
-
         // Récupération des lunes de la planète
         await fetch(`https://space-odyssey-backend.vercel.app/bodies/moons/${planetName}`)
             .then((response) => response.json())
@@ -235,6 +223,19 @@ export default function HomePage() {
         if (!focusOnPlanet) {
             setFocusOnPlanet(true)
             focusPlanet(planetName)
+        } else {
+            setPlanetStates({
+                milkyWaySize: 0, sagittarusA: 0,
+                sunSize: 0, indexSun: 0, sunOrbit: 0,
+                mercuryOrbit: planetName === 'mercure' ? 1 : 0, mercurySize: planetName === 'mercure' ? 10 : 0, mercuryIndex: planetName === 'mercure' ? 10 : 0,
+                venusOrbit: planetName === 'venus' ? 1 : 0, venusSize: planetName === 'venus' ? 10 : 0, venusIndex: planetName === 'venus' ? 10 : 0,
+                earthOrbit: planetName === 'terre' ? 1 : 0, earthSize: planetName === 'terre' ? 10 : 0, earthIndex: planetName === 'terre' ? 10 : 0,
+                marsOrbit: planetName === 'mars' ? 1 : 0, marsSize: planetName === 'mars' ? 10 : 0, marsIndex: planetName === 'mars' ? 10 : 0,
+                jupiterOrbit: planetName === 'jupiter' ? 1 : 0, jupiterSize: planetName === 'jupiter' ? 10 : 0, jupiterIndex: planetName === 'jupiter' ? 10 : 0,
+                saturnOrbit: planetName === 'saturne' ? 1 : 0, saturnSize: planetName === 'saturne' ? 10 : 0, saturnIndex: planetName === 'saturne' ? 10 : 0,
+                uranusOrbit: planetName === 'uranus' ? 1 : 0, uranusSize: planetName === 'uranus' ? 10 : 0, uranusIndex: planetName === 'uranus' ? 10 : 0,
+                neptuneOrbit: planetName === 'neptune' ? 1 : 0, neptuneSize: planetName === 'neptune' ? 10 : 0, neptuneIndex: planetName === 'neptune' ? 10 : 0
+            });
         }
 
         setFocusOnPlanet(!focusOnPlanet)
@@ -324,7 +325,7 @@ export default function HomePage() {
                     setMoonMenu(true)
                     focusMoon(selectedPlanet, item.id)
                 }}
-                    >
+            >
                 {item.englishName}
             </div>
         )
