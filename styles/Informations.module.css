@@ -22,35 +22,37 @@
 .infos {
     display: flex;
     flex-direction: column;
-    gap : 8px; 
-    width : 100%;
+    gap: 8px;
+    width: 100%;
 }
 
 .content {
-display:flex;
-flex-direction: column;
-        gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
+
 .content:hover>:not(:hover) {
     opacity: 0.5;
 }
 
 .element {
-    display : flex ; 
+    display: flex;
     align-items: center;
     justify-content: space-between;
     transition: opacity 0.3s ease;
-   
+
 }
 
 .icon {
     display: flex;
-        align-items: center;
-        justify-content: center;
+    align-items: center;
+    justify-content: center;
     width: 32px;
     height: 32px;
     border-radius: 50%;
     background: rgba(236, 243, 233, 0.08);
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
+        cursor: help;
 }

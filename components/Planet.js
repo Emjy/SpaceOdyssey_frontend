@@ -3,7 +3,16 @@ import React, { useState, useEffect } from 'react';
 // Composants 
 import Moon from './Moon';
 
+// Fonctions
+import { fetchMoons } from '../functions/utils';
+
+
 export default function Planet(props) {
+
+    if (props.name === props.selectedPlanet) {
+        console.log("index planete", props.name, props.index)
+
+    }
 
     let orbit = 60;
     let spacing = 40;
@@ -23,46 +32,40 @@ export default function Planet(props) {
         spacing = 15;
     }
 
-    let nOrb = 0;
 
     const [moons, setMoons] = useState([]);
 
     useEffect(() => {
 
-        fetch(`https://space-odyssey-backend.vercel.app/bodies/moons/${props.name}`)
-            .then((response) => response.json())
-            .then((data) => {
-                if (data.result) {
-                    setMoons(data.moons);
-                }
-            });
+        fetchMoons(props.name, setMoons) 
 
     }, [props.name]);
 
-    const selectedMoons = moons.slice(0, props.nbMoons).map((item, index) => {
+    const mapMoons = moons.slice(0, props.nbMoons).map((item, index) => {
 
         orbit += spacing;
-        nOrb += 1
 
         let vitesse = item.sideralOrbit < 5 ? 5 : item.sideralOrbit;
 
-        if (props.nbMoons === 8) {
-            vitesse = item.sideralOrbit * 10;
-        }
-        if (props.nbMoons === 1) {
-            vitesse = item.sideralOrbit * 10;
-        }
+        if (props.nbMoons === 8 || props.nbMoons === 1) {
+            vitesse = item.sideralOrbit * 100;
+        } 
 
         return (
             <Moon
                 key={item.id}
                 moonOrbit={orbit}
                 moonSize={props.planetSize / 5}
-                moon={item.id}
-                nOrb={nOrb}
+                name={item.id}
+                planetName={props.name}
+                nOrb={index + 1}
                 vitesseMoon={vitesse}
-                moonSelected={props.moonSelected}
+                selectedMoon={props.selectedMoon}
+                selectedPlanet={props.selectedPlanet}
                 focus={props.focus}
+                index={props.name === props.selectedPlanet ? 20 - props.index + index + 1 : 0}
+                focusMoon={props.focusMoon}
+                setFocusOnMoon={props.setFocusOnMoon}
             />);
     });
 
@@ -71,7 +74,7 @@ export default function Planet(props) {
             style={{
                 width: `${props.orbitSize}px`,
                 height: `${props.orbitSize}px`,
-                borderTop: 'solid rgba(255, 255, 255, 0.2) 1px',
+                borderTop: 'solid rgba(255, 255, 255, 0.2) 2px',
                 boxSizing: 'border-box',
                 borderRadius: '50%',
                 position: 'absolute',
@@ -81,7 +84,7 @@ export default function Planet(props) {
                 animation: `orbit${props.nOrb} ${props.vitesse}s linear infinite`,
                 transition: `width 0.2s ease-in, height 0.2s ease-in, opacity 0.2s ease-out`,
                 opacity: props.orbitSize,
-                zIndex: props.index,
+                zIndex: `${props.index}`,
             }}
 
         >
@@ -95,9 +98,14 @@ export default function Planet(props) {
                 top: '50%',
                 transition: `transform 2s ease-in, width 2s ease-in, height 2s ease-in`,
                 cursor: 'pointer',
-                zIndex: props.index,
+                zIndex: `${props.index}`,
             }}
-                onClick={() => props.zoomPlanet(props.name)} // Appelle la fonction de mise au point de la planète
+                onClick={(event) => {
+                    props.setFocusOnPlanet(prevState => !prevState)
+                    props.focusPlanet(props.name)
+                    event.stopPropagation()
+                }} 
+
             >
 
                 <img src={`planets/${props.name}.png`}
@@ -105,12 +113,14 @@ export default function Planet(props) {
                         width: '100%',
                         height: '100%',
                         objectFit: 'cover',
-                        zIndex: '1',
+                        zIndex: `${props.index}`,
                     }}
+
                 />
+                <div>
+                    {mapMoons}
+                </div>
 
-
-                {selectedMoons}
 
             </div>
         </div >

@@ -52,7 +52,10 @@ export default function Sun(props) {
 
                 }}
 
-                onClick={() => props.focusSolarSystem()}
+                onClick={() => {
+                    props.setFocusSolarSystem(prevState => !prevState);
+                    props.focusSolarSystem()
+                }}
             >
                 <video
                     src="sun.mp4"

@@ -16,6 +16,7 @@ export default function Informations(props) {
     const [contentHeight, setContentHeight] = useState(0);
     const [contentWidth, setContentWidth] = useState(0);
 
+
     const contentRef = useRef(null);
 
     useEffect(() => {
@@ -23,6 +24,79 @@ export default function Informations(props) {
         setContentHeight(contentRef.current.clientHeight);
         setContentWidth(contentRef.current.clientWidth);
     }, [props.infos]);
+
+    const infoItems = Object.entries(props.infos).map(([key, value], index) => {
+
+        const [hovered, setHovered] = useState(false)
+
+        // Vérifier si la valeur est supérieure à zéro pour afficher le composant
+        if (value > 0 || (key === 'mass' && value.massValue > 0)) {
+            // Créer dynamiquement le composant en fonction de la clé
+            let iconComponent;
+            let infoName;
+
+            switch (key) {
+                case 'mass':
+                    infoName = 'Mass';
+                    iconComponent = <FitnessCenterIcon />;
+                    value = `${value.massValue.toFixed(2)} x 10e${value.massExponent} kg`;
+                    break;
+                case 'meanRadius':
+                    infoName = 'Mean radius';
+                    iconComponent = <DonutSmallRoundedIcon />;
+                    value = `${value.toFixed(0)} km`;
+                    break;
+                case 'gravity':
+                    infoName = 'Surface gravity';
+                    iconComponent = <PlayForWorkRoundedIcon />;
+                    value = `${value} m.s-2`;
+                    break;
+                case 'density':
+                    infoName = 'Density';
+                    iconComponent = <BlurCircularRoundedIcon />;
+                    value = `${value} g.cm3`;
+                    break;
+                case 'avgTemp':
+                    infoName = 'Average temperature';
+                    iconComponent = <DeviceThermostatRoundedIcon />;
+                    value = `${(value - 273.15).toFixed(2)} °C`;
+                    break;
+                case 'sideralOrbit':
+                    infoName = 'Sideral Orbit';
+                    iconComponent = <RotateLeftRoundedIcon />;
+                    value = `${(value / 365.242190).toFixed(3)} an(s)`;
+                    break;
+                default:
+                    iconComponent = null;
+                    value = null;
+                    break;
+            }
+
+            // Rendu du composant dynamique
+            return (
+                <>
+                    {value &&
+                        <div
+                            key={index}
+                            className={styles.element}
+                        >
+                            <div className={styles.icon}
+                                onMouseEnter={() => setHovered(true)}
+                                onMouseLeave={() => setHovered(false)}>
+                                {iconComponent}
+                            </div>
+                            {hovered ? infoName : value}
+                        </div >
+                    }
+                </>
+
+
+            );
+        }
+
+        return null; // Si la valeur est inférieure ou égale à zéro, ne rien afficher
+    });
+
 
     return (
         <div
@@ -48,7 +122,7 @@ export default function Informations(props) {
 
                 <div className={styles.content}>
 
-                {props.infos.mass &&
+                    {/* {props.infos.mass &&
                     <div className={styles.element}>
                         <div className={styles.icon}>
                             <FitnessCenterIcon />
@@ -98,7 +172,9 @@ export default function Informations(props) {
                         </div>
                         {(props.infos.sideralOrbit / 365.242190).toFixed(2) + ' an(s)'}
                     </div>
-                    }
+                    }*/}
+                    {infoItems}
+
                 </div>
 
             </div>
