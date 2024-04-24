@@ -22,7 +22,7 @@ export default function HomePage() {
     const [milkyWayMenu, setMilkyWayMenu] = useState(false)
     const [solarSystemMenu, setSolarSystemMenu] = useState(false)
     const [planetMenu, setPlanetMenu] = useState(false)
-    const [moonMenu, setMoonMenu] = useState(false)
+    const [moonMenu, setMoonMenu] = useState(true)
 
     // Adaptation de la taille des fenetres 
     const secondaryButtonsRef = useRef(null);
@@ -32,11 +32,14 @@ export default function HomePage() {
     const [focusSA, setFocusSA] = useState(true);
     const [focusSolarSystem, setFocusSolarSystem] = useState(true);
     const [focusOnPlanet, setFocusOnPlanet] = useState(false);
-    const [focusOnMoon, setFocusOnMoon] = useState(false);
-    const [focusOneMoon, setFocusOneMoon] = useState(true);
+    const [focusOnMoon, setFocusOnMoon] = useState(true);
 
-    // Sctokage des informations
+    // a voir si a affacer 
+    const [focusOneMoon, setFocusOneMoon] = useState(false);
+
+    // Sctokage des informations 
     const [infos, setInfos] = useState(false)
+    const [infosSup, setInfosSup] = useState(false)
 
     // Gestion Solar System
     const [selectedMilkyWay, setSelectedMilkyWay] = useState(null)
@@ -97,6 +100,7 @@ export default function HomePage() {
                         setFocusSA(true)
                         focusSagittarusA()
                     } else if (item === 'Solar System') {
+                        setSelectedSolarSystem('Sun')
                         focusOnSolarSystem()
                     }
                 }}
@@ -190,6 +194,9 @@ export default function HomePage() {
 
         });
 
+        // Récupération des informations
+        infoObjet('milkyWay', setInfos)
+
         // Stackage de la planète et moon selectionnée 
         setSelectedMoon(null)
         setFocusOnPlanet(false)
@@ -239,7 +246,7 @@ export default function HomePage() {
             setInfos(null)
             focusMilkyWay()
         } else {
-            setPlanetMenu(true)
+            // setPlanetMenu(true)
 
             setPlanetStates({
                 milkyWaySize: 0, sagittarusA: 0, indexSa: 0,
@@ -267,7 +274,7 @@ export default function HomePage() {
 
     }
 
-    const focusPlanet = (planetName) => {
+    const focusPlanet = async (planetName) => {
 
         // Selection de la planète en cours
         setSelectedPlanet(planetName)
@@ -276,6 +283,9 @@ export default function HomePage() {
         setSelectedMoon(null)
         setFocusOneMoon(false)
         setNbMoons(8)
+
+        // récupération des lunes de la planète
+        await fetchMoons(planetName, setMoons)
 
         // Permet le focus sur la planète
         if (!focusOnPlanet) {
@@ -307,11 +317,8 @@ export default function HomePage() {
             });
         }
 
-        // récupération des lunes de la planète
-        fetchMoons(planetName, setMoons)
-
         // Open auto moon menu 
-        setMoonMenu(true)
+        //setMoonMenu(true)
 
         // Récupération des informations sur l'objet en cours
         infoObjet(planetName, setInfos)
@@ -321,6 +328,7 @@ export default function HomePage() {
     const focusMoon = (moonName, planetName) => {
 
         setSelectedMoon(moonName)
+
         setFocusOneMoon(false)
         setNbMoons(1)
 
@@ -352,7 +360,9 @@ export default function HomePage() {
                 uranusOrbit: 0, uranusSize: 0, uranusIndex: planetName === 'uranus' ? 10 : 0,
                 neptuneOrbit: 0, neptuneSize: 0, neptuneIndex: planetName === 'naptune' ? 10 : 0,
             });
+
         }
+
 
         // Récupération des informations sur l'objet en cours
         infoObjet(moonName, setInfos)
@@ -365,8 +375,8 @@ export default function HomePage() {
         return (
 
             <Planet
-                style={{ cursor: 'pointer', position: 'absolute', zIndex: '12' }}
                 key={index}
+                style={{ cursor: 'pointer', position: 'absolute', zIndex: '12' }}
                 name={item.id}
                 orbitSize={planetStates[`${item.englishName.toLowerCase()}Orbit`]}
                 index={planetStates[`${item.englishName.toLowerCase()}Index`]}
@@ -381,15 +391,20 @@ export default function HomePage() {
                 setFocusOnMoon={setFocusOnMoon}
                 selectedMoon={selectedMoon}
                 selectedPlanet={selectedPlanet}
+                setSelectedMoon={setSelectedMoon}
 
             />
 
         )
     })
 
+    // console.log("infosSup : ", infos)
+
+
     return (
         <>
             <div className={styles.pageBackground}>
+
 
                 {/* Menu */}
                 <div className={styles.menu}>
@@ -400,12 +415,13 @@ export default function HomePage() {
                         }}>
                             <div className={styles.menuTitle} onClick={() => {
                                 setSelectedMilkyWay(null)
+                                setMoons([])
                                 setMilkyWayMenu(!milkyWayMenu)
                                 if (milkyWayMenu) {
                                     focusMilkyWay()
                                 }
                             }}>
-                                {selectedMilkyWay ? selectedMilkyWay : 'Milky Way'}
+                                {'Milky Way'}
                             </div>
                             <div>
                                 {milkyWayMenu && buttonsMilkyWay}
@@ -490,6 +506,7 @@ export default function HomePage() {
                 {/* Informations */}
                 {infos && <div className={styles.rightContainer}>
                     <Informations infos={infos} />
+
                 </div>}
 
             </div>

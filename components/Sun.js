@@ -32,7 +32,7 @@ export default function Sun(props) {
                 justifyContent: 'center',
                 alignItems: 'center',
                 animation: `orbit4 500s linear infinite`,
-                transition: `width 2s ease-in, height 2s ease-in, opacity 2s ease-out`,
+                transition: `width 1s ease-in, height 1s ease-in, opacity 1s ease-out`,
                 zIndex: props.indexSun,
                 cursor: 'pointer'
             }}
@@ -48,7 +48,7 @@ export default function Sun(props) {
                     position: 'absolute',
                     left: '50%',
                     top: '50%',
-                    transition: `transform 2s ease-in, width 2s ease-in, height 2s ease-in`,
+                    transition: `transform 1s ease-in, width 1s ease-in, height 1s ease-in`,
 
                 }}
 

@@ -21,6 +21,7 @@
 
 .menu {
     display: flex;
+    flex-direction: column;
     position: absolute;
     top: 2em;
     left: 2em;

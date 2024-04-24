@@ -10,12 +10,14 @@ import BlurCircularRoundedIcon from '@mui/icons-material/BlurCircularRounded';
 import DeviceThermostatRoundedIcon from '@mui/icons-material/DeviceThermostatRounded';
 import RotateLeftRoundedIcon from '@mui/icons-material/RotateLeftRounded';
 import PlayForWorkRoundedIcon from '@mui/icons-material/PlayForWorkRounded';
+import PublicIcon from '@mui/icons-material/Public';
+import FlareIcon from '@mui/icons-material/Flare';
 
 export default function Informations(props) {
 
     const [contentHeight, setContentHeight] = useState(0);
     const [contentWidth, setContentWidth] = useState(0);
-
+    const [hoveredIndices, setHoveredIndices] = useState([]);
 
     const contentRef = useRef(null);
 
@@ -25,12 +27,19 @@ export default function Informations(props) {
         setContentWidth(contentRef.current.clientWidth);
     }, [props.infos]);
 
+    const handleMouseEnter = (index) => {
+        setHoveredIndices(prevIndices => [...prevIndices, index]);
+    };
+
+    const handleMouseLeave = (index) => {
+        setHoveredIndices(prevIndices => prevIndices.filter(i => i !== index));
+    };
+
+
     const infoItems = Object.entries(props.infos).map(([key, value], index) => {
 
-        const [hovered, setHovered] = useState(false)
-
         // Vérifier si la valeur est supérieure à zéro pour afficher le composant
-        if (value > 0 || (key === 'mass' && value.massValue > 0)) {
+        if (value > 0 || (key === 'mass' && value.massValue > 0) || value) {
             // Créer dynamiquement le composant en fonction de la clé
             let iconComponent;
             let infoName;
@@ -44,7 +53,7 @@ export default function Informations(props) {
                 case 'meanRadius':
                     infoName = 'Mean radius';
                     iconComponent = <DonutSmallRoundedIcon />;
-                    value = `${value.toFixed(0)} km`;
+                    value = `${value} km`;
                     break;
                 case 'gravity':
                     infoName = 'Surface gravity';
@@ -54,7 +63,7 @@ export default function Informations(props) {
                 case 'density':
                     infoName = 'Density';
                     iconComponent = <BlurCircularRoundedIcon />;
-                    value = `${value} g.cm3`;
+                    value = `${value.toFixed(2)} g.cm3`;
                     break;
                 case 'avgTemp':
                     infoName = 'Average temperature';
@@ -65,6 +74,16 @@ export default function Informations(props) {
                     infoName = 'Sideral Orbit';
                     iconComponent = <RotateLeftRoundedIcon />;
                     value = `${(value / 365.242190).toFixed(3)} an(s)`;
+                    break;
+                case 'numberOfStars':
+                    infoName = 'Number of stars';
+                    iconComponent = <FlareIcon />;
+                    value = `${value.toLocaleString('fr-FR') }`;
+                    break;
+                case 'numberOfPlanets':
+                    infoName = 'Number of planets';
+                    iconComponent = <PublicIcon />;
+                    value = `${value.toLocaleString('fr-FR') }`;
                     break;
                 default:
                     iconComponent = null;
@@ -81,13 +100,14 @@ export default function Informations(props) {
                             className={styles.element}
                         >
                             <div className={styles.icon}
-                                onMouseEnter={() => setHovered(true)}
-                                onMouseLeave={() => setHovered(false)}>
+                                onMouseEnter={() => handleMouseEnter(index)}
+                                onMouseLeave={() => handleMouseLeave(index)}>
                                 {iconComponent}
                             </div>
-                            {hovered ? infoName : value}
+                            {hoveredIndices.includes(index) ? infoName : value}
                         </div >
                     }
+
                 </>
 
 
@@ -121,60 +141,7 @@ export default function Informations(props) {
                 </div>
 
                 <div className={styles.content}>
-
-                    {/* {props.infos.mass &&
-                    <div className={styles.element}>
-                        <div className={styles.icon}>
-                            <FitnessCenterIcon />
-                        </div>
-                        {props.infos.mass.massValue.toFixed(2) + ` x 10e${props.infos.mass.massExponent} kg`}
-                    </div>}
-
-                {props.infos.meanRadius > 0 &&
-                    <div className={styles.element}>
-                        <div className={styles.icon}>
-                            <DonutSmallRoundedIcon />
-                        </div>
-                        {props.infos.meanRadius.toFixed(0) + ` km`}
-                    </div>}
-
-                {props.infos.gravity > 0 &&
-                    <div className={styles.element}>
-                        <div className={styles.icon}>
-                                <PlayForWorkRoundedIcon />
-                        </div>
-                        {props.infos.gravity + ' m.s-2'}
-                    </div>
-                }
-
-                {props.infos.density > 0 &&
-                    <div className={styles.element}>
-                        <div className={styles.icon}>
-                            <BlurCircularRoundedIcon />
-                        </div>
-                        {props.infos.density + ' g.cm3'}
-                    </div>
-                }
-
-                {props.infos.avgTemp > 0 &&
-                    <div className={styles.element}>
-                        <div className={styles.icon}>
-                            <DeviceThermostatRoundedIcon />
-                        </div>
-                        {(props.infos.avgTemp - 273.15).toFixed(2) + ' °C'}
-                    </div>
-                }
-
-                {props.infos.sideralOrbit > 0 &&
-                    <div className={styles.element}>
-                        <div className={styles.icon}>
-                            <RotateLeftRoundedIcon />
-                        </div>
-                        {(props.infos.sideralOrbit / 365.242190).toFixed(2) + ' an(s)'}
-                    </div>
-                    }*/}
                     {infoItems}
-
                 </div>
 
             </div>

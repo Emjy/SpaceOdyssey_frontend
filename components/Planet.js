@@ -9,10 +9,10 @@ import { fetchMoons } from '../functions/utils';
 
 export default function Planet(props) {
 
-    if (props.name === props.selectedPlanet) {
-        console.log("index planete", props.name, props.index)
+    // if (props.name === props.selectedPlanet) {
+    //     console.log("index planete", props.name, props.index)
 
-    }
+    // }
 
     let orbit = 60;
     let spacing = 40;
@@ -63,7 +63,7 @@ export default function Planet(props) {
                 selectedMoon={props.selectedMoon}
                 selectedPlanet={props.selectedPlanet}
                 focus={props.focus}
-                index={props.name === props.selectedPlanet ? 20 - props.index + index + 1 : 0}
+                index={props.name === props.selectedPlanet ? 18 - index : 0}
                 focusMoon={props.focusMoon}
                 setFocusOnMoon={props.setFocusOnMoon}
             />);
@@ -96,7 +96,7 @@ export default function Planet(props) {
                 position: 'absolute',
                 left: '50%',
                 top: '50%',
-                transition: `transform 2s ease-in, width 2s ease-in, height 2s ease-in`,
+                transition: `transform 1s ease-in, width 1s ease-in, height 1s ease-in`,
                 cursor: 'pointer',
                 zIndex: `${props.index}`,
             }}
@@ -104,6 +104,7 @@ export default function Planet(props) {
                     props.setFocusOnPlanet(prevState => !prevState)
                     props.focusPlanet(props.name)
                     event.stopPropagation()
+
                 }} 
 
             >
