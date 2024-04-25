@@ -1,10 +1,10 @@
 export const solarSystem = [
-    'Sun',
+    'Planets',
     'Asteroids',
-    'Comets'
+    // 'Comets'
 ]
 
-export const milkyWay = [ 
+export const milkyWay = [
     'Sagittarius A',
     'Solar System',
 ]

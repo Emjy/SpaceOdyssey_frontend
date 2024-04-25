@@ -2,18 +2,18 @@ import React, { useState, useEffect } from 'react';
 
 export default function Moon(props) {
 
-    
+
     // Faire random 1 4 pour orbit moons  ou props de 1 a 4 
     const [imageError, setImageError] = useState(false);
     const [index, setIndex] = useState(0);
-    const [nameSave, setNameSave] = useState(null)
+    const [coef, setCoef] = useState(1);
+
 
     useEffect(() => {
         setImageError(false)
-        setIndex(props.index) 
-        setNameSave(props.selectedMoon)
+        setIndex(props.index)
     }, [props])
- 
+
 
     // if (props.planetName === props.selectedPlanet) {
     //     console.log("lune name", props.name) // le probelme viens du props.name qui est toujours le mmee : la premeire lune 
@@ -28,23 +28,23 @@ export default function Moon(props) {
                 boxSizing: 'border-box',
                 borderRadius: '50%',
                 position: 'absolute',
-                width: props.focus ? '1px' : `${props.moonOrbit}px`,
-                height: props.focus ? '1px' : `${props.moonOrbit}px`,
-                left: props.focus ? '1%' : `calc(50% - ${props.moonOrbit / 2}px)`, // Centrer l'orbite de la lune autour de la planète
-                top: props.focus ? '1%' : `calc(50% - ${props.moonOrbit / 2}px)`,
+                width: props.focus ? '0vh' : `${props.moonOrbit}vh`,
+                height: props.focus ? '0vh' : `${props.moonOrbit}vh`,
+                left: props.focus ? '1%' : `calc(50% - ${props.moonOrbit / 2}vh)`, // Centrer l'orbite de la lune autour de la planète
+                top: props.focus ? '1%' : `calc(50% - ${props.moonOrbit / 2}vh)`,
                 animation: props.focus ? 'none' : `orbit${props.nOrb} ${props.vitesseMoon}s linear infinite`,
-                transition: `width 1s ease-in, height 1s ease-in, opacity 1s ease-out`,
+                transition: `width 1s ease-in, height 1s ease-in`,
                 zIndex: `${index}`,
             }}>
                 <div style={{
                     borderRadius: '50%',
-                    width: props.focus && props.selectedMoon ? '10em' : `${props.moonSize}em`,
-                    height: props.focus && props.selectedMoon ? '10em' : `${props.moonSize}em`,
+                    width: props.focus && props.selectedMoon ? `${40}vh` : `${props.moonSize * coef}vh`,
+                    height: props.focus && props.selectedMoon ? `${40}vh` : `${props.moonSize * coef}vh`,
                     position: 'absolute',
                     left: props.focus ? 'none' : '50%',
                     top: props.focus ? 'none' : '50%',
-                    transform: props.focus ? 'translate(-50%, -50%)' : `translate(-50%, -50%) translateX(${props.moonOrbit * 0.5}px)`,
-                    transition: `width 1s ease-in, height 1s ease-in, opacity 1s ease-out`,
+                    transform: props.focus ? 'translate(-50%, -50%)' : `translate(-50%, -50%) translateX(${props.moonOrbit * 0.5}vh)`,
+                    transition: `transform 1s ease-in, width 0.2s ease-in, height 0.2s ease-in`,
                     zIndex: `${index}`,
                     cursor: 'pointer',
                 }}
@@ -53,6 +53,9 @@ export default function Moon(props) {
                         props.focusMoon(props.selectedMoon || props.name, props.selectedPlanet) // on renvoi le props.name qui va dans la fonction et rechange le selectedMoon 
                         event.stopPropagation()
                     }}
+
+                    onMouseEnter={() => setCoef(1.2)}
+                    onMouseLeave={() => setCoef(1)}
                 >
 
                     <img
@@ -63,7 +66,6 @@ export default function Moon(props) {
                             height: '100%',
                             objectFit: 'cover',
                             transition: `width 1s ease-in, height 1s ease-in, opacity 1s ease-out`,
-                            opacity: imageError ? 0.2 : 1,
                             zIndex: `${index}`
 
                         }}

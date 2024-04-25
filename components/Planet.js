@@ -6,38 +6,39 @@ import Moon from './Moon';
 // Fonctions
 import { fetchMoons } from '../functions/utils';
 
+// Styles
+import styles from '../styles/Planet.module.css';
 
 export default function Planet(props) {
 
     // if (props.name === props.selectedPlanet) {
     //     console.log("index planete", props.name, props.index)
-
     // }
 
-    let orbit = 60;
-    let spacing = 40;
+    let orbit = 6;
+    let spacing = 4;
 
     if (props.nbMoons === 1) {
-        orbit = 500;
-        spacing = 80;
+        orbit = 80;
+        spacing = 8;
     }
 
     if (props.nbMoons === 8) {
-        orbit = 300;
-        spacing = 80;
+        orbit = 30;
+        spacing = 8;
     }
 
     if (props.nbMoons === 4) {
-        orbit = 30;
-        spacing = 15;
+        orbit = 4;
+        spacing = 1.2;
     }
 
-
     const [moons, setMoons] = useState([]);
+    const [coef, setCoef] = useState(1);
 
     useEffect(() => {
 
-        fetchMoons(props.name, setMoons) 
+        fetchMoons(props.name, setMoons)
 
     }, [props.name]);
 
@@ -49,7 +50,7 @@ export default function Planet(props) {
 
         if (props.nbMoons === 8 || props.nbMoons === 1) {
             vitesse = item.sideralOrbit * 100;
-        } 
+        }
 
         return (
             <Moon
@@ -72,9 +73,9 @@ export default function Planet(props) {
     return (
         <div
             style={{
-                width: `${props.orbitSize}px`,
-                height: `${props.orbitSize}px`,
-                borderTop: 'solid rgba(255, 255, 255, 0.2) 2px',
+                width: `${props.orbitSize}vh`,
+                height: `${props.orbitSize}vh`,
+                borderTop: 'solid rgba(255, 255, 255, 0.2) 1px',
                 boxSizing: 'border-box',
                 borderRadius: '50%',
                 position: 'absolute',
@@ -82,31 +83,33 @@ export default function Planet(props) {
                 justifyContent: 'center',
                 alignItems: 'center',
                 animation: `orbit${props.nOrb} ${props.vitesse}s linear infinite`,
-                transition: `width 0.2s ease-in, height 0.2s ease-in, opacity 0.2s ease-out`,
+                transition: `transform 0.5s ease, width 0.2s ease-in, height 0.2s ease-in`,
                 opacity: props.orbitSize,
                 zIndex: `${props.index}`,
             }}
 
         >
-            <div style={{
-                transform: `translate(-50%, -50%) translateX(${props.orbitSize / 2}px)`,
-                borderRadius: '50%',
-                width: `${props.planetSize}em`,
-                height: `${props.planetSize}em`,
-                position: 'absolute',
-                left: '50%',
-                top: '50%',
-                transition: `transform 1s ease-in, width 1s ease-in, height 1s ease-in`,
-                cursor: 'pointer',
-                zIndex: `${props.index}`,
-            }}
+            <div
+                style={{
+                    transform: `translate(-50%, -50%) translateX(${props.orbitSize / 2}vh)`,
+                    borderRadius: '50%',
+                    width: `${props.planetSize * coef}vh`,
+                    height: `${props.planetSize * coef}vh`,
+                    position: 'absolute',
+                    left: '50%',
+                    top: '50%',
+                    transition: `transform 1s ease-in, width 0.2s ease-out, height 0.2s ease-out`,
+                    cursor: 'pointer',
+                    zIndex: `${props.index}`,
+                }}
                 onClick={(event) => {
                     props.setFocusOnPlanet(prevState => !prevState)
                     props.focusPlanet(props.name)
                     event.stopPropagation()
 
-                }} 
-
+                }}
+                onMouseEnter={() => setCoef(1.2)}
+                onMouseLeave={() => setCoef(1)}
             >
 
                 <img src={`planets/${props.name}.png`}

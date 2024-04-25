@@ -19,9 +19,9 @@ export default function MilkyWay(props) {
                     className={styles.image}
                     style={{
                         opacity: props.size,
-                        width: props.size,
-                        height: props.size,
-                        transition: `opacity 2s ease-in-out, width 2s ease-in-out, height 2s ease-in-out`,
+                        width: `${props.size}vh`, 
+                        height: `${props.size}vh`, 
+                        transition: `opacity 2s ease-in-out, width 1s ease-out, height 1s ease-out`,
                         animation: `orbit1 500s linear infinite`,
                         zIndex: '1'
                     }}

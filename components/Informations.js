@@ -19,6 +19,8 @@ export default function Informations(props) {
     const [contentWidth, setContentWidth] = useState(0);
     const [hoveredIndices, setHoveredIndices] = useState([]);
 
+    const[open, setOpen] =useState(true)
+
     const contentRef = useRef(null);
 
     useEffect(() => {
@@ -37,7 +39,10 @@ export default function Informations(props) {
 
 
     const infoItems = Object.entries(props.infos).map(([key, value], index) => {
-
+        // Si la masse n'existe pas 
+        if (key === "mass" && value === null) {
+            return;
+        }
         // Vérifier si la valeur est supérieure à zéro pour afficher le composant
         if (value > 0 || (key === 'mass' && value.massValue > 0) || value) {
             // Créer dynamiquement le composant en fonction de la clé
@@ -78,12 +83,12 @@ export default function Informations(props) {
                 case 'numberOfStars':
                     infoName = 'Number of stars';
                     iconComponent = <FlareIcon />;
-                    value = `${value.toLocaleString('fr-FR') }`;
+                    value = `# ${value.toLocaleString('fr-FR') }`;
                     break;
                 case 'numberOfPlanets':
                     infoName = 'Number of planets';
                     iconComponent = <PublicIcon />;
-                    value = `${value.toLocaleString('fr-FR') }`;
+                    value = `# ${value.toLocaleString('fr-FR') }`;
                     break;
                 default:
                     iconComponent = null;
@@ -125,24 +130,25 @@ export default function Informations(props) {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'flex-start',
-                width: `300px`,
-                height: `${contentHeight + 35}px`,
+                width: `18vw`,
+                minWidth: `180px`,
+                height: open ?`${contentHeight + 35}px` : '4.3em',
                 opacity: `${contentHeight}`,
                 color: 'rgba(255,255,255, 0.5)',
                 borderRadius: '32px',
                 padding: '16px',
-                overflow: 'auto',
-                transition: `width 1s ease-in, height 1s ease-in`,
+                transition: `width 0.5s ease-in, height 0.5s ease-in, font-size 0.5s ease `,
             }}>
 
             <div className={styles.infos} ref={contentRef}>
-                <div className={styles.title}>
-                    {props.infos.englishName + ' - ' + props.infos.bodyType}
+                <div className={styles.title}
+                onClick={() => setOpen(!open)}>
+                    {props.infos.bodyType + ' : ' + props.infos.englishName}
                 </div>
 
-                <div className={styles.content}>
+               {open && <div className={styles.content} style={{ overflow: 'auto' }}>
                     {infoItems}
-                </div>
+                </div>}
 
             </div>
 

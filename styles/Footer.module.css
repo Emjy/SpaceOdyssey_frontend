@@ -1,0 +1,12 @@
+.footer {
+    display: flex;
+    align-items: flex-start;
+    flex-direction: column;
+    position: absolute;
+    bottom: 0;
+    height: 2em;
+    width: 100%;
+    background: rgba(236, 243, 233, 0.08);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}

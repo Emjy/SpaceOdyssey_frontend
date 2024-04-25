@@ -6,21 +6,15 @@ import styles from '../styles/Sun.module.css'; // Assurez-vous que le chemin d'a
 export default function Sun(props) {
 
     const [sunSize, setSunSize] = useState(props.sunSize);
+    const [coef, setCoef] = useState(1);
+
 
     useEffect(() => {
         setSunSize(props.sunSize);
     }, [props.sunSize]);
 
-    return (
-        // <div className={styles.sunStyle} style={{ height: `${sunSize}px`, width: `${sunSize}px`, zIndex: props.indexSun }}>
-        //     <video
-        //         src="sun.mp4"
-        //         className={styles.video}
-        //         autoPlay loop muted
-        //     />
-        //     <div className={styles.videoOverlay} style={{ height: `${sunSize}px`, width: `${sunSize}px` }}></div>
-        // </div>
 
+    return (
 
         <div
             style={{
@@ -41,14 +35,14 @@ export default function Sun(props) {
             <div
                 className={styles.sunStyle}
                 style={{
-                    transform: `translate(-50%, -50%) translateX(${props.orbit}px)`,
+                    transform: `translate(-50%, -50%) translateX(${props.orbit}vh)`,
                     borderRadius: '50%',
-                    width: `${sunSize}px`,
-                    height: `${sunSize}px`,
+                    width: `${sunSize * coef}vh`,
+                    height: `${sunSize * coef}vh`,
                     position: 'absolute',
                     left: '50%',
                     top: '50%',
-                    transition: `transform 1s ease-in, width 1s ease-in, height 1s ease-in`,
+                    transition: `transform 0.5s ease, width 0.5s ease-out, height 0.5s ease-out`,
 
                 }}
 
@@ -56,13 +50,15 @@ export default function Sun(props) {
                     props.setFocusSolarSystem(prevState => !prevState);
                     props.focusSolarSystem()
                 }}
+                onMouseEnter={() => setCoef(1.2)}
+                onMouseLeave={() => setCoef(1)}
             >
                 <video
                     src="sun.mp4"
                     className={styles.video}
                     autoPlay loop muted
                 />
-                <div className={styles.videoOverlay} style={{ height: `${sunSize}px`, width: `${sunSize}px` }}></div>
+                <div className={styles.videoOverlay} style={{ height: `${sunSize * coef}vh`, width: `${sunSize * coef}vh` }}></div>
 
             </div>
 

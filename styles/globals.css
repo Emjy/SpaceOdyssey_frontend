@@ -1,16 +1,21 @@
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Reddit+Mono:wght@400;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=QuickSand:wght@400;700&display=swap');
+
 body {
   padding: 0;
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
     Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
 }
 
 * {
   box-sizing: border-box;
 }
+
 /* Animation pour l'orbite de la Terre */
 @keyframes orbit1 {
   from {

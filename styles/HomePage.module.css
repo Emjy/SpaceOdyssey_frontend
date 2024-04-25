@@ -9,11 +9,12 @@
     height: 100vh;
     font-family: 'Reddit mono', sans-serif;
     color: rgba(255, 255, 255, 0.5);
+    position: relative;
 }
 
 /* Conteneur principal */
 .container {
-    position: relative;
+    position: absolute;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -23,43 +24,28 @@
     display: flex;
     flex-direction: column;
     position: absolute;
-    top: 2em;
-    left: 2em;
+    top: 2vh;
+    left: 2vw;
     gap: 1em;
-    z-index: 100;
+    z-index: 999;
+    overflow: auto;
+    height: 92vh;
 }
 
 .menuTitle {
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     color: white;
     padding: 8px;
     cursor: pointer;
 }
 
-.buttons {
-    background-color: rgba(255, 255, 255, 0.08);
-    padding: 8px;
-    border-radius: 32px;
-    z-index: 300;
-}
-
-.button {
-    display: flex;
-    justify-content: center;
-    gap: 100px;
-    padding: 8px;
-    border-radius: 16px;
-    font-size: 16px;
-    z-index: 101;
-    width: auto;
-    /* Réglez la largeur sur auto ou une valeur appropriée */
-}
-
 .secondaryButtons {
     padding: 8px;
-    width: 10em;
+    width: 12em;
     border-radius: 24px;
-    background: rgba(236, 243, 233, 0.08);
+    background: rgba(236, 243, 233, 0.2);
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
     transition: height 0.3s ease;
@@ -71,19 +57,15 @@
     justify-content: center;
     padding: 8px;
     border-radius: 16px;
-    font-size: 16px;
     bottom: 2em;
     width: 100%;
     cursor: pointer;
     animation: slideDown 0.75s ease-out forwards;
     z-index: 300;
+    font-size: 12px;
 }
 
 
-.secondaryButton :hover {
-    background-color: lightgrey;
-    color: black;
-}
 
 .secondaryButtons :hover>:not(:hover) {
     background-color: none;
@@ -109,6 +91,15 @@
     align-items: flex-start;
     flex-direction: column;
     position: absolute;
-    right: 2em;
-    top: 2em;
+    right: 2vh;
+    top: 2vh;
+}
+
+.asteroids {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width : 100%;
+    height: 100%;
 }
