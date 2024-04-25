@@ -321,8 +321,8 @@ export default function HomePage() {
                 jupiterOrbit: 56, jupiterSize: 4, jupiterIndex: 5,
                 saturnOrbit: 68, saturnSize: 4, saturnIndex: 4,
                 uranusOrbit: 80, uranusSize: 4, uranusIndex: 3,
-                neptuneOrbit: 95, neptuneSize: 4, neptuneIndex: 2,
-                plutoOrbit: 98, plutoSize: 1.5, plutoIndex: 1,
+                neptuneOrbit: 92, neptuneSize: 4, neptuneIndex: 2,
+                plutoOrbit: 104, plutoSize: 1.5, plutoIndex: 1,
 
 
             });
@@ -667,6 +667,7 @@ export default function HomePage() {
                     <div className={styles.asteroids} >
                         {selectedSolarSystem === 'Asteroids' && mapAsteroids}
                     </div>
+
 
                 </div>
 
