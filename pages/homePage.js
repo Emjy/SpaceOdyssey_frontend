@@ -16,6 +16,7 @@ import Sun from '../components/Sun';
 import Planet from '../components/Planet';
 import Asteroid from '../components/Asteroid';
 import Informations from '../components/Informations';
+import Satellite from '../components/Satellite';
 import Footer from '../components/Footer';
 
 // Composants MUI
@@ -30,7 +31,7 @@ export default function HomePage() {
     const [solarSystemMenu, setSolarSystemMenu] = useState(false)
     const [planetMenu, setPlanetMenu] = useState(false)
     const [asteroidMenu, setAsteroidMenu] = useState(false)
-    const [moonMenu, setMoonMenu] = useState(true)
+    const [moonMenu, setMoonMenu] = useState(false)
 
     // Adaptation de la taille des fenetres 
     const secondaryButtonsRef = useRef(null);
@@ -136,9 +137,6 @@ export default function HomePage() {
             </div>
         )
     })
-
-
-    console.log("Orbit pluton" ,planetStates.plutoOrbit)
 
     // Boutons solarSystem pour le menu 
     const buttonsSolarSystem = solarSystem.map((item) => {
@@ -398,7 +396,6 @@ export default function HomePage() {
     const focusAsteroids = (asteroidName) => {
 
         setNbMoons(0)
-        console.log('asteroid name', asteroidName)
 
         // Selection de l'asteroide en cours
         setSelectedAsteroid(asteroidName)
@@ -409,8 +406,8 @@ export default function HomePage() {
             mercuryOrbit: 0, mercurySize: 0, mercuryIndex: 0,
             venusOrbit: 0, venusSize: 0, venusIndex: 0,
             earthOrbit: 0, earthSize: 0, earthIndex: 0,
-            marsOrbit: 20, marsSize: 4, marsIndex: 10,
-            jupiterOrbit: 100, jupiterSize: 10, jupiterIndex: 0,
+            marsOrbit: 20, marsSize: 4, marsIndex: 0,
+            jupiterOrbit: 90, jupiterSize: 10, jupiterIndex: 0,
             saturnOrbit: 0, saturnSize: 0, saturnIndexIndex: 0,
             uranusOrbit: 0, uranusSize: 0, uranusIndex: 0,
             neptuneOrbit: 0, neptuneSize: 0, neptuneIndex: 0,
@@ -470,6 +467,27 @@ export default function HomePage() {
 
     }
 
+    // const focusSatellites = () => {
+
+    //     setNbMoons(0)
+
+    //     setPlanetStates({
+    //         milkyWaySize: 0, sagittarusA: 0, indexSa: 0,
+    //         sunSize: 0, indexSun: 100, sunOrbit: 0,
+    //         mercuryOrbit: 0, mercurySize: 0, mercuryIndex: 0,
+    //         venusOrbit: 0, venusSize: 0, venusIndex: 0,
+    //         earthOrbit: 1, earthSize: 2, earthIndex: 0,
+    //         marsOrbit: 0, marsSize: 0, marsIndex: 0,
+    //         jupiterOrbit: 0, jupiterSize: 0, jupiterIndex: 0,
+    //         saturnOrbit: 0, saturnSize: 0, saturnIndexIndex: 0,
+    //         uranusOrbit: 0, uranusSize: 0, uranusIndex: 0,
+    //         neptuneOrbit: 0, neptuneSize: 0, neptuneIndex: 0,
+    //         plutoOrbit: 0, plutoSize: 0, plutoIndex: 0,
+
+    //     })
+
+    // }
+
     // Mapping des composants planètes sur la page
     const mapPlanets = planets.map((item, index) => {
 
@@ -500,7 +518,7 @@ export default function HomePage() {
     })
 
     // Affichage des composants asteroids sur la page
-    const mapAsteroids = asteroids.slice(0, 30).map((item, index) => {
+    const mapAsteroids = asteroids.map((item, index) => {
 
         return (
             <div>
@@ -509,14 +527,11 @@ export default function HomePage() {
                     key={index}
                     name={item.id}
                     englishName={item.englishName}
-                    orbitSize={selectedSolarSystem === 'Asteroids' ? 60 + index : 48}
+                    orbitSize={selectedSolarSystem === 'Asteroids' ? 55 + index / 3 : 48}
                     index={index + 1}
                     nOrb={index + 1}
                     planetSize={item.meanRadius / 130}
                     vitesse={(item.sideralOrbit / 10)}
-                    nbMoons={nbMoons}
-                    focus={focusOneMoon}
-
                 />
             </div>
         )
@@ -556,7 +571,7 @@ export default function HomePage() {
                         {selectedMilkyWay === 'Solar System' &&
                             <div
                                 className={styles.secondaryButtons}
-                                style={{ height: solarSystemMenu ? `${(solarSystem.length + 1) * 2.7}em` : '3.3em' }}
+                                style={{ height: solarSystemMenu ? `${(solarSystem.length + 1) * 2.5}em` : '3.3em' }}
                             >
                                 <div className={styles.menuTitle} onClick={() => setSolarSystemMenu(!solarSystemMenu)}>
                                     <div></div>
@@ -593,11 +608,12 @@ export default function HomePage() {
                                 </div>
                             </div>
                         </div>
+
                     }
 
+                    {selectedPlanet && selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Asteroids' &&
 
-                    <div className={styles.menuItem}>
-                        {selectedPlanet && selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Asteroids' &&
+                        <div className={styles.menuItem}>
                             <div
                                 ref={secondaryButtonsRef}
                                 className={styles.secondaryButtons}
@@ -616,14 +632,14 @@ export default function HomePage() {
                                     {asteroidMenu && buttonsAsteroids}
                                 </div>
                             </div>
-                        }
-                    </div>
 
-                    <div className={styles.menuItem}>
-                        {moons.length > 0 &&
+                        </div>}
+
+                    {moons.length > 0 && selectedSolarSystem === 'Planets' &&
+                        <div className={styles.menuItem}>
                             <div
                                 className={styles.secondaryButtons}
-                                style={{ maxHeight: `${(planets.length + 1) * 2.42}em`, height: moonMenu ? `${(planets.length + 1) * 2.5}em` : '3.3em' }}
+                                style={{ maxHeight: `${(moons.length + 1) * 2.7}em`, height: moonMenu ? `${(planets.length) * 2.4}em` : '3.3em' }}
                             >
                                 <div className={styles.menuTitle}
                                     onClick={() => setMoonMenu(!moonMenu)}
@@ -638,8 +654,23 @@ export default function HomePage() {
                                     {moonMenu && buttonsMoons}
                                 </div>
 
-                            </div>}
-                    </div>
+                            </div>
+                        </div>}
+                    
+                    {/* {selectedPlanet === 'terre' &&
+                        <div className={styles.menuItem} onClick={() => focusSatellites()}>
+                            <div className={styles.secondaryButtons} >
+                                <div className={styles.menuTitle}>
+                                    <div></div>
+                                    {'Satellites'}
+                                    <KeyboardArrowDownIcon />
+
+                                </div>
+
+                            </div>
+                        </div>} */}
+
+
                 </div>
 
                 {/* Affichage des objets */}
@@ -664,9 +695,8 @@ export default function HomePage() {
                     />
 
                     {(selectedSolarSystem === 'Planets' || selectedSolarSystem === 'Asteroids') && mapPlanets}
-                    <div className={styles.asteroids} >
-                        {selectedSolarSystem === 'Asteroids' && mapAsteroids}
-                    </div>
+                    {selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Asteroids' && mapAsteroids}
+                    {/* {selectedPlanet === 'terre' && <Satellite />} */}
 
 
                 </div>

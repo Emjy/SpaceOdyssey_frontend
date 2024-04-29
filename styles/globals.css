@@ -16,8 +16,8 @@ body {
   box-sizing: border-box;
 }
 
-/* Animation pour l'orbite de la Terre */
-@keyframes orbit1 {
+/* Animation pour l'orbite 20 */
+@keyframes orbit20 {
   from {
     transform: rotate(0deg);
   }
@@ -27,74 +27,212 @@ body {
   }
 }
 
-@keyframes orbit2 {
+/* Animation pour l'orbite 19 */
+@keyframes orbit19 {
   from {
-    transform: rotate(-90deg);
+    transform: rotate(33deg);
   }
 
   to {
-    transform: rotate(270deg);
+    transform: rotate(393deg);
   }
 }
 
-@keyframes orbit3 {
+/* Animation pour l'orbite 18 */
+@keyframes orbit18 {
   from {
-    transform: rotate(-180deg);
+    transform: rotate(66deg);
   }
 
   to {
-    transform: rotate(180deg);
+    transform: rotate(426deg);
   }
 }
 
-@keyframes orbit4 {
+/* Animation pour l'orbite 17 */
+@keyframes orbit17 {
   from {
-    transform: rotate(-240deg);
+    transform: rotate(99deg);
   }
 
   to {
-    transform: rotate(120deg);
+    transform: rotate(459deg);
   }
 }
 
-/* Animation pour l'orbite de la Terre */
-@keyframes orbit5 {
+/* Animation pour l'orbite 16 */
+@keyframes orbit16 {
   from {
-    transform: rotate(0deg);
+    transform: rotate(132deg);
   }
 
   to {
-    transform: rotate(360deg);
+    transform: rotate(492deg);
   }
 }
 
-@keyframes orbit6 {
+/* Animation pour l'orbite 15 */
+@keyframes orbit15 {
   from {
-    transform: rotate(-90deg);
+    transform: rotate(165deg);
   }
 
   to {
-    transform: rotate(270deg);
+    transform: rotate(525deg);
   }
 }
 
-@keyframes orbit7 {
+/* Animation pour l'orbite 14 */
+@keyframes orbit14 {
   from {
-    transform: rotate(-180deg);
+    transform: rotate(198deg);
   }
 
   to {
-    transform: rotate(180deg);
+    transform: rotate(558deg);
   }
 }
 
+/* Animation pour l'orbite 13 */
+@keyframes orbit13 {
+  from {
+    transform: rotate(231deg);
+  }
+
+  to {
+    transform: rotate(591deg);
+  }
+}
+
+/* Animation pour l'orbite 12 */
+@keyframes orbit12 {
+  from {
+    transform: rotate(264deg);
+  }
+
+  to {
+    transform: rotate(624deg);
+  }
+}
+
+/* Animation pour l'orbite 11 */
+@keyframes orbit11 {
+  from {
+    transform: rotate(297deg);
+  }
+
+  to {
+    transform: rotate(657deg);
+  }
+}
+
+/* Animation pour l'orbite 10 */
+@keyframes orbit10 {
+  from {
+    transform: rotate(330deg);
+  }
+
+  to {
+    transform: rotate(690deg);
+  }
+}
+
+/* Animation pour l'orbite 9 */
+@keyframes orbit9 {
+  from {
+    transform: rotate(363deg);
+  }
+
+  to {
+    transform: rotate(723deg);
+  }
+}
+
+/* Animation pour l'orbite 8 */
 @keyframes orbit8 {
   from {
-    transform: rotate(-240deg);
+    transform: rotate(396deg);
   }
 
   to {
-    transform: rotate(120deg);
+    transform: rotate(756deg);
+  }
+}
+
+/* Animation pour l'orbite 7 */
+@keyframes orbit7 {
+  from {
+    transform: rotate(429deg);
+  }
+
+  to {
+    transform: rotate(789deg);
+  }
+}
+
+/* Animation pour l'orbite 6 */
+@keyframes orbit6 {
+  from {
+    transform: rotate(462deg);
+  }
+
+  to {
+    transform: rotate(822deg);
+  }
+}
+
+/* Animation pour l'orbite 5 */
+@keyframes orbit5 {
+  from {
+    transform: rotate(495deg);
+  }
+
+  to {
+    transform: rotate(855deg);
+  }
+}
+
+/* Animation pour l'orbite 4 */
+@keyframes orbit4 {
+  from {
+    transform: rotate(528deg);
+  }
+
+  to {
+    transform: rotate(888deg);
+  }
+}
+
+/* Animation pour l'orbite 3 */
+@keyframes orbit3 {
+  from {
+    transform: rotate(561deg);
+  }
+
+  to {
+    transform: rotate(921deg);
+  }
+}
+
+/* Animation pour l'orbite 2 */
+@keyframes orbit2 {
+  from {
+    transform: rotate(594deg);
+  }
+
+  to {
+    transform: rotate(954deg);
+  }
+}
+
+/* Animation pour l'orbite 1 */
+@keyframes orbit1 {
+  from {
+    transform: rotate(627deg);
+  }
+
+  to {
+    transform: rotate(987deg);
   }
 }
 

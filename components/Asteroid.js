@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 
 export default function Asteroid(props) {
 
-    console.log(props.name)
-
     const [coef, setCoef] = useState(1);
     const [size, setSize] = useState(1);
     const [orbit, setOrbit] = useState(48);
@@ -42,13 +40,13 @@ export default function Asteroid(props) {
                     cursor: 'pointer',
                     zIndex: `${props.index}`,
                 }}
-                onClick={(event) => {
-                    props.setFocusOnPlanet(prevState => !prevState)
-                    props.focusPlanet(props.name)
-                    event.stopPropagation()
+                // onClick={(event) => {
+                //     props.setFocusOnPlanet(prevState => !prevState)
+                //     props.focusPlanet(props.name)
+                //     event.stopPropagation()
 
-                }}
-                onMouseEnter={() => setCoef(1.2)}
+                // }}
+                onMouseEnter={() => setCoef(3)}
                 onMouseLeave={() => setCoef(1)}
             >
 
