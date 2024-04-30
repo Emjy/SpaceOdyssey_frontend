@@ -1,8 +1,10 @@
 .container {
-    background: rgba(236, 243, 233, 0.2);
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
+    background: rgba(0, 0, 255, 0.2);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
     z-index: 999;
+            border: solid 1px rgba(255, 255,255,0.2);
+
 }
 
 .title {

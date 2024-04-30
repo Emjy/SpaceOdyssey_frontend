@@ -11,6 +11,14 @@ import styles from '../styles/Planet.module.css';
 
 export default function Planet(props) {
 
+    const [moons, setMoons] = useState([]);
+    const [coef, setCoef] = useState(1);
+
+    useEffect(() => {
+
+        fetchMoons(props.name, setMoons)
+
+    }, [props.name]);
     // if (props.name === props.selectedPlanet) {
     //     console.log("index planete", props.name, props.index)
     // }
@@ -33,14 +41,12 @@ export default function Planet(props) {
         spacing = 1.2;
     }
 
-    const [moons, setMoons] = useState([]);
-    const [coef, setCoef] = useState(1);
+    // if (moons.length <= 2 ) {
+    //     orbit = 1;
+    //     spacing = 1.2; 
+    // }
 
-    useEffect(() => {
-
-        fetchMoons(props.name, setMoons)
-
-    }, [props.name]);
+   
 
     const mapMoons = moons.slice(0, props.nbMoons).map((item, index) => {
 
@@ -56,7 +62,7 @@ export default function Planet(props) {
             <Moon
                 key={item.id}
                 moonOrbit={orbit}
-                moonSize={props.planetSize / 5}
+                moonSize={props.planetSize / 7}
                 name={item.id}
                 planetName={props.name}
                 nOrb={index + 1}
@@ -112,7 +118,7 @@ export default function Planet(props) {
                 onMouseLeave={() => setCoef(1)}
             >
 
-                <img src={`planets/${props.name}.png`}
+                <img src={`planets/${props.name}${props.orbitSize === 1? '_north':''}.png`}
                     style={{
                         width: '100%',
                         height: '100%',

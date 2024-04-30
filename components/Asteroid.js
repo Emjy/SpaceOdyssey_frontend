@@ -8,7 +8,7 @@ export default function Asteroid(props) {
 
     useEffect(() => {
 
-        setSize(props.planetSize)
+        setSize(props.asteroidSize)
         setOrbit(props.orbitSize)
 
     }, [props]);
@@ -30,7 +30,7 @@ export default function Asteroid(props) {
             <div
                 style={{
                     transform: `translate(-50%, -50%) translateX(${orbit / 2}vh)`,
-                    borderRadius: '50%',
+                    // borderRadius: '50%',
                     width: `${size * coef}vh`,
                     height: `${size * coef}vh`,
                     position: 'absolute',
@@ -40,13 +40,13 @@ export default function Asteroid(props) {
                     cursor: 'pointer',
                     zIndex: `${props.index}`,
                 }}
-                // onClick={(event) => {
-                //     props.setFocusOnPlanet(prevState => !prevState)
-                //     props.focusPlanet(props.name)
-                //     event.stopPropagation()
-
-                // }}
-                onMouseEnter={() => setCoef(3)}
+                onClick={async (event) => {
+                 props.setFocusOnAsteroid(prevState => !prevState)
+                    props.setSelectedAsteroid(props.name)
+                    await props.focusAsteroid(props.name)
+                    event.stopPropagation()
+                }}
+                onMouseEnter={() => setCoef(1.3)}
                 onMouseLeave={() => setCoef(1)}
             >
 
@@ -54,7 +54,7 @@ export default function Asteroid(props) {
                     style={{
                         width: '100%',
                         height: '100%',
-                        objectFit: 'cover',
+                        objectFit: 'contain',
                         zIndex: `${props.index}`,
                     }}
 

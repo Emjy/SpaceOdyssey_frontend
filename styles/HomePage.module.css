@@ -8,7 +8,7 @@
     width: 100vw;
     height: 100vh;
     font-family: 'Reddit mono', sans-serif;
-    color: rgba(255, 255, 255, 0.5);
+    background: rgba(236, 243, 233, 0.2);
     position: relative;
 }
 
@@ -45,11 +45,12 @@
     padding: 8px;
     width: 12em;
     border-radius: 24px;
-    background: rgba(236, 243, 233, 0.2);
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
+    background: rgba(0, 0, 255, 0.2);
+        backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
     transition: height 0.3s ease;
     z-index: 300;
+            border: solid 1px rgba(255, 255, 255, 0.1);
 }
 
 .secondaryButton {
@@ -62,6 +63,7 @@
     animation: slideDown 0.75s ease-out forwards;
     z-index: 300;
     font-size: 12px;
+    color : rgba(255,255,255,0.5);
 }
 
 
@@ -101,4 +103,31 @@
     align-items: center;
     width : 100%;
     height: 100%;
+}
+
+.footer {
+    position : absolute ;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    width: 98vw;
+    height: auto;
+    bottom: 2em; 
+    border-radius: 50px;
+    padding: 0.5em;
+    background: rgba(0, 0, 255, 0.2);
+            backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        font-size: 9px;
+        gap : 3em ; 
+        color: rgba(255,255,255, 0.5);
+        border: solid 1px rgba(255, 255,255,0.2);
+}
+
+.element {
+    display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
 }

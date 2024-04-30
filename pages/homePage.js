@@ -42,6 +42,7 @@ export default function HomePage() {
     const [focusSolarSystem, setFocusSolarSystem] = useState(true);
     const [focusOnPlanet, setFocusOnPlanet] = useState(false);
     const [focusOnMoon, setFocusOnMoon] = useState(true);
+    const [focusOnAsteroid, setFocusOnAsteroid] = useState(false);
 
     // a voir si a affacer 
     const [focusOneMoon, setFocusOneMoon] = useState(false);
@@ -77,7 +78,6 @@ export default function HomePage() {
     // Gestion des Asteroides
     const [asteroids, setAsteroids] = useState([])
     const [selectedAsteroid, setSelectedAsteroid] = useState(null)
-
 
     // Gestion des lunes
     const [moons, setMoons] = useState([]);
@@ -150,14 +150,16 @@ export default function HomePage() {
                     color: isActive ? 'white' : ''
                 }}
                 className={styles.secondaryButton}
-                onClick={() => {
+                onClick={async () => {
                     // setSolarSystemMenu(false)
                     setSelectedSolarSystem(item)
+
                     if (item === 'Planets') {
                         setFocusSolarSystem(true)
                         focusOnSolarSystem()
-                    } else if (item === 'Asteroids') {
-                        focusAsteroids(item)
+                    } else if (item === 'Asteroid Belt') {
+                        setFocusOnAsteroid(false)
+                        await focusAsteroid('')
                     }
                 }}
             >
@@ -201,8 +203,9 @@ export default function HomePage() {
                 }}
                 className={styles.secondaryButton}
                 onClick={() => {
-                    // setFocusOnPlanet(true)
-                    focusAsteroids(item.id)
+                    setSelectedAsteroid(item.id)
+                    setFocusOnAsteroid(true)
+                    focusAsteroid(item.id)
                 }}
             >
                 {item.englishName}
@@ -393,30 +396,53 @@ export default function HomePage() {
 
     }
 
-    const focusAsteroids = (asteroidName) => {
+    const focusAsteroid = async (asteroidName) => {
 
         setNbMoons(0)
-
-        // Selection de l'asteroide en cours
+        infoObjet('', setInfos)
         setSelectedAsteroid(asteroidName)
+        // setFocusOnAsteroid(!focusOnAsteroid)
 
-        setPlanetStates({
-            milkyWaySize: 0, sagittarusA: 0, indexSa: 0,
-            sunSize: 2, indexSun: 100, sunOrbit: 0,
-            mercuryOrbit: 0, mercurySize: 0, mercuryIndex: 0,
-            venusOrbit: 0, venusSize: 0, venusIndex: 0,
-            earthOrbit: 0, earthSize: 0, earthIndex: 0,
-            marsOrbit: 20, marsSize: 4, marsIndex: 0,
-            jupiterOrbit: 90, jupiterSize: 10, jupiterIndex: 0,
-            saturnOrbit: 0, saturnSize: 0, saturnIndexIndex: 0,
-            uranusOrbit: 0, uranusSize: 0, uranusIndex: 0,
-            neptuneOrbit: 0, neptuneSize: 0, neptuneIndex: 0,
-            plutoOrbit: 0, plutoSize: 0, plutoIndex: 0,
+        if (focusOnAsteroid) {
 
-        })
+            setPlanetStates({
+                milkyWaySize: 0, sagittarusA: 0, indexSa: 0,
+                sunSize: 0, indexSun: 0, sunOrbit: 0,
+                mercuryOrbit: 0, mercurySize: 0, mercuryIndex: 0,
+                venusOrbit: 0, venusSize: 0, venusIndex: 0,
+                earthOrbit: 0, earthSize: 0, earthIndex: 0,
+                marsOrbit: 0, marsSize: 0, marsIndex: 0,
+                jupiterOrbit: 0, jupiterSize: 0, jupiterIndex: 0,
+                saturnOrbit: 0, saturnSize: 0, saturnIndexIndex: 0,
+                uranusOrbit: 0, uranusSize: 0, uranusIndex: 0,
+                neptuneOrbit: 0, neptuneSize: 0, neptuneIndex: 0,
+                plutoOrbit: 0, plutoSize: 0, plutoIndex: 0,
+            })
+
+
+        } else {
+            setSelectedAsteroid('')
+
+            setPlanetStates({
+                milkyWaySize: 0, sagittarusA: 0, indexSa: 0,
+                sunSize: 2, indexSun: 100, sunOrbit: 0,
+                mercuryOrbit: 5, mercurySize: 1, mercuryIndex: 0,
+                venusOrbit: 10, venusSize: 1, venusIndex: 0,
+                earthOrbit: 15, earthSize: 1, earthIndex: 0,
+                marsOrbit: 20, marsSize: 1, marsIndex: 0,
+                jupiterOrbit: 90, jupiterSize: 10, jupiterIndex: 0,
+                saturnOrbit: 0, saturnSize: 0, saturnIndexIndex: 0,
+                uranusOrbit: 0, uranusSize: 0, uranusIndex: 0,
+                neptuneOrbit: 0, neptuneSize: 0, neptuneIndex: 0,
+                plutoOrbit: 0, plutoSize: 0, plutoIndex: 0,
+
+            })
+
+        }
 
         // Récupération des informations sur l'objet en cours
         infoObjet(asteroidName, setInfos)
+
     }
 
     const focusMoon = (moonName, planetName) => {
@@ -467,26 +493,26 @@ export default function HomePage() {
 
     }
 
-    // const focusSatellites = () => {
+    const focusSatellites = () => {
 
-    //     setNbMoons(0)
+        //     setNbMoons(0)
 
-    //     setPlanetStates({
-    //         milkyWaySize: 0, sagittarusA: 0, indexSa: 0,
-    //         sunSize: 0, indexSun: 100, sunOrbit: 0,
-    //         mercuryOrbit: 0, mercurySize: 0, mercuryIndex: 0,
-    //         venusOrbit: 0, venusSize: 0, venusIndex: 0,
-    //         earthOrbit: 1, earthSize: 2, earthIndex: 0,
-    //         marsOrbit: 0, marsSize: 0, marsIndex: 0,
-    //         jupiterOrbit: 0, jupiterSize: 0, jupiterIndex: 0,
-    //         saturnOrbit: 0, saturnSize: 0, saturnIndexIndex: 0,
-    //         uranusOrbit: 0, uranusSize: 0, uranusIndex: 0,
-    //         neptuneOrbit: 0, neptuneSize: 0, neptuneIndex: 0,
-    //         plutoOrbit: 0, plutoSize: 0, plutoIndex: 0,
+        //     setPlanetStates({
+        //         milkyWaySize: 0, sagittarusA: 0, indexSa: 0,
+        //         sunSize: 0, indexSun: 100, sunOrbit: 0,
+        //         mercuryOrbit: 0, mercurySize: 0, mercuryIndex: 0,
+        //         venusOrbit: 0, venusSize: 0, venusIndex: 0,
+        //         earthOrbit: 1, earthSize: 2, earthIndex: 0,
+        //         marsOrbit: 0, marsSize: 0, marsIndex: 0,
+        //         jupiterOrbit: 0, jupiterSize: 0, jupiterIndex: 0,
+        //         saturnOrbit: 0, saturnSize: 0, saturnIndexIndex: 0,
+        //         uranusOrbit: 0, uranusSize: 0, uranusIndex: 0,
+        //         neptuneOrbit: 0, neptuneSize: 0, neptuneIndex: 0,
+        //         plutoOrbit: 0, plutoSize: 0, plutoIndex: 0,
 
-    //     })
+        //     })
 
-    // }
+    }
 
     // Mapping des composants planètes sur la page
     const mapPlanets = planets.map((item, index) => {
@@ -501,7 +527,7 @@ export default function HomePage() {
                 index={planetStates[`${item.englishName.toLowerCase()}Index`]}
                 nOrb={index + 1}
                 planetSize={planetStates[`${item.englishName.toLowerCase()}Size`]}
-                vitesse={(item.sideralOrbit)}
+                vitesse={item.sideralOrbit}
                 nbMoons={nbMoons}
                 focus={focusOneMoon}
                 focusPlanet={focusPlanet}
@@ -511,7 +537,6 @@ export default function HomePage() {
                 selectedMoon={selectedMoon}
                 selectedPlanet={selectedPlanet}
                 setSelectedMoon={setSelectedMoon}
-
             />
 
         )
@@ -520,24 +545,38 @@ export default function HomePage() {
     // Affichage des composants asteroids sur la page
     const mapAsteroids = asteroids.map((item, index) => {
 
+        let orbitSize
+        let size
+
+        if (selectedAsteroid === '') {
+            orbitSize = 55 + index / 3
+            size = item.meanRadius / 130
+        } else if (selectedAsteroid === item.id) {
+            orbitSize = 1
+            size = 50
+        } else {
+            return null;
+        }
+
+
         return (
             <div>
-
                 <Asteroid
                     key={index}
                     name={item.id}
                     englishName={item.englishName}
-                    orbitSize={selectedSolarSystem === 'Asteroids' ? 55 + index / 3 : 48}
+                    orbitSize={orbitSize}
                     index={index + 1}
                     nOrb={index + 1}
-                    planetSize={item.meanRadius / 130}
-                    vitesse={(item.sideralOrbit / 10)}
+                    asteroidSize={size}
+                    vitesse={item.sideralOrbit / 10}
+                    setSelectedAsteroid={setSelectedAsteroid}
+                    focusAsteroid={focusAsteroid}
+                    setFocusOnAsteroid={setFocusOnAsteroid}
                 />
             </div>
         )
     })
-
-    // console.log("infosSup : ", infos)
 
     return (
         <>
@@ -611,7 +650,7 @@ export default function HomePage() {
 
                     }
 
-                    {selectedPlanet && selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Asteroids' &&
+                    {selectedPlanet && selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Asteroid Belt' &&
 
                         <div className={styles.menuItem}>
                             <div
@@ -624,7 +663,7 @@ export default function HomePage() {
                                     onClick={() => setAsteroidMenu(!asteroidMenu)}
                                 >
                                     <div></div>
-                                    {!asteroidMenu ? selectedAsteroid[0].toUpperCase() + selectedAsteroid.slice(1) : 'Asteroids'}
+                                    {!asteroidMenu && selectedAsteroid ? selectedAsteroid[0].toUpperCase() + selectedAsteroid.slice(1) : 'Asteroids'}
                                     {asteroidMenu ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
 
                                 </div>
@@ -656,7 +695,7 @@ export default function HomePage() {
 
                             </div>
                         </div>}
-                    
+
                     {/* {selectedPlanet === 'terre' &&
                         <div className={styles.menuItem} onClick={() => focusSatellites()}>
                             <div className={styles.secondaryButtons} >
@@ -694,8 +733,8 @@ export default function HomePage() {
                         setFocusSolarSystem={setFocusSolarSystem}
                     />
 
-                    {(selectedSolarSystem === 'Planets' || selectedSolarSystem === 'Asteroids') && mapPlanets}
-                    {selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Asteroids' && mapAsteroids}
+                    {(selectedSolarSystem === 'Planets' || selectedSolarSystem === 'Asteroid Belt') && mapPlanets}
+                    {selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Asteroid Belt' && mapAsteroids}
                     {/* {selectedPlanet === 'terre' && <Satellite />} */}
 
 
@@ -706,9 +745,8 @@ export default function HomePage() {
                     <Informations infos={infos} />
                 </div>}
 
-                {/* Footer */}
-                {/* <Footer /> */}
-
+                {/* Footer  */}
+                {/* <Footer vitesse={''} size={''} /> */}
 
             </div>
 

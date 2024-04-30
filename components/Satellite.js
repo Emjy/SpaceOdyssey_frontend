@@ -16,7 +16,6 @@ export default function Satellite() {
             </div>
             <div className={styles.imageContainer}>
                 <img src='satellites/voyager2.png' className={styles.image} />
-
             </div>
         </div>
 

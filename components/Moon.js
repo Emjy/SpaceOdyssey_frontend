@@ -13,14 +13,7 @@ export default function Moon(props) {
         setImageError(false)
         setIndex(props.index)
     }, [props])
-
-
-    // if (props.planetName === props.selectedPlanet) {
-    //     console.log("lune name", props.name) // le probelme viens du props.name qui est toujours le mmee : la premeire lune 
-    //     console.log("lune selected", props.selectedMoon) 
-    //     console.log("name saved", nameSave) // tout change meme le nom sauvé 
-    // }
-
+ 
     return (
         <>
             <div style={{

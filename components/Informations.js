@@ -12,6 +12,8 @@ import RotateLeftRoundedIcon from '@mui/icons-material/RotateLeftRounded';
 import PlayForWorkRoundedIcon from '@mui/icons-material/PlayForWorkRounded';
 import PublicIcon from '@mui/icons-material/Public';
 import FlareIcon from '@mui/icons-material/Flare';
+import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
+import TodayRoundedIcon from '@mui/icons-material/TodayRounded';
 
 export default function Informations(props) {
 
@@ -89,6 +91,16 @@ export default function Informations(props) {
                     infoName = 'Number of planets';
                     iconComponent = <PublicIcon />;
                     value = `# ${value.toLocaleString('fr-FR') }`;
+                    break;
+                case 'discoveredBy':
+                    infoName = 'Discover by';
+                    iconComponent = <PersonRoundedIcon />;
+                    value = `${value}`;
+                    break;
+                case 'discoveryDate':
+                    infoName = 'Discovery date';
+                    iconComponent = <TodayRoundedIcon />;
+                    value = `${value}`;
                     break;
                 default:
                     iconComponent = null;

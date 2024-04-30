@@ -1,6 +1,6 @@
 export const solarSystem = [
     'Planets',
-    'Asteroids',
+    'Asteroid Belt',
     // 'Comets'
 ]
 
