@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-//Style 
+//Style
 import styles from '../styles/HomePage.module.css';
 
 // Fonctions
@@ -9,7 +9,10 @@ import { infoObjet, fetchMoons } from '../functions/utils';
 // Datas
 import { milkyWay, solarSystem } from '../data/solarSystem';
 
-// composants 
+// Hooks personnalisés
+import usePlanetStates from '../hooks/usePlanetStates';
+
+// composants
 import MilkyWay from '../components/MilkyWay';
 import SagittarusA from '../components/SagittarusA';
 import Sun from '../components/Sun';
@@ -18,6 +21,7 @@ import Asteroid from '../components/Asteroid';
 import Informations from '../components/Informations';
 import Satellite from '../components/Satellite';
 import Footer from '../components/Footer';
+import MenuButton from '../components/ui/MenuButton';
 
 // Composants MUI
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -44,10 +48,9 @@ export default function HomePage() {
     const [focusOnMoon, setFocusOnMoon] = useState(true);
     const [focusOnAsteroid, setFocusOnAsteroid] = useState(false);
 
-    // a voir si a affacer 
     const [focusOneMoon, setFocusOneMoon] = useState(false);
 
-    // Sctokage des informations 
+    // Stockage des informations 
     const [infos, setInfos] = useState(false)
     const [infosSup, setInfosSup] = useState(false)
 
@@ -57,22 +60,9 @@ export default function HomePage() {
     // Gestion Solar System
     const [selectedSolarSystem, setSelectedSolarSystem] = useState(null)
 
-    // Gestion des planètes
+    // Gestion des planètes avec hook personnalisé
     const [planets, setPlanets] = useState([]);
-    const [planetStates, setPlanetStates] = useState({
-        milkyWaySize: 80, sagittarusA: 16, indexSa: 10,
-        sunSize: 1.6, indexSun: 10, sunOrbit: 21,
-        mercuryOrbit: 0, mercurySize: 0, mercuryIndex: 9,
-        venusOrbit: 0, venusSize: 0, venusIndex: 8,
-        earthOrbit: 0, earthSize: 0, earthIndex: 7,
-        marsOrbit: 0, marsSize: 0, marsIndex: 6,
-        jupiterOrbit: 0, jupiterSize: 0, jupiterIndex: 5,
-        saturnOrbit: 0, saturnSize: 0, saturnIndex: 4,
-        uranusOrbit: 0, uranusSize: 0, uranusIndex: 3,
-        neptuneOrbit: 0, neptuneSize: 0, neptuneIndex: 2,
-        plutoOrbit: 0, plutoSize: 0, plutoIndex: 1,
-
-    });
+    const { planetStates, updatePlanetState, setPlanetStates } = usePlanetStates();
     const [selectedPlanet, setSelectedPlanet] = useState(null)
 
     // Gestion des Asteroides
@@ -109,131 +99,90 @@ export default function HomePage() {
 
     }, []);
 
-    // Boutons milkyWay pour le menu 
-    const buttonsMilkyWay = milkyWay.map((item) => {
+    // Boutons milkyWay pour le menu
+    const buttonsMilkyWay = milkyWay.map((item) => (
+        <MenuButton
+            key={item.id || item}
+            itemKey={item.id || item}
+            label={item}
+            isActive={selectedMilkyWay === item}
+            onClick={() => {
+                setSelectedMilkyWay(item)
+                if (item === 'Sagittarius A') {
+                    setFocusSA(true)
+                    focusSagittarusA()
+                } else if (item === 'Solar System') {
+                    setFocusSolarSystem(true)
+                    focusOnSolarSystem()
+                }
+            }}
+        />
+    ))
 
-        const isActive = selectedMilkyWay === item;
-
-        return (
-            <div key={item.id}
-                style={{
-                    backgroundColor: isActive ? 'rgba(236, 243, 233, 0.2)' : '',
-                    color: isActive ? 'white' : ''
-                }}
-                className={styles.secondaryButton}
-                onClick={() => {
-                    setSelectedMilkyWay(item)
-                    //setMilkyWayMenu(false)
-                    if (item === 'Sagittarius A') {
-                        setFocusSA(true)
-                        focusSagittarusA()
-                    } else if (item === 'Solar System') {
-                        setFocusSolarSystem(true)
-                        focusOnSolarSystem()
-                    }
-                }}
-            >
-                {item}
-            </div>
-        )
-    })
-
-    // Boutons solarSystem pour le menu 
-    const buttonsSolarSystem = solarSystem.map((item) => {
-
-        const isActive = selectedSolarSystem === item;
-
-        return (
-            <div key={item.id}
-                style={{
-                    backgroundColor: isActive ? 'rgba(236, 243, 233, 0.2)' : '',
-                    color: isActive ? 'white' : ''
-                }}
-                className={styles.secondaryButton}
-                onClick={async () => {
-                    // setSolarSystemMenu(false)
-                    setSelectedSolarSystem(item)
-
-                    if (item === 'Planets') {
-                        setFocusSolarSystem(true)
-                        focusOnSolarSystem()
-                    } else if (item === 'Asteroid Belt') {
-                        setFocusOnAsteroid(false)
-                        await focusAsteroid('')
-                    }
-                }}
-            >
-                {item}
-            </div>
-        )
-    })
+    // Boutons solarSystem pour le menu
+    const buttonsSolarSystem = solarSystem.map((item) => (
+        <MenuButton
+            key={item.id || item}
+            itemKey={item.id || item}
+            label={item}
+            isActive={selectedSolarSystem === item}
+            onClick={async () => {
+                setSelectedSolarSystem(item)
+                if (item === 'Planets') {
+                    setFocusSolarSystem(true)
+                    focusOnSolarSystem()
+                } else if (item === 'Asteroid Belt') {
+                    setFocusOnAsteroid(false)
+                    await focusAsteroid('')
+                }
+            }}
+        />
+    ))
 
     // Boutons planets pour le menu
-    const buttonsPlanets = planets.map((item) => {
+    const buttonsPlanets = planets.map((item) => (
+        <MenuButton
+            key={item.id}
+            itemKey={item.id}
+            label={item.englishName}
+            isActive={selectedPlanet === item.id}
+            onClick={() => {
+                setFocusOnPlanet(true)
+                focusPlanet(item.id)
+            }}
+        />
+    ))
 
-        const isActive = selectedPlanet === item.id;
-
-        return (
-            <div key={item.id}
-                style={{
-                    backgroundColor: isActive ? 'rgba(236, 243, 233, 0.2)' : '',
-                    color: isActive ? 'white' : ''
-                }}
-                className={styles.secondaryButton}
-                onClick={() => {
-                    setFocusOnPlanet(true)
-                    focusPlanet(item.id)
-                }}
-            >
-                {item.englishName}
-            </div>
-        )
-    })
-
-    // Boutons planets pour le menu
-    const buttonsAsteroids = asteroids.map((item) => {
-
-        const isActive = selectedAsteroid === item.id;
-
-        return (
-            <div key={item.id}
-                style={{
-                    backgroundColor: isActive ? 'rgba(236, 243, 233, 0.2)' : '',
-                    color: isActive ? 'white' : ''
-                }}
-                className={styles.secondaryButton}
-                onClick={() => {
-                    setSelectedAsteroid(item.id)
-                    setFocusOnAsteroid(true)
-                    focusAsteroid(item.id)
-                }}
-            >
-                {item.englishName}
-            </div>
-        )
-    })
+    // Boutons asteroids pour le menu
+    const buttonsAsteroids = asteroids.map((item) => (
+        <MenuButton
+            key={item.id}
+            itemKey={item.id}
+            label={item.englishName}
+            isActive={selectedAsteroid === item.id}
+            onClick={() => {
+                setSelectedAsteroid(item.id)
+                setFocusOnAsteroid(true)
+                focusAsteroid(item.id)
+            }}
+        />
+    ))
 
     // Boutons moons pour le menu
-    const buttonsMoons = moons.filter(item => !item.name.startsWith('S/')).map((item) => {
-
-        const isActive = selectedMoon === item.id;
-
-        return (
-            <div key={item.id}
-                style={{
-                    backgroundColor: isActive ? 'rgba(236, 243, 233, 0.2)' : '',
-                    color: isActive ? 'white' : ''
-                }}
-                className={styles.secondaryButton}
+    const buttonsMoons = moons
+        .filter(item => !item.name.startsWith('S/'))
+        .map((item) => (
+            <MenuButton
+                key={item.id}
+                itemKey={item.id}
+                label={item.englishName}
+                isActive={selectedMoon === item.id}
                 onClick={() => {
                     setFocusOnMoon(true)
                     focusMoon(item.id, selectedPlanet)
                 }}
-            >
-                {item.englishName}
-            </div>
-        )
-    });
+            />
+        ));
 
     const focusMilkyWay = () => {
 
@@ -255,15 +204,11 @@ export default function HomePage() {
         // Récupération des informations
         infoObjet('milkyWay', setInfos)
 
-        // Stackage de la planète et moon selectionnée 
+        // Réinitialisation des sélections
         setSelectedMoon(null)
         setFocusOnPlanet(false)
         setSelectedMilkyWay(null)
         setFocusOneMoon(false)
-
-        // Infos milkyway
-        infoObjet('milkyWay', setInfos)
-
         setSelectedPlanet(null)
         setPlanetMenu(false)
         setMoons([])
@@ -310,8 +255,6 @@ export default function HomePage() {
             setInfos(null)
             focusMilkyWay()
         } else {
-            // setPlanetMenu(true)
-
             setPlanetStates({
                 milkyWaySize: 0, sagittarusA: 0, indexSa: 0,
                 sunSize: 10, indexSun: 10, sunOrbit: 0,
@@ -386,9 +329,6 @@ export default function HomePage() {
             });
         }
 
-        // Open auto moon menu 
-        //setMoonMenu(true)
-
         // Récupération des informations sur l'objet en cours
         infoObjet(planetName, setInfos)
 
@@ -397,11 +337,9 @@ export default function HomePage() {
     }
 
     const focusAsteroid = async (asteroidName) => {
-
         setNbMoons(0)
         infoObjet('', setInfos)
         setSelectedAsteroid(asteroidName)
-        // setFocusOnAsteroid(!focusOnAsteroid)
 
         if (focusOnAsteroid) {
 
@@ -493,26 +431,6 @@ export default function HomePage() {
 
     }
 
-    const focusSatellites = () => {
-
-        //     setNbMoons(0)
-
-        //     setPlanetStates({
-        //         milkyWaySize: 0, sagittarusA: 0, indexSa: 0,
-        //         sunSize: 0, indexSun: 100, sunOrbit: 0,
-        //         mercuryOrbit: 0, mercurySize: 0, mercuryIndex: 0,
-        //         venusOrbit: 0, venusSize: 0, venusIndex: 0,
-        //         earthOrbit: 1, earthSize: 2, earthIndex: 0,
-        //         marsOrbit: 0, marsSize: 0, marsIndex: 0,
-        //         jupiterOrbit: 0, jupiterSize: 0, jupiterIndex: 0,
-        //         saturnOrbit: 0, saturnSize: 0, saturnIndexIndex: 0,
-        //         uranusOrbit: 0, uranusSize: 0, uranusIndex: 0,
-        //         neptuneOrbit: 0, neptuneSize: 0, neptuneIndex: 0,
-        //         plutoOrbit: 0, plutoSize: 0, plutoIndex: 0,
-
-        //     })
-
-    }
 
     // Mapping des composants planètes sur la page
     const mapPlanets = planets.map((item, index) => {
@@ -696,20 +614,6 @@ export default function HomePage() {
                             </div>
                         </div>}
 
-                    {/* {selectedPlanet === 'terre' &&
-                        <div className={styles.menuItem} onClick={() => focusSatellites()}>
-                            <div className={styles.secondaryButtons} >
-                                <div className={styles.menuTitle}>
-                                    <div></div>
-                                    {'Satellites'}
-                                    <KeyboardArrowDownIcon />
-
-                                </div>
-
-                            </div>
-                        </div>} */}
-
-
                 </div>
 
                 {/* Affichage des objets */}
@@ -735,8 +639,6 @@ export default function HomePage() {
 
                     {(selectedSolarSystem === 'Planets' || selectedSolarSystem === 'Asteroid Belt') && mapPlanets}
                     {selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Asteroid Belt' && mapAsteroids}
-                    {/* {selectedPlanet === 'terre' && <Satellite />} */}
-
 
                 </div>
 
@@ -744,9 +646,6 @@ export default function HomePage() {
                 {infos && <div className={styles.rightContainer}>
                     <Informations infos={infos} />
                 </div>}
-
-                {/* Footer  */}
-                {/* <Footer vitesse={''} size={''} /> */}
 
             </div>
 
