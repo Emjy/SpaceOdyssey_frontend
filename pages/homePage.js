@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 
 //Style
 import styles from '../styles/HomePage.module.css';
@@ -23,9 +23,8 @@ import Satellite from '../components/Satellite';
 import Footer from '../components/Footer';
 import MenuButton from '../components/ui/MenuButton';
 
-// Composants MUI
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+// Icônes (react-icons est plus léger que MUI)
+import { MdKeyboardArrowDown, MdKeyboardArrowUp } from 'react-icons/md';
 
 export default function HomePage() {
 
@@ -76,115 +75,33 @@ export default function HomePage() {
 
     // Initialisation, récupération des planètes et asteroides
     useEffect(() => {
-        fetch(`https://space-odyssey-backend.vercel.app/bodies/planets`)
-            .then((response) => response.json())
-            .then((data) => {
+        const fetchData = async () => {
+            try {
+                const response = await fetch(`https://space-odyssey-backend.vercel.app/bodies/planets`);
+                const data = await response.json();
                 if (data.result) {
                     setPlanets(data.planets);
                 }
-            }).catch(error => {
+            } catch (error) {
                 console.error('Une erreur s\'est produite :', error);
-            });
+            }
 
-        fetch(`https://space-odyssey-backend.vercel.app/bodies/asteroids`)
-            .then((response) => response.json())
-            .then((data) => {
+            try {
+                const response = await fetch(`https://space-odyssey-backend.vercel.app/bodies/asteroids`);
+                const data = await response.json();
                 if (data.result) {
                     setAsteroids(data.asteroids);
                 }
-            }).catch(error => {
+            } catch (error) {
                 console.error('Une erreur s\'est produite :', error);
-            });
+            }
+        };
 
-
+        fetchData();
     }, []);
 
-    // Boutons milkyWay pour le menu
-    const buttonsMilkyWay = milkyWay.map((item) => (
-        <MenuButton
-            key={item.id || item}
-            itemKey={item.id || item}
-            label={item}
-            isActive={selectedMilkyWay === item}
-            onClick={() => {
-                setSelectedMilkyWay(item)
-                if (item === 'Sagittarius A') {
-                    setFocusSA(true)
-                    focusSagittarusA()
-                } else if (item === 'Solar System') {
-                    setFocusSolarSystem(true)
-                    focusOnSolarSystem()
-                }
-            }}
-        />
-    ))
-
-    // Boutons solarSystem pour le menu
-    const buttonsSolarSystem = solarSystem.map((item) => (
-        <MenuButton
-            key={item.id || item}
-            itemKey={item.id || item}
-            label={item}
-            isActive={selectedSolarSystem === item}
-            onClick={async () => {
-                setSelectedSolarSystem(item)
-                if (item === 'Planets') {
-                    setFocusSolarSystem(true)
-                    focusOnSolarSystem()
-                } else if (item === 'Asteroid Belt') {
-                    setFocusOnAsteroid(false)
-                    await focusAsteroid('')
-                }
-            }}
-        />
-    ))
-
-    // Boutons planets pour le menu
-    const buttonsPlanets = planets.map((item) => (
-        <MenuButton
-            key={item.id}
-            itemKey={item.id}
-            label={item.englishName}
-            isActive={selectedPlanet === item.id}
-            onClick={() => {
-                setFocusOnPlanet(true)
-                focusPlanet(item.id)
-            }}
-        />
-    ))
-
-    // Boutons asteroids pour le menu
-    const buttonsAsteroids = asteroids.map((item) => (
-        <MenuButton
-            key={item.id}
-            itemKey={item.id}
-            label={item.englishName}
-            isActive={selectedAsteroid === item.id}
-            onClick={() => {
-                setSelectedAsteroid(item.id)
-                setFocusOnAsteroid(true)
-                focusAsteroid(item.id)
-            }}
-        />
-    ))
-
-    // Boutons moons pour le menu
-    const buttonsMoons = moons
-        .filter(item => !item.name.startsWith('S/'))
-        .map((item) => (
-            <MenuButton
-                key={item.id}
-                itemKey={item.id}
-                label={item.englishName}
-                isActive={selectedMoon === item.id}
-                onClick={() => {
-                    setFocusOnMoon(true)
-                    focusMoon(item.id, selectedPlanet)
-                }}
-            />
-        ));
-
-    const focusMilkyWay = () => {
+    // Fonctions de focus avec useCallback pour éviter les re-créations
+    const focusMilkyWay = useCallback(() => {
 
         setPlanetStates({
             milkyWaySize: 80, sagittarusA: 16, indexSa: 10,
@@ -213,9 +130,9 @@ export default function HomePage() {
         setPlanetMenu(false)
         setMoons([])
 
-    }
+    }, [setPlanetStates, setSelectedMoon, setFocusOnPlanet, setSelectedMilkyWay, setFocusOneMoon, setSelectedPlanet, setPlanetMenu, setMoons]);
 
-    const focusSagittarusA = () => {
+    const focusSagittarusA = useCallback(() => {
 
         if (!focusSA) {
             setSelectedMilkyWay(null)
@@ -242,15 +159,15 @@ export default function HomePage() {
 
         setInfos(false)
 
-    }
+    }, [focusSA, focusMilkyWay, setPlanetStates, setSelectedMilkyWay]);
 
-    const focusOnSolarSystem = () => {
+    const focusOnSolarSystem = useCallback(() => {
 
         setSelectedSolarSystem('Planets')
         setSelectedPlanet('Planets')
         setSelectedMilkyWay('Solar System')
 
-        // focus milky way si clic sur le soleil 
+        // focus milky way si clic sur le soleil
         if (!focusSolarSystem && !focusOnPlanet && !focusOneMoon) {
             setInfos(null)
             focusMilkyWay()
@@ -281,9 +198,9 @@ export default function HomePage() {
         setNbMoons(4)
         setSelectedMoon(null)
 
-    }
+    }, [focusSolarSystem, focusOnPlanet, focusOneMoon, focusMilkyWay, setPlanetStates, setSelectedSolarSystem, setSelectedPlanet, setSelectedMilkyWay, setFocusOnPlanet, setFocusOneMoon, setMoons, setNbMoons, setSelectedMoon]);
 
-    const focusPlanet = async (planetName) => {
+    const focusPlanet = useCallback(async (planetName) => {
 
         // Selection de la planète en cours
         setSelectedPlanet(planetName)
@@ -334,9 +251,9 @@ export default function HomePage() {
 
         setInfos(false)
 
-    }
+    }, [focusOnPlanet, setPlanetStates, setSelectedPlanet, setSelectedMoon, setFocusOneMoon, setNbMoons, setMoons]);
 
-    const focusAsteroid = async (asteroidName) => {
+    const focusAsteroid = useCallback(async (asteroidName) => {
         setNbMoons(0)
         infoObjet('', setInfos)
         setSelectedAsteroid(asteroidName)
@@ -381,9 +298,9 @@ export default function HomePage() {
         // Récupération des informations sur l'objet en cours
         infoObjet(asteroidName, setInfos)
 
-    }
+    }, [focusOnPlanet, setPlanetStates, setNbMoons, setSelectedAsteroid]);
 
-    const focusMoon = (moonName, planetName) => {
+    const focusMoon = useCallback((moonName, planetName) => {
 
         setSelectedMoon(moonName)
 
@@ -429,8 +346,92 @@ export default function HomePage() {
         // Récupération des informations sur l'objet en cours
         infoObjet(moonName, setInfos)
 
-    }
+    }, [focusOnMoon, setPlanetStates, setSelectedMoon, setFocusOneMoon, setNbMoons]);
 
+    // Boutons milkyWay pour le menu - avec useMemo pour éviter les re-renders
+    const buttonsMilkyWay = useMemo(() => milkyWay.map((item) => (
+        <MenuButton
+            key={item.id || item}
+            itemKey={item.id || item}
+            label={item}
+            isActive={selectedMilkyWay === item}
+            onClick={() => {
+                setSelectedMilkyWay(item)
+                if (item === 'Sagittarius A') {
+                    setFocusSA(true)
+                    focusSagittarusA()
+                } else if (item === 'Solar System') {
+                    setFocusSolarSystem(true)
+                    focusOnSolarSystem()
+                }
+            }}
+        />
+    )), [selectedMilkyWay, focusSagittarusA, focusOnSolarSystem]);
+
+    // Boutons solarSystem pour le menu
+    const buttonsSolarSystem = useMemo(() => solarSystem.map((item) => (
+        <MenuButton
+            key={item.id || item}
+            itemKey={item.id || item}
+            label={item}
+            isActive={selectedSolarSystem === item}
+            onClick={async () => {
+                setSelectedSolarSystem(item)
+                if (item === 'Planets') {
+                    setFocusSolarSystem(true)
+                    focusOnSolarSystem()
+                } else if (item === 'Asteroid Belt') {
+                    setFocusOnAsteroid(false)
+                    await focusAsteroid('')
+                }
+            }}
+        />
+    )), [selectedSolarSystem, focusOnSolarSystem, focusAsteroid]);
+
+    // Boutons planets pour le menu
+    const buttonsPlanets = useMemo(() => planets.map((item) => (
+        <MenuButton
+            key={item.id}
+            itemKey={item.id}
+            label={item.englishName}
+            isActive={selectedPlanet === item.id}
+            onClick={() => {
+                setFocusOnPlanet(true)
+                focusPlanet(item.id)
+            }}
+        />
+    )), [planets, selectedPlanet, focusPlanet]);
+
+    // Boutons asteroids pour le menu
+    const buttonsAsteroids = useMemo(() => asteroids.map((item) => (
+        <MenuButton
+            key={item.id}
+            itemKey={item.id}
+            label={item.englishName}
+            isActive={selectedAsteroid === item.id}
+            onClick={() => {
+                setSelectedAsteroid(item.id)
+                setFocusOnAsteroid(true)
+                focusAsteroid(item.id)
+            }}
+        />
+    )), [asteroids, selectedAsteroid, focusAsteroid]);
+
+    // Boutons moons pour le menu
+    const buttonsMoons = useMemo(() => moons
+        .filter(item => !item.name.startsWith('S/'))
+        .map((item) => (
+            <MenuButton
+                key={item.id}
+                itemKey={item.id}
+                label={item.englishName}
+                isActive={selectedMoon === item.id}
+                onClick={() => {
+                    setFocusOnMoon(true)
+                    focusMoon(item.id, selectedPlanet)
+                }}
+            />
+        )), [moons, selectedMoon, selectedPlanet, focusMoon]);
 
     // Mapping des composants planètes sur la page
     const mapPlanets = planets.map((item, index) => {
@@ -515,7 +516,7 @@ export default function HomePage() {
                             }}>
                                 <div></div>
                                 {'Milky Way'}
-                                {milkyWayMenu ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                                {milkyWayMenu ? <MdKeyboardArrowUp /> : <MdKeyboardArrowDown />}
                             </div>
                             <div>
                                 {milkyWayMenu && buttonsMilkyWay}
@@ -533,7 +534,7 @@ export default function HomePage() {
                                 <div className={styles.menuTitle} onClick={() => setSolarSystemMenu(!solarSystemMenu)}>
                                     <div></div>
                                     {'Solar System'}
-                                    {solarSystemMenu ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                                    {solarSystemMenu ? <MdKeyboardArrowUp /> : <MdKeyboardArrowDown />}
 
                                 </div>
                                 <div>
@@ -557,7 +558,7 @@ export default function HomePage() {
                                 >
                                     <div></div>
                                     {!planetMenu ? selectedPlanet[0].toUpperCase() + selectedPlanet.slice(1) : 'Planets'}
-                                    {planetMenu ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                                    {planetMenu ? <MdKeyboardArrowUp /> : <MdKeyboardArrowDown />}
 
                                 </div>
                                 <div>
@@ -582,7 +583,7 @@ export default function HomePage() {
                                 >
                                     <div></div>
                                     {!asteroidMenu && selectedAsteroid ? selectedAsteroid[0].toUpperCase() + selectedAsteroid.slice(1) : 'Asteroids'}
-                                    {asteroidMenu ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                                    {asteroidMenu ? <MdKeyboardArrowUp /> : <MdKeyboardArrowDown />}
 
                                 </div>
                                 <div style={{ maxHeight: `290px`, overflow: 'auto' }}>
@@ -603,7 +604,7 @@ export default function HomePage() {
                                 >
                                     <div></div>
                                     {!moonMenu && selectedMoon ? selectedMoon[0].toUpperCase() + selectedMoon.slice(1) : 'Moons'}
-                                    {moonMenu ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                                    {moonMenu ? <MdKeyboardArrowUp /> : <MdKeyboardArrowDown />}
 
 
                                 </div>
@@ -617,7 +618,7 @@ export default function HomePage() {
                 </div>
 
                 {/* Affichage des objets */}
-                <div className={styles.container} >
+                <div className={styles.container}>
 
                     <MilkyWay size={planetStates.milkyWaySize} />
 

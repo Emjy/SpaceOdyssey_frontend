@@ -3,8 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 // Styles
 import styles from '../styles/MilkyWay.module.css';
 
-// Mui 
-import CenterFocusWeakIcon from '@mui/icons-material/CenterFocusWeak';
+// Icônes
+import { MdCenterFocusWeak } from 'react-icons/md';
 
 export default function MilkyWay(props) {
 

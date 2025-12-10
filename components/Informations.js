@@ -3,17 +3,9 @@ import React, { useState, useRef, useEffect } from 'react';
 // Styles
 import styles from '../styles/Informations.module.css';
 
-// MUI
-import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
-import DonutSmallRoundedIcon from '@mui/icons-material/DonutSmallRounded';
-import BlurCircularRoundedIcon from '@mui/icons-material/BlurCircularRounded';
-import DeviceThermostatRoundedIcon from '@mui/icons-material/DeviceThermostatRounded';
-import RotateLeftRoundedIcon from '@mui/icons-material/RotateLeftRounded';
-import PlayForWorkRoundedIcon from '@mui/icons-material/PlayForWorkRounded';
-import PublicIcon from '@mui/icons-material/Public';
-import FlareIcon from '@mui/icons-material/Flare';
-import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
-import TodayRoundedIcon from '@mui/icons-material/TodayRounded';
+// Icônes react-icons
+import { GiWeight } from 'react-icons/gi';
+import { MdDonutSmall, MdBlurCircular, MdDeviceThermostat, MdRotateLeft, MdPlayArrow, MdPublic, MdFlare, MdPerson, MdToday } from 'react-icons/md';
 
 export default function Informations(props) {
 
@@ -54,52 +46,52 @@ export default function Informations(props) {
             switch (key) {
                 case 'mass':
                     infoName = 'Mass';
-                    iconComponent = <FitnessCenterIcon />;
+                    iconComponent = <GiWeight />;
                     value = `${value.massValue.toFixed(2)} x 10e${value.massExponent} kg`;
                     break;
                 case 'meanRadius':
                     infoName = 'Mean radius';
-                    iconComponent = <DonutSmallRoundedIcon />;
+                    iconComponent = <MdDonutSmall />;
                     value = `${value} km`;
                     break;
                 case 'gravity':
                     infoName = 'Surface gravity';
-                    iconComponent = <PlayForWorkRoundedIcon />;
+                    iconComponent = <MdPlayArrow />;
                     value = `${value} m.s-2`;
                     break;
                 case 'density':
                     infoName = 'Density';
-                    iconComponent = <BlurCircularRoundedIcon />;
+                    iconComponent = <MdBlurCircular />;
                     value = `${value.toFixed(2)} g.cm3`;
                     break;
                 case 'avgTemp':
                     infoName = 'Average temperature';
-                    iconComponent = <DeviceThermostatRoundedIcon />;
+                    iconComponent = <MdDeviceThermostat />;
                     value = `${(value - 273.15).toFixed(2)} °C`;
                     break;
                 case 'sideralOrbit':
                     infoName = 'Sideral Orbit';
-                    iconComponent = <RotateLeftRoundedIcon />;
+                    iconComponent = <MdRotateLeft />;
                     value = `${(value / 365.242190).toFixed(3)} an(s)`;
                     break;
                 case 'numberOfStars':
                     infoName = 'Number of stars';
-                    iconComponent = <FlareIcon />;
+                    iconComponent = <MdFlare />;
                     value = `# ${value.toLocaleString('fr-FR') }`;
                     break;
                 case 'numberOfPlanets':
                     infoName = 'Number of planets';
-                    iconComponent = <PublicIcon />;
+                    iconComponent = <MdPublic />;
                     value = `# ${value.toLocaleString('fr-FR') }`;
                     break;
                 case 'discoveredBy':
                     infoName = 'Discover by';
-                    iconComponent = <PersonRoundedIcon />;
+                    iconComponent = <MdPerson />;
                     value = `${value}`;
                     break;
                 case 'discoveryDate':
                     infoName = 'Discovery date';
-                    iconComponent = <TodayRoundedIcon />;
+                    iconComponent = <MdToday />;
                     value = `${value}`;
                     break;
                 default:

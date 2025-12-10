@@ -35,13 +35,14 @@ export const infoObjetSup = async (objectName, setInfosSup) => {
 
 export const fetchMoons = async (planetName, setMoons) => {
     // Récupération des lunes de la planète pour le menu
-     fetch(`https://space-odyssey-backend.vercel.app/bodies/moons/${planetName}`)
-        .then((response) => response.json())
-        .then((data) => {
-            if (data.result) {
-                setMoons(data.moons)
-            }
-        }).catch(error => {
-            console.error('Une erreur s\'est produite :', error);
-        });
+    try {
+        const response = await fetch(`https://space-odyssey-backend.vercel.app/bodies/moons/${planetName}`);
+        const data = await response.json();
+        if (data.result) {
+            setMoons(data.moons);
+        }
+    } catch (error) {
+        // Gestion des erreurs
+        console.error('Une erreur s\'est produite :', error);
+    }
 }
