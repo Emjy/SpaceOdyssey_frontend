@@ -1,56 +1,43 @@
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 
-// Styles
 import styles from '../styles/HomePage.module.css';
 
-// Hooks personnalisés
 import usePlanetStates from '../hooks/usePlanetStates';
-import useSpaceData from '../hooks/useSpaceData';
+import useSpaceData    from '../hooks/useSpaceData';
 import useFocusManager from '../hooks/useFocusManager';
 
-// Composants
 import NavigationMenu from './NavigationMenu';
-import SpaceViewer from './SpaceViewer';
-import Informations from './Informations';
+import Informations   from './Informations';
 
-/**
- * Page principale de l'application SpaceOdyssey
- * Composant principal optimisé et modulaire
- */
+// Three.js — chargement côté client uniquement
+const SolarSystemScene = dynamic(() => import('./SolarSystemScene'), { ssr: false });
+
 export default function HomePage() {
-    // Hook pour les états des planètes (tailles, positions, etc.)
-    const { planetStates, setPlanetStates } = usePlanetStates();
-
-    // Hook pour récupérer les données depuis l'API
+    // usePlanetStates reste présent car useFocusManager en dépend (pour les infos/navigation)
+    // mais ses valeurs ne pilotent plus le rendu visuel (Three.js gère ça)
+    const { setPlanetStates } = usePlanetStates();
     const { planets, asteroids, loading } = useSpaceData();
 
-    // Hook pour gérer tous les états de focus et la navigation
     const {
-        // Setters nécessaires
-        setFocusSA,
-        setFocusSolarSystem,
         setFocusOnPlanet,
         setFocusOnMoon,
         setFocusOnAsteroid,
+        setFocusSA,
+        setFocusSolarSystem,
 
-        // États utilisés
         focusOneMoon,
-        selectedMilkyWay,
-        setSelectedMilkyWay,
-        selectedSolarSystem,
-        setSelectedSolarSystem,
+        selectedMilkyWay, setSelectedMilkyWay,
+        selectedSolarSystem, setSelectedSolarSystem,
         selectedPlanet,
-        selectedAsteroid,
-        setSelectedAsteroid,
+        selectedAsteroid, setSelectedAsteroid,
         selectedMoon,
         infos,
-        moons,
-        setMoons,
+        moons, setMoons,
         nbMoons,
 
-        // Fonctions
         focusMilkyWay,
         focusSagittarusA,
         focusOnSolarSystem,
@@ -59,85 +46,95 @@ export default function HomePage() {
         focusMoon,
     } = useFocusManager(setPlanetStates);
 
-    // Affichage de chargement
     if (loading) {
         return (
             <div className={styles.pageBackground}>
-                <div className={styles.container}>
-                    <p style={{ color: 'white', textAlign: 'center' }}>Chargement...</p>
-                </div>
+                <div className={styles.loadingState}>Chargement du système orbital…</div>
             </div>
         );
     }
 
     return (
         <div className={styles.pageBackground}>
-            {/* Menu de navigation */}
-            <NavigationMenu
-                // Données
-                planets={planets}
-                asteroids={asteroids}
-                moons={moons}
 
-                // États de sélection
-                selectedMilkyWay={selectedMilkyWay}
-                selectedSolarSystem={selectedSolarSystem}
-                selectedPlanet={selectedPlanet}
-                selectedAsteroid={selectedAsteroid}
-                selectedMoon={selectedMoon}
+            {/* Scène Three.js — plein écran en arrière-plan */}
+            <div className={styles.sceneLayer}>
+                <SolarSystemScene
+                    selectedPlanet={selectedPlanet}
+                    selectedMoon={selectedMoon}
+                    moons={moons}
+                    nbMoons={nbMoons}
+                    focusPlanet={focusPlanet}
+                    focusMoon={focusMoon}
+                    setFocusOnPlanet={setFocusOnPlanet}
+                    setFocusOnMoon={setFocusOnMoon}
+                />
+            </div>
 
-                // Fonctions de focus
-                focusMilkyWay={focusMilkyWay}
-                focusSagittarusA={focusSagittarusA}
-                focusOnSolarSystem={focusOnSolarSystem}
-                focusPlanet={focusPlanet}
-                focusAsteroid={focusAsteroid}
-                focusMoon={focusMoon}
-
-                // Setters
-                setFocusSA={setFocusSA}
-                setFocusSolarSystem={setFocusSolarSystem}
-                setFocusOnPlanet={setFocusOnPlanet}
-                setFocusOnAsteroid={setFocusOnAsteroid}
-                setFocusOnMoon={setFocusOnMoon}
-                setSelectedMilkyWay={setSelectedMilkyWay}
-                setSelectedSolarSystem={setSelectedSolarSystem}
-                setSelectedAsteroid={setSelectedAsteroid}
-                setMoons={setMoons}
-            />
-
-            {/* Visualisation 3D de l'espace */}
-            <SpaceViewer
-                planetStates={planetStates}
-                planets={planets}
-                asteroids={asteroids}
-                selectedSolarSystem={selectedSolarSystem}
-                selectedMilkyWay={selectedMilkyWay}
-                selectedAsteroid={selectedAsteroid}
-                selectedPlanet={selectedPlanet}
-                selectedMoon={selectedMoon}
-                nbMoons={nbMoons}
-                focusOneMoon={focusOneMoon}
-                focusSagittarusA={focusSagittarusA}
-                focusOnSolarSystem={focusOnSolarSystem}
-                focusPlanet={focusPlanet}
-                focusMoon={focusMoon}
-                focusAsteroid={focusAsteroid}
-                setFocusSA={setFocusSA}
-                setFocusSolarSystem={setFocusSolarSystem}
-                setFocusOnPlanet={setFocusOnPlanet}
-                setFocusOnMoon={setFocusOnMoon}
-                setSelectedMoon={() => {}} // Géré par useFocusManager
-                setSelectedAsteroid={setSelectedAsteroid}
-                setFocusOnAsteroid={setFocusOnAsteroid}
-            />
-
-            {/* Panneau d'informations */}
-            {infos && (
-                <div className={styles.rightContainer}>
-                    <Informations infos={infos} />
+            {/* Barre supérieure */}
+            <header className={`${styles.panel} ${styles.topBar}`}>
+                <div className={styles.topBarTitleGroup}>
+                    <div className={styles.eyebrow}>Orbital Atlas</div>
+                    <h1 className={styles.heroTitle}>Space Odyssey</h1>
+                    <p className={styles.heroCopy}>
+                        Drag pour pivoter · cliquez sur une planète pour la sélectionner
+                    </p>
                 </div>
-            )}
+                <div className={styles.stageMeta}>
+                    <div className={styles.footerChip}>
+                        Vue : {selectedSolarSystem || 'Système solaire'}
+                    </div>
+                    <div className={styles.footerChip}>
+                        Cible : {selectedPlanet || selectedMoon || '—'}
+                    </div>
+                    <div className={styles.footerChip}>
+                        {planets.length + asteroids.length} corps célestes
+                    </div>
+                </div>
+            </header>
+
+            {/* Menu gauche */}
+            <aside className={styles.leftDock}>
+                <NavigationMenu
+                    planets={planets}
+                    asteroids={asteroids}
+                    moons={moons}
+                    selectedMilkyWay={selectedMilkyWay}
+                    selectedSolarSystem={selectedSolarSystem}
+                    selectedPlanet={selectedPlanet}
+                    selectedAsteroid={selectedAsteroid}
+                    selectedMoon={selectedMoon}
+                    focusMilkyWay={focusMilkyWay}
+                    focusSagittarusA={focusSagittarusA}
+                    focusOnSolarSystem={focusOnSolarSystem}
+                    focusPlanet={focusPlanet}
+                    focusAsteroid={focusAsteroid}
+                    focusMoon={focusMoon}
+                    setFocusSA={setFocusSA}
+                    setFocusSolarSystem={setFocusSolarSystem}
+                    setFocusOnPlanet={setFocusOnPlanet}
+                    setFocusOnAsteroid={setFocusOnAsteroid}
+                    setFocusOnMoon={setFocusOnMoon}
+                    setSelectedMilkyWay={setSelectedMilkyWay}
+                    setSelectedSolarSystem={setSelectedSolarSystem}
+                    setSelectedAsteroid={setSelectedAsteroid}
+                    setMoons={setMoons}
+                />
+            </aside>
+
+            {/* Panneau d'info droit */}
+            <aside className={styles.rightDock}>
+                <div className={styles.rightContainer}>
+                    {infos ? (
+                        <Informations infos={infos} />
+                    ) : (
+                        <div className={`${styles.panel} ${styles.emptyInfo}`}>
+                            Sélectionne un objet depuis la scène ou le menu pour afficher sa fiche.
+                        </div>
+                    )}
+                </div>
+            </aside>
+
         </div>
     );
 }

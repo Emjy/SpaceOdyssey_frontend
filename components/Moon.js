@@ -19,7 +19,7 @@ export default function Moon(props) {
     return (
         <>
             <div style={{
-                borderTop: `solid rgba(255, 255, 255, ${props.moonSize < 0.4 ? 0.08 : 0.2}) 1px`,
+                border: `solid rgba(255, 255, 255, ${props.focus ? 0 : props.moonSize < 0.4 ? 0.08 : 0.18}) 1px`,
                 boxSizing: 'border-box',
                 borderRadius: '50%',
                 position: 'absolute',
@@ -38,7 +38,9 @@ export default function Moon(props) {
                     position: 'absolute',
                     left: props.focus ? 'none' : '50%',
                     top: props.focus ? 'none' : '50%',
-                    transform: props.focus ? 'translate(-50%, -50%)' : `translate(-50%, -50%) translateX(${props.moonOrbit * 0.5}vh)`,
+                    transform: props.focus
+                        ? `translate(-50%, -50%) rotateX(${-props.viewTilt}deg)`
+                        : `translate(-50%, -50%) translateX(${props.moonOrbit * 0.5}vh) rotateX(${-props.viewTilt}deg)`,
                     transition: `transform 1s ease-in, width 0.2s ease-in, height 0.2s ease-in`,
                     zIndex: `${index}`,
                     cursor: 'pointer',

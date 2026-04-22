@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, memo } from 'react';
+import React, { useState, useMemo, memo, useEffect } from 'react';
 import CollapsibleMenu from './ui/CollapsibleMenu';
 import MenuButton from './ui/MenuButton';
 import { milkyWay, solarSystem } from '../data/solarSystem';
@@ -42,11 +42,26 @@ const NavigationMenu = memo(({
     setMoons,
 }) => {
     // États locaux pour les menus
-    const [milkyWayMenu, setMilkyWayMenu] = useState(false);
+    const [milkyWayMenu, setMilkyWayMenu] = useState(true);
     const [solarSystemMenu, setSolarSystemMenu] = useState(false);
     const [planetMenu, setPlanetMenu] = useState(false);
     const [asteroidMenu, setAsteroidMenu] = useState(false);
     const [moonMenu, setMoonMenu] = useState(false);
+
+    // Auto-ouvrir les sous-menus à la navigation
+    useEffect(() => {
+        setSolarSystemMenu(selectedMilkyWay === 'Solar System');
+    }, [selectedMilkyWay]);
+
+    useEffect(() => {
+        if (selectedSolarSystem === 'Planets') setPlanetMenu(true);
+        if (selectedSolarSystem === 'Asteroid Belt') setAsteroidMenu(true);
+    }, [selectedSolarSystem]);
+
+    useEffect(() => {
+        if (moons.length > 0) setMoonMenu(true);
+        else setMoonMenu(false);
+    }, [moons.length]);
 
     // Boutons Milky Way
     const buttonsMilkyWay = useMemo(() =>
@@ -59,10 +74,8 @@ const NavigationMenu = memo(({
                 onClick={() => {
                     setSelectedMilkyWay(item);
                     if (item === 'Sagittarius A') {
-                        setFocusSA(true);
                         focusSagittarusA();
                     } else if (item === 'Solar System') {
-                        setFocusSolarSystem(true);
                         focusOnSolarSystem();
                     }
                 }}
@@ -82,16 +95,14 @@ const NavigationMenu = memo(({
                 onClick={async () => {
                     setSelectedSolarSystem(item);
                     if (item === 'Planets') {
-                        setFocusSolarSystem(true);
                         focusOnSolarSystem();
                     } else if (item === 'Asteroid Belt') {
-                        setFocusOnAsteroid(false);
                         await focusAsteroid('');
                     }
                 }}
             />
         )),
-        [selectedSolarSystem, focusOnSolarSystem, focusAsteroid, setFocusSolarSystem, setFocusOnAsteroid, setSelectedSolarSystem]
+        [selectedSolarSystem, focusOnSolarSystem, focusAsteroid, setFocusSolarSystem, setSelectedSolarSystem]
     );
 
     // Boutons Planètes
@@ -103,12 +114,11 @@ const NavigationMenu = memo(({
                 label={item.englishName}
                 isActive={selectedPlanet === item.id}
                 onClick={() => {
-                    setFocusOnPlanet(true);
                     focusPlanet(item.id);
                 }}
             />
         )),
-        [planets, selectedPlanet, focusPlanet, setFocusOnPlanet]
+        [planets, selectedPlanet, focusPlanet]
     );
 
     // Boutons Astéroïdes
@@ -132,7 +142,7 @@ const NavigationMenu = memo(({
     // Boutons Lunes
     const buttonsMoons = useMemo(() =>
         moons
-            .filter((item) => !item.name.startsWith('S/'))
+            .filter((item) => !item.name?.startsWith('S/'))
             .map((item) => (
                 <MenuButton
                     key={item.id}
@@ -140,24 +150,24 @@ const NavigationMenu = memo(({
                     label={item.englishName}
                     isActive={selectedMoon === item.id}
                     onClick={() => {
-                        setFocusOnMoon(true);
                         focusMoon(item.id, selectedPlanet);
                     }}
                 />
             )),
-        [moons, selectedMoon, selectedPlanet, focusMoon, setFocusOnMoon]
+        [moons, selectedMoon, selectedPlanet, focusMoon]
     );
 
     return (
-        <div className={styles.menu}>
+        <div className={`${styles.panel} ${styles.menu}`}>
             {/* Menu Milky Way */}
             <CollapsibleMenu
                 title="Milky Way"
                 isOpen={milkyWayMenu}
                 onToggle={() => {
-                    setMoons([]);
-                    setMilkyWayMenu(!milkyWayMenu);
-                    if (milkyWayMenu) {
+                    const opening = !milkyWayMenu;
+                    setMilkyWayMenu(opening);
+                    if (opening) {
+                        setMoons([]);
                         focusMilkyWay();
                     }
                 }}
@@ -179,9 +189,9 @@ const NavigationMenu = memo(({
             )}
 
             {/* Menu Planètes */}
-            {selectedPlanet && selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Planets' && (
+            {selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Planets' && (
                 <CollapsibleMenu
-                    title={!planetMenu ? selectedPlanet[0].toUpperCase() + selectedPlanet.slice(1) : 'Planets'}
+                    title={selectedPlanet ? selectedPlanet[0].toUpperCase() + selectedPlanet.slice(1) : 'Planets'}
                     isOpen={planetMenu}
                     onToggle={() => setPlanetMenu(!planetMenu)}
                     itemCount={planets.length}
@@ -192,9 +202,9 @@ const NavigationMenu = memo(({
             )}
 
             {/* Menu Astéroïdes */}
-            {selectedPlanet && selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Asteroid Belt' && (
+            {selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Asteroid Belt' && (
                 <CollapsibleMenu
-                    title={!asteroidMenu && selectedAsteroid ? selectedAsteroid[0].toUpperCase() + selectedAsteroid.slice(1) : 'Asteroids'}
+                    title={selectedAsteroid ? selectedAsteroid[0].toUpperCase() + selectedAsteroid.slice(1) : 'Asteroids'}
                     isOpen={asteroidMenu}
                     onToggle={() => setAsteroidMenu(!asteroidMenu)}
                     itemCount={asteroids.length}

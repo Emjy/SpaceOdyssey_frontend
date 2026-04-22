@@ -11,17 +11,16 @@ import styles from '../../styles/HomePage.module.css';
  */
 const MenuButton = React.memo(({ itemKey, label, isActive, onClick }) => {
     return (
-        <div
+        <button
             key={itemKey}
-            style={{
-                backgroundColor: isActive ? 'rgba(236, 243, 233, 0.2)' : '',
-                color: isActive ? 'white' : ''
-            }}
-            className={styles.secondaryButton}
+            type="button"
+            className={`${styles.secondaryButton} ${isActive ? styles.secondaryButtonActive : ''}`}
             onClick={onClick}
+            aria-pressed={isActive}
         >
-            {label}
-        </div>
+            <span className={styles.buttonLabel}>{label}</span>
+            <span className={styles.buttonIndicator}></span>
+        </button>
     );
 });
 

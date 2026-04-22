@@ -36,13 +36,16 @@ const CollapsibleMenu = memo(({
                     maxHeight: maxHeight || 'none'
                 }}
             >
-                <div className={styles.menuTitle} onClick={onToggle}>
-                    <div></div>
-                    {title}
+                <button className={styles.menuTitle} onClick={onToggle} type="button">
+                    <span className={styles.menuTitleText}>{title}</span>
+                    <span className={styles.menuCount}>{itemCount}</span>
                     {isOpen ? <MdKeyboardArrowUp /> : <MdKeyboardArrowDown />}
-                </div>
+                </button>
                 {isOpen && (
-                    <div style={scrollable ? { maxHeight: '290px', overflow: 'auto' } : {}}>
+                    <div
+                        className={styles.menuContent}
+                        style={scrollable ? { maxHeight: '290px', overflow: 'auto' } : {}}
+                    >
                         {children}
                     </div>
                 )}

@@ -18,11 +18,16 @@ export default function Asteroid(props) {
     return (
         <div
             style={{   
+                width: `${orbit}vh`,
+                height: `${orbit}vh`,
                 borderTop: 'solid rgba(255, 255, 255, 0.5) 1px',
                 boxSizing: 'border-box',
                 borderRadius: '50%',
-                position: 'absolute', 
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
                 animation: `orbit${props.nOrb} ${props.vitesse}s linear infinite`,
+                transform: 'translate(-50%, -50%)',
                 transition: `transform 0.5s ease, width 0.2s ease-in, height 0.2s ease-in`,
                 opacity: `${orbit}`,
                 zIndex: `${props.index}`,
@@ -31,8 +36,7 @@ export default function Asteroid(props) {
         >
             <div
                 style={{
-                    transform: `translate(-50%, -50%) translateX(${orbit / 2}vh)`,
-                    // borderRadius: '50%',
+                    transform: `translate(-50%, -50%) translateX(${orbit / 2}vh) rotateX(${-props.viewTilt}deg)`,
                     width: `${size * coef}vh`,
                     height: `${size * coef}vh`,
                     position: 'absolute',

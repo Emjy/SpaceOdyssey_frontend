@@ -37,18 +37,18 @@ export const VISUAL_DISTANCES = {
 
 // Limites de zoom
 export const ZOOM_LIMITS = {
-    MIN: 0.3,    // Zoom minimum (vue d'ensemble)
-    MAX: 5,      // Zoom maximum (vue rapprochée)
+    MIN: 0.55,    // Zoom minimum (vue d'ensemble)
+    MAX: 2.4,      // Zoom maximum (vue rapprochée)
     DEFAULT: 1,  // Zoom par défaut
-    STEP: 0.1,   // Pas d'incrémentation du zoom
+    STEP: 0.08,   // Pas d'incrémentation du zoom
 };
 
 // Configuration de la rotation 3D
 export const ROTATION_3D = {
-    MIN_ANGLE: -75,  // Angle minimum (vue du dessus = -90°, on limite à -75° pour la lisibilité)
-    MAX_ANGLE: 75,   // Angle maximum (vue du dessous = 90°, on limite à 75°)
-    DEFAULT_ANGLE: -60, // Angle par défaut (légère inclinaison)
-    SENSITIVITY: 0.5, // Sensibilité de la souris (degrés par pixel)
+    MIN_ANGLE: -45,
+    MAX_ANGLE: 45,
+    DEFAULT_ANGLE: 22,
+    SENSITIVITY: 0.25,
 };
 
 // Tailles relatives des planètes (échelle visuelle, pas réelle)

@@ -1,27 +1,11 @@
-import { fetchFromApi } from '../lib/api';
+import { getMoonsForPlanet, getObjectInfo } from '../data/celestialData';
 
 // Fonction pour récupération des informations sur l'objet en cours
 export const infoObjet = async (objectName, setInfos) => {
-    await setInfos(null)
-    try {
-        const data = await fetchFromApi(`/bodies/body/${objectName}`);
-        if (data.result) {
-            setInfos(data.body);
-        }
-    } catch (error) {
-        // Gestion des erreurs
-        console.error('Une erreur s\'est produite :', error);
-    }
-
-
-    try {
-        const data = await fetchFromApi(`/infos/${objectName}`);
-        if (data.result) {
-            setInfos(prevState => ({ ...prevState, ...data.info }));
-        }
-    } catch (error) {
-        // Gestion des erreurs
-        console.error('Une erreur s\'est produite :', error);
+    setInfos(null);
+    const objectInfo = getObjectInfo(objectName);
+    if (objectInfo) {
+        setInfos(objectInfo);
     }
 };
 
@@ -34,15 +18,5 @@ export const infoObjetSup = async (objectName, setInfosSup) => {
 }
 
 export const fetchMoons = async (planetName, setMoons) => {
-    // Récupération des lunes de la planète pour le menu
-    try {
-        const data = await fetchFromApi(`/bodies/moons/${planetName}`);
-        if (data.result) {
-            setMoons(data.moons);
-        }
-    } catch (error) {
-        // Gestion des erreurs
-        console.error('Une erreur s\'est produite :', error);
-        setMoons([]);
-    }
-}
+    setMoons(getMoonsForPlanet(planetName));
+};

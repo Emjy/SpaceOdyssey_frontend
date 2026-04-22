@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FALLBACK_PLANETS, fetchFromApi } from '../lib/api';
+import { getAsteroids, getPlanets } from '../data/celestialData';
 
 /**
  * Hook personnalisé pour récupérer les données des planètes et astéroïdes
@@ -19,29 +19,8 @@ export default function useSpaceData() {
             setError(null);
 
             try {
-                try {
-                    const planetsData = await fetchFromApi('/bodies/planets');
-                    if (planetsData.result && Array.isArray(planetsData.planets) && planetsData.planets.length > 0) {
-                        setPlanets(planetsData.planets);
-                    } else {
-                        setPlanets(FALLBACK_PLANETS);
-                    }
-                } catch (planetsError) {
-                    console.error('Erreur lors de la récupération des planètes:', planetsError);
-                    setPlanets(FALLBACK_PLANETS);
-                }
-
-                try {
-                    const asteroidsData = await fetchFromApi('/bodies/asteroids');
-                    if (asteroidsData.result && Array.isArray(asteroidsData.asteroids)) {
-                        setAsteroids(asteroidsData.asteroids);
-                    } else {
-                        setAsteroids([]);
-                    }
-                } catch (asteroidsError) {
-                    console.error('Erreur lors de la récupération des astéroïdes:', asteroidsError);
-                    setAsteroids([]);
-                }
+                setPlanets(getPlanets());
+                setAsteroids(getAsteroids());
             } catch (err) {
                 console.error('Erreur lors de la récupération des données:', err);
                 setError(err);

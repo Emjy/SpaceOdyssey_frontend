@@ -1,6 +1,21 @@
 /**
  * Configurations de vue pour différents états de focus dans l'application
+ * Orbites basées sur une échelle logarithmique réaliste des distances réelles
  */
+
+// Distances visuelles logarithmiques (en vh) basées sur les distances réelles en millions de km
+// Formule : Math.log10(distance_Mkm) * 15, ajustées pour tenir dans ~110vh
+const ORB = {
+    mercury: 26,   // 57.9 Mkm → log10(57.9)*15 ≈ 26
+    venus:   30,   // 108.2 Mkm → log10(108.2)*15 ≈ 30
+    earth:   33,   // 149.6 Mkm
+    mars:    36,   // 227.9 Mkm
+    jupiter: 44,   // 778.5 Mkm
+    saturn:  48,   // 1432 Mkm
+    uranus:  52,   // 2867 Mkm
+    neptune: 55,   // 4515 Mkm
+    pluto:   57,   // 5906 Mkm
+};
 
 // Configuration vide (tout masqué)
 const EMPTY_STATE = {
@@ -11,7 +26,7 @@ const EMPTY_STATE = {
     earthOrbit: 0, earthSize: 0, earthIndex: 0,
     marsOrbit: 0, marsSize: 0, marsIndex: 0,
     jupiterOrbit: 0, jupiterSize: 0, jupiterIndex: 0,
-    saturnOrbit: 0, saturnSize: 0, saturnIndexIndex: 0,
+    saturnOrbit: 0, saturnSize: 0, saturnIndex: 0,
     uranusOrbit: 0, uranusSize: 0, uranusIndex: 0,
     neptuneOrbit: 0, neptuneSize: 0, neptuneIndex: 0,
     plutoOrbit: 0, plutoSize: 0, plutoIndex: 0,
@@ -19,8 +34,6 @@ const EMPTY_STATE = {
 
 // Vue Milky Way
 export const MILKY_WAY_VIEW = {
-    milkyWaySize: 80, sagittarusA: 16, indexSa: 10,
-    sunSize: 1.6, indexSun: 10, sunOrbit: 21,
     ...EMPTY_STATE,
     milkyWaySize: 80, sagittarusA: 16, indexSa: 10,
     sunSize: 1.6, indexSun: 10, sunOrbit: 21,
@@ -33,31 +46,31 @@ export const SAGITTARIUS_VIEW = {
     indexSa: 10,
 };
 
-// Vue Solar System
+// Vue Solar System — orbites logarithmiques réalistes
 export const SOLAR_SYSTEM_VIEW = {
     milkyWaySize: 0, sagittarusA: 0, indexSa: 0,
-    sunSize: 10, indexSun: 10, sunOrbit: 0,
-    mercuryOrbit: 16, mercurySize: 1.5, mercuryIndex: 9,
-    venusOrbit: 24, venusSize: 1.5, venusIndex: 8,
-    earthOrbit: 32, earthSize: 2, earthIndex: 7,
-    marsOrbit: 40, marsSize: 2, marsIndex: 6,
-    jupiterOrbit: 56, jupiterSize: 4, jupiterIndex: 5,
-    saturnOrbit: 68, saturnSize: 4, saturnIndex: 4,
-    uranusOrbit: 80, uranusSize: 4, uranusIndex: 3,
-    neptuneOrbit: 92, neptuneSize: 4, neptuneIndex: 2,
-    plutoOrbit: 104, plutoSize: 1.5, plutoIndex: 1,
+    sunSize: 8, indexSun: 10, sunOrbit: 0,
+    mercuryOrbit: ORB.mercury, mercurySize: 1.5, mercuryIndex: 9,
+    venusOrbit:   ORB.venus,   venusSize: 2,   venusIndex: 8,
+    earthOrbit:   ORB.earth,   earthSize: 2,   earthIndex: 7,
+    marsOrbit:    ORB.mars,    marsSize: 1.8,  marsIndex: 6,
+    jupiterOrbit: ORB.jupiter, jupiterSize: 4.5, jupiterIndex: 5,
+    saturnOrbit:  ORB.saturn,  saturnSize: 4,  saturnIndex: 4,
+    uranusOrbit:  ORB.uranus,  uranusSize: 3,  uranusIndex: 3,
+    neptuneOrbit: ORB.neptune, neptuneSize: 3, neptuneIndex: 2,
+    plutoOrbit:   ORB.pluto,   plutoSize: 1.2, plutoIndex: 1,
 };
 
-// Vue ceinture d'astéroïdes
+// Vue ceinture d'astéroïdes (entre Mars et Jupiter)
 export const ASTEROID_BELT_VIEW = {
     milkyWaySize: 0, sagittarusA: 0, indexSa: 0,
     sunSize: 2, indexSun: 100, sunOrbit: 0,
-    mercuryOrbit: 5, mercurySize: 1, mercuryIndex: 0,
-    venusOrbit: 10, venusSize: 1, venusIndex: 0,
-    earthOrbit: 15, earthSize: 1, earthIndex: 0,
-    marsOrbit: 20, marsSize: 1, marsIndex: 0,
-    jupiterOrbit: 90, jupiterSize: 10, jupiterIndex: 0,
-    saturnOrbit: 0, saturnSize: 0, saturnIndexIndex: 0,
+    mercuryOrbit: 5,  mercurySize: 0.8, mercuryIndex: 0,
+    venusOrbit:   9,  venusSize: 0.9,   venusIndex: 0,
+    earthOrbit:   13, earthSize: 1,     earthIndex: 0,
+    marsOrbit:    18, marsSize: 0.8,    marsIndex: 0,
+    jupiterOrbit: 85, jupiterSize: 8,   jupiterIndex: 0,
+    saturnOrbit: 0, saturnSize: 0, saturnIndex: 0,
     uranusOrbit: 0, uranusSize: 0, uranusIndex: 0,
     neptuneOrbit: 0, neptuneSize: 0, neptuneIndex: 0,
     plutoOrbit: 0, plutoSize: 0, plutoIndex: 0,

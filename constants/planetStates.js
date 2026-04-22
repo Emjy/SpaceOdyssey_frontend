@@ -26,7 +26,7 @@ export const DEFAULT_PLANET_STATE = {
     jupiterIndex: 5,
     saturnOrbit: 0,
     saturnSize: 0,
-    saturnIndexIndex: 4,
+    saturnIndex: 4,
     uranusOrbit: 0,
     uranusSize: 0,
     uranusIndex: 3,
