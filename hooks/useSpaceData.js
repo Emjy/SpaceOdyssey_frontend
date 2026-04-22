@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-const API_BASE_URL = 'https://space-odyssey-backend.vercel.app';
+import { FALLBACK_PLANETS, fetchFromApi } from '../lib/api';
 
 /**
  * Hook personnalisé pour récupérer les données des planètes et astéroïdes
@@ -20,18 +19,28 @@ export default function useSpaceData() {
             setError(null);
 
             try {
-                // Récupération des planètes
-                const planetsResponse = await fetch(`${API_BASE_URL}/bodies/planets`);
-                const planetsData = await planetsResponse.json();
-                if (planetsData.result) {
-                    setPlanets(planetsData.planets);
+                try {
+                    const planetsData = await fetchFromApi('/bodies/planets');
+                    if (planetsData.result && Array.isArray(planetsData.planets) && planetsData.planets.length > 0) {
+                        setPlanets(planetsData.planets);
+                    } else {
+                        setPlanets(FALLBACK_PLANETS);
+                    }
+                } catch (planetsError) {
+                    console.error('Erreur lors de la récupération des planètes:', planetsError);
+                    setPlanets(FALLBACK_PLANETS);
                 }
 
-                // Récupération des astéroïdes
-                const asteroidsResponse = await fetch(`${API_BASE_URL}/bodies/asteroids`);
-                const asteroidsData = await asteroidsResponse.json();
-                if (asteroidsData.result) {
-                    setAsteroids(asteroidsData.asteroids);
+                try {
+                    const asteroidsData = await fetchFromApi('/bodies/asteroids');
+                    if (asteroidsData.result && Array.isArray(asteroidsData.asteroids)) {
+                        setAsteroids(asteroidsData.asteroids);
+                    } else {
+                        setAsteroids([]);
+                    }
+                } catch (asteroidsError) {
+                    console.error('Erreur lors de la récupération des astéroïdes:', asteroidsError);
+                    setAsteroids([]);
                 }
             } catch (err) {
                 console.error('Erreur lors de la récupération des données:', err);

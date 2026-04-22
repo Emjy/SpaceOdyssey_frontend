@@ -1,9 +1,10 @@
+import { fetchFromApi } from '../lib/api';
+
 // Fonction pour récupération des informations sur l'objet en cours
 export const infoObjet = async (objectName, setInfos) => {
     await setInfos(null)
     try {
-        const response = await fetch(`https://space-odyssey-backend.vercel.app/bodies/body/${objectName}`);
-        const data = await response.json();
+        const data = await fetchFromApi(`/bodies/body/${objectName}`);
         if (data.result) {
             setInfos(data.body);
         }
@@ -14,8 +15,7 @@ export const infoObjet = async (objectName, setInfos) => {
 
 
     try {
-        const response = await fetch(`https://space-odyssey-backend.vercel.app/infos/${objectName}`);
-        const data = await response.json();
+        const data = await fetchFromApi(`/infos/${objectName}`);
         if (data.result) {
             setInfos(prevState => ({ ...prevState, ...data.info }));
         }
@@ -36,13 +36,13 @@ export const infoObjetSup = async (objectName, setInfosSup) => {
 export const fetchMoons = async (planetName, setMoons) => {
     // Récupération des lunes de la planète pour le menu
     try {
-        const response = await fetch(`https://space-odyssey-backend.vercel.app/bodies/moons/${planetName}`);
-        const data = await response.json();
+        const data = await fetchFromApi(`/bodies/moons/${planetName}`);
         if (data.result) {
             setMoons(data.moons);
         }
     } catch (error) {
         // Gestion des erreurs
         console.error('Une erreur s\'est produite :', error);
+        setMoons([]);
     }
 }
