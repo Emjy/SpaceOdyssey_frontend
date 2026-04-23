@@ -136,6 +136,42 @@ function makeSoftDiscTexture({
     return texture;
 }
 
+function makeGlowBandTexture({
+    centerColor = 'rgba(255,255,255,0.9)',
+    edgeColor = 'rgba(255,255,255,0)',
+    width = 512,
+    height = 80,
+} = {}) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const across = ctx.createLinearGradient(0, 0, 0, height);
+    across.addColorStop(0, edgeColor);
+    across.addColorStop(0.18, 'rgba(255,255,255,0.08)');
+    across.addColorStop(0.5, centerColor);
+    across.addColorStop(0.82, 'rgba(255,255,255,0.08)');
+    across.addColorStop(1, edgeColor);
+    ctx.fillStyle = across;
+    ctx.fillRect(0, 0, width, height);
+
+    const along = ctx.createLinearGradient(0, 0, width, 0);
+    along.addColorStop(0, 'rgba(255,255,255,0.92)');
+    along.addColorStop(0.12, 'rgba(255,255,255,1)');
+    along.addColorStop(0.78, 'rgba(255,255,255,0.9)');
+    along.addColorStop(1, 'rgba(255,255,255,0.36)');
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = along;
+    ctx.fillRect(0, 0, width, height);
+    ctx.globalCompositeOperation = 'source-over';
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
 function makeSaturnRings(planetRadius) {
     // Anneaux principaux visibles de Saturne, en proportion du rayon de la planète.
     const inner = planetRadius * 1.11;
@@ -541,17 +577,13 @@ export default function SolarSystemScene({
             outerColor: 'rgba(255,255,255,0)',
             size: 256,
         });
-        const armGlowTexture = makeSoftDiscTexture({
-            innerColor: 'rgba(224,236,255,0.82)',
-            midColor: 'rgba(165,196,255,0.22)',
-            outerColor: 'rgba(0,0,0,0)',
-            size: 256,
+        const armRibbonTexture = makeGlowBandTexture({
+            centerColor: 'rgba(223,236,255,0.96)',
+            edgeColor: 'rgba(255,255,255,0)',
         });
-        const armDenseTexture = makeSoftDiscTexture({
-            innerColor: 'rgba(232,240,255,0.92)',
-            midColor: 'rgba(176,204,255,0.28)',
-            outerColor: 'rgba(0,0,0,0)',
-            size: 256,
+        const armRibbonCoreTexture = makeGlowBandTexture({
+            centerColor: 'rgba(245,248,255,0.98)',
+            edgeColor: 'rgba(255,255,255,0)',
         });
         const hiiTexture = makeSoftDiscTexture({
             innerColor: 'rgba(255,194,206,0.92)',
@@ -567,10 +599,10 @@ export default function SolarSystemScene({
         });
 
         const armDefinitions = [
-            { phase: 0.34, twist: 0.165, width: 0.13, start: 10, end: 92, weight: 1.15, primary: true, sway: 0.06 },
-            { phase: Math.PI + 0.34, twist: 0.165, width: 0.13, start: 10, end: 92, weight: 1.15, primary: true, sway: 0.06 },
-            { phase: Math.PI / 2 + 0.82, twist: 0.152, width: 0.17, start: 16, end: 84, weight: 0.7, primary: false, sway: 0.05 },
-            { phase: (Math.PI * 3) / 2 + 0.82, twist: 0.152, width: 0.17, start: 16, end: 84, weight: 0.7, primary: false, sway: 0.05 },
+            { phase: 0.28, twist: 0.168, width: 0.11, start: 5, end: 92, weight: 1.25, primary: true, sway: 0.045 },
+            { phase: Math.PI + 0.28, twist: 0.168, width: 0.11, start: 5, end: 92, weight: 1.25, primary: true, sway: 0.045 },
+            { phase: Math.PI / 2 + 0.72, twist: 0.154, width: 0.15, start: 8, end: 84, weight: 0.68, primary: false, sway: 0.038 },
+            { phase: (Math.PI * 3) / 2 + 0.72, twist: 0.154, width: 0.15, start: 8, end: 84, weight: 0.68, primary: false, sway: 0.038 },
         ];
         const armWeightSum = armDefinitions.reduce((sum, arm) => sum + arm.weight, 0);
         const pickArm = () => {
@@ -581,17 +613,85 @@ export default function SolarSystemScene({
             }
             return armDefinitions[0];
         };
-        const sampleArmPoint = (arm, radius, scatterScale = 1) => {
+        const getArmCenterPoint = (arm, radius) => {
             const localRadius = Math.max(radius - arm.start, 0);
-            const angleNoise = (Math.random() - 0.5) * (arm.width + radius * 0.0018) * 6 * scatterScale;
             const wave = Math.sin(localRadius * 0.085 + arm.phase * 1.3) * arm.sway;
-            const angle = arm.phase + localRadius * arm.twist + wave + angleNoise;
+            const angle = arm.phase + localRadius * arm.twist + wave;
+            return {
+                angle,
+                x: Math.cos(angle) * radius,
+                z: Math.sin(angle) * radius,
+            };
+        };
+        const sampleArmPoint = (arm, radius, scatterScale = 1) => {
+            const centerPoint = getArmCenterPoint(arm, radius);
+            const angleNoise = (Math.random() - 0.5) * (arm.width + radius * 0.0018) * 6 * scatterScale;
             const radialNoise = (Math.random() - 0.5) * 1.8;
+            const angle = centerPoint.angle + angleNoise;
             return {
                 angle,
                 x: Math.cos(angle) * (radius + radialNoise),
                 z: Math.sin(angle) * (radius + radialNoise),
             };
+        };
+        const buildArmRibbon = (arm, {
+            texture,
+            widthStart,
+            widthEnd,
+            opacity,
+            color,
+            innerRadius = arm.start,
+            outerRadius = arm.end,
+            steps = 180,
+        }) => {
+            const positions = [];
+            const uvs = [];
+            const indices = [];
+            const colors = [];
+
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const radius = THREE.MathUtils.lerp(innerRadius, outerRadius, t);
+                const center = getArmCenterPoint(arm, radius);
+                const prev = getArmCenterPoint(arm, Math.max(innerRadius, radius - 0.4));
+                const next = getArmCenterPoint(arm, Math.min(outerRadius, radius + 0.4));
+                const tangent = new THREE.Vector2(next.x - prev.x, next.z - prev.z).normalize();
+                const normal = new THREE.Vector2(-tangent.y, tangent.x);
+                const width = THREE.MathUtils.lerp(widthStart, widthEnd, Math.pow(t, 0.72));
+                const halfWidth = width * 0.5;
+
+                positions.push(
+                    center.x - normal.x * halfWidth, 0, center.z - normal.y * halfWidth,
+                    center.x + normal.x * halfWidth, 0, center.z + normal.y * halfWidth
+                );
+                uvs.push(t, 0, t, 1);
+                colors.push(color.r, color.g, color.b, color.r, color.g, color.b);
+
+                if (i < steps) {
+                    const base = i * 2;
+                    indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+                }
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.setIndex(indices);
+
+            return new THREE.Mesh(
+                geometry,
+                new THREE.MeshBasicMaterial({
+                    map: texture,
+                    transparent: true,
+                    opacity,
+                    color: 0xffffff,
+                    vertexColors: true,
+                    depthWrite: false,
+                    side: THREE.DoubleSide,
+                    blending: THREE.AdditiveBlending,
+                })
+            );
         };
 
         const buildGalaxyPopulation = (count, size, opacity, palette) => {
@@ -614,7 +714,7 @@ export default function SolarSystemScene({
                     color = palette.core.clone().lerp(palette.disk, Math.min(r / 22, 1));
                 } else {
                     const arm = pickArm();
-                    const radius = arm.start + Math.pow(Math.random(), arm.primary ? 0.72 : 0.82) * (arm.end - arm.start);
+                    const radius = arm.start + Math.pow(Math.random(), arm.primary ? 1.7 : 1.45) * (arm.end - arm.start);
                     const point = sampleArmPoint(arm, radius, arm.primary ? 0.7 : 0.95);
                     x = point.x;
                     z = point.z;
@@ -711,6 +811,32 @@ export default function SolarSystemScene({
         galaxyDisk.add(galaxyBulge);
         galaxyDisk.add(galaxyBulgeCore);
 
+        const armGlowRibbons = armDefinitions.map((arm) => {
+            const broadRibbon = buildArmRibbon(arm, {
+                texture: armRibbonTexture,
+                widthStart: arm.primary ? 14 : 11,
+                widthEnd: arm.primary ? 6.5 : 5,
+                opacity: arm.primary ? 0.2 : 0.13,
+                color: arm.primary ? new THREE.Color('#bfd3f3') : new THREE.Color('#aebfd8'),
+                innerRadius: arm.start,
+                outerRadius: arm.end,
+                steps: arm.primary ? 220 : 190,
+            });
+            const coreRibbon = buildArmRibbon(arm, {
+                texture: armRibbonCoreTexture,
+                widthStart: arm.primary ? 8.5 : 6.4,
+                widthEnd: arm.primary ? 3.8 : 2.8,
+                opacity: arm.primary ? 0.15 : 0.1,
+                color: arm.primary ? new THREE.Color('#e4ecff') : new THREE.Color('#d0daf0'),
+                innerRadius: arm.start,
+                outerRadius: arm.end,
+                steps: arm.primary ? 220 : 190,
+            });
+            galaxyDisk.add(broadRibbon);
+            galaxyDisk.add(coreRibbon);
+            return { broadRibbon, coreRibbon };
+        });
+
         const coreGlowSpecs = [
             { size: 24, opacity: 0.96, x: 0, z: 0, y: 0.03 },
             { size: 42, opacity: 0.34, x: 0.6, z: -0.3, y: 0.02 },
@@ -757,52 +883,6 @@ export default function SolarSystemScene({
             depthWrite: false,
         }));
         galaxyRoot.add(halo);
-
-        const armMistClouds = [];
-        for (let i = 0; i < 300; i++) {
-            const arm = pickArm();
-            const radius = arm.start + Math.pow(Math.random(), 0.7) * (arm.end - arm.start);
-            const point = sampleArmPoint(arm, radius, 0.28);
-            const cloud = new THREE.Mesh(
-                new THREE.PlaneGeometry(7 + Math.random() * 20, 4 + Math.random() * 11),
-                new THREE.MeshBasicMaterial({
-                    map: armGlowTexture,
-                    transparent: true,
-                    opacity: 0.12 + Math.random() * 0.13,
-                    depthWrite: false,
-                    alphaTest: 0.004,
-                    blending: THREE.AdditiveBlending,
-                })
-            );
-            cloud.position.set(point.x, (Math.random() - 0.5) * 0.45, point.z);
-            cloud.rotation.x = -Math.PI / 2;
-            cloud.rotation.z = point.angle + Math.PI / 2 + (Math.random() - 0.5) * 0.34;
-            armMistClouds.push(cloud);
-            galaxyDisk.add(cloud);
-        }
-
-        const armDenseClouds = [];
-        for (let i = 0; i < 140; i++) {
-            const arm = pickArm();
-            const radius = Math.max(18, arm.start + Math.pow(Math.random(), 0.68) * (arm.end - arm.start));
-            const point = sampleArmPoint(arm, radius, 0.2);
-            const cloud = new THREE.Mesh(
-                new THREE.PlaneGeometry(10 + Math.random() * 24, 3.5 + Math.random() * 7),
-                new THREE.MeshBasicMaterial({
-                    map: armDenseTexture,
-                    transparent: true,
-                    opacity: 0.08 + Math.random() * 0.1,
-                    depthWrite: false,
-                    alphaTest: 0.004,
-                    blending: THREE.AdditiveBlending,
-                })
-            );
-            cloud.position.set(point.x, (Math.random() - 0.5) * 0.28, point.z);
-            cloud.rotation.x = -Math.PI / 2;
-            cloud.rotation.z = point.angle + Math.PI / 2 + (Math.random() - 0.5) * 0.16;
-            armDenseClouds.push(cloud);
-            galaxyDisk.add(cloud);
-        }
 
         const dustBands = [];
         for (let i = 0; i < 120; i++) {
@@ -1141,11 +1221,9 @@ export default function SolarSystemScene({
                 coreGlows.forEach((glow, index) => {
                     glow.material.opacity = coreGlowSpecs[index].opacity * (0.96 + Math.sin(time * 0.00035 + index) * 0.04);
                 });
-                armMistClouds.forEach((cloud, index) => {
-                    cloud.material.opacity = 0.09 + ((Math.sin(time * 0.00022 + index * 0.37) + 1) * 0.5) * 0.1;
-                });
-                armDenseClouds.forEach((cloud, index) => {
-                    cloud.material.opacity = 0.07 + ((Math.sin(time * 0.00018 + index * 0.19) + 1) * 0.5) * 0.08;
+                armGlowRibbons.forEach(({ broadRibbon, coreRibbon }, index) => {
+                    broadRibbon.material.opacity = (index < 2 ? 0.2 : 0.13) * (0.98 + Math.sin(time * 0.00016 + index) * 0.03);
+                    coreRibbon.material.opacity = (index < 2 ? 0.15 : 0.1) * (0.98 + Math.sin(time * 0.00019 + index * 1.7) * 0.03);
                 });
                 gasClouds.forEach((cloud, index) => {
                     cloud.material.opacity = 0.18 + ((Math.sin(time * 0.00045 + index * 0.51) + 1) * 0.5) * 0.16;
