@@ -66,7 +66,13 @@ function makeTrailArc(radius, color = 0xffffff, opacity = 0.4, reversed = false)
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colorArr, 3));
 
-    const mat = new THREE.LineBasicMaterial({ vertexColors: true, opacity, transparent: true, depthWrite: false });
+    const mat = new THREE.LineBasicMaterial({
+        vertexColors: true,
+        opacity,
+        transparent: true,
+        depthWrite: false,
+        linewidth: 2,
+    });
     return new THREE.Line(geo, mat);
 }
 
@@ -431,16 +437,16 @@ export default function SolarSystemScene({
         PLANET_DATA.forEach((cfg, i) => {
             const orbitRadius = getCompressedPlanetRadius(cfg.name, planets);
             const orbitSpeed = getCompressedPlanetSpeed(cfg.name, planets);
-            // Arc de traîne 180° — sera tourné chaque frame
-            const arc = makeTrailArc(orbitRadius);
-            scene.add(arc);
-
             const orbitGroup = new THREE.Group();
             orbitGroup.rotation.x = getOrbitalInclination(
                 planets.find((planet) => planet.id === cfg.name),
                 0
             );
             scene.add(orbitGroup);
+
+            // Arc de traîne 180° dans le même plan orbital que la planète.
+            const arc = makeTrailArc(orbitRadius);
+            orbitGroup.add(arc);
 
             const group = new THREE.Group();
             orbitGroup.add(group);
@@ -459,7 +465,7 @@ export default function SolarSystemScene({
                 tiltGroup.add(ring);
             }
 
-            const initAngle = (i / PLANET_DATA.length) * Math.PI * 2;
+            const initAngle = Math.random() * Math.PI * 2;
             group.position.set(Math.cos(initAngle) * orbitRadius, 0, Math.sin(initAngle) * orbitRadius);
 
             planetsRef.current[cfg.name] = { orbitGroup, group, mesh, arc, ring, angle: initAngle, r: orbitRadius, speed: orbitSpeed };
@@ -475,7 +481,7 @@ export default function SolarSystemScene({
             const orbitRadius = asteroidBeltInner + (i / Math.max(asteroids.length - 1, 1)) * beltSpread + ((i % 3) - 1) * 0.22;
             const size = THREE.MathUtils.clamp((asteroid.meanRadius ?? 40) / 900, 0.035, 0.18);
             const mesh = makeSphere(size, '#a59a8a', '#120f0b');
-            const angle = (i / Math.max(asteroids.length, 1)) * Math.PI * 2;
+            const angle = Math.random() * Math.PI * 2;
             const height = ((i % 5) - 2) * 0.08;
 
             mesh.position.set(Math.cos(angle) * orbitRadius, height, Math.sin(angle) * orbitRadius);
@@ -691,8 +697,7 @@ export default function SolarSystemScene({
                 p.group.position.set(Math.cos(p.angle) * p.r, 0, Math.sin(p.angle) * p.r);
                 p.mesh.rotation.y += 0.004 * cfg.rotDir;
 
-                // Arc rotatif : rotation.y = -angle aligne le début de l'arc sur la planète
-                // (correction du sens de rotation Three.js vs EllipseCurve)
+                // Aligne l'extrémité de la traînée sur le centre courant de la planète.
                 p.arc.rotation.y = Math.PI - p.angle;
 
                 // Opacité : lors d'un focus, cacher tout sauf la planète sélectionnée
@@ -724,6 +729,7 @@ export default function SolarSystemScene({
             moonsRef.current.forEach(m => {
                 m.angle -= THREE.MathUtils.degToRad(m.speed);
                 m.mesh.position.set(Math.cos(m.angle) * m.radius, 0, Math.sin(m.angle) * m.radius);
+                // Même logique pour les lunes : l'extrémité lumineuse doit passer par le centre.
                 m.arc.rotation.y = -m.angle;
                 m.mesh.rotation.y -= 0.008;
             });
@@ -894,7 +900,7 @@ export default function SolarSystemScene({
             }
             orbitGroup.add(mesh);
 
-            const initAngle = (i / visibleMoons.length) * Math.PI * 2;
+            const initAngle = Math.random() * Math.PI * 2;
             mesh.position.set(Math.cos(initAngle) * moonOrbitR, 0, Math.sin(initAngle) * moonOrbitR);
             moonsRef.current.push({
                 orbitGroup,
