@@ -7,24 +7,26 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const PLANET_DATA = [
-    { name: 'mercure', r: 10,   size: 0.15, color: '#c8c8c8', emissive: '#555555', speed: 0.16 },
-    { name: 'venus',   r: 13,   size: 0.35, color: '#f0d080', emissive: '#6b4a00', speed: 0.10 },
-    { name: 'terre',   r: 16,   size: 0.38, color: '#4a80c0', emissive: '#0a2a50', speed: 0.07 },
-    { name: 'mars',    r: 19,   size: 0.22, color: '#d05010', emissive: '#501800', speed: 0.04 },
-    // On laisse un grand vide pour la ceinture d'astéroïdes
-    { name: 'jupiter', r: 28,   size: 1.40, color: '#d8a060', emissive: '#4a2800', speed: 0.016 },
-    { name: 'saturne', r: 36,   size: 1.20, color: '#ede0a0', emissive: '#504000', speed: 0.010 },
-    { name: 'uranus',  r: 45,   size: 0.75, color: '#88eef0', emissive: '#104050', speed: 0.006 },
-    { name: 'neptune', r: 52,   size: 0.72, color: '#3355e8', emissive: '#0c1555', speed: 0.004 },
-    { name: 'pluton',  r: 58,   size: 0.12, color: '#9a8070', emissive: '#302520', speed: 0.002 },
+    //                                                                               tilt(°)  rotDir (+1=prograde, -1=rétrograde)
+    { name: 'mercure', r: 10, size: 0.15, color: '#c8c8c8', emissive: '#555555', speed: 0.16,  tilt:   0.03, rotDir:  1 },
+    { name: 'venus',   r: 13, size: 0.35, color: '#f0d080', emissive: '#6b4a00', speed: 0.10,  tilt: 177.4,  rotDir: -1 },
+    { name: 'terre',   r: 16, size: 0.38, color: '#4a80c0', emissive: '#0a2a50', speed: 0.07,  tilt:  23.44, rotDir:  1 },
+    { name: 'mars',    r: 19, size: 0.22, color: '#d05010', emissive: '#501800', speed: 0.04,  tilt:  25.19, rotDir:  1 },
+    { name: 'jupiter', r: 28, size: 1.40, color: '#d8a060', emissive: '#4a2800', speed: 0.016, tilt:   3.13, rotDir:  1 },
+    { name: 'saturne', r: 36, size: 1.20, color: '#ede0a0', emissive: '#504000', speed: 0.010, tilt:  26.73, rotDir:  1 },
+    { name: 'uranus',  r: 45, size: 0.75, color: '#88eef0', emissive: '#104050', speed: 0.006, tilt:  97.77, rotDir: -1 },
+    { name: 'neptune', r: 52, size: 0.72, color: '#3355e8', emissive: '#0c1555', speed: 0.004, tilt:  28.32, rotDir:  1 },
+    { name: 'pluton',  r: 58, size: 0.12, color: '#9a8070', emissive: '#302520', speed: 0.002, tilt: 122.53, rotDir: -1 },
 ];
 
 const DEFAULT_CAM_DIST = 90;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Arc de traîne 180° avec dégradé : transparent à la queue, opaque à la tête (planète)
-function makeTrailArc(radius, color = 0xffffff, opacity = 0.28) {
+// Arc de traîne 180° avec dégradé.
+// reversed=false : φ=0 sombre (queue), φ=π lumineux (tête à la planète) — arc.rotation.y = Math.PI - angle
+// reversed=true  : φ=0 lumineux (tête à la lune),  φ=π sombre (queue)   — arc.rotation.y = -angle
+function makeTrailArc(radius, color = 0xffffff, opacity = 0.28, reversed = false) {
     const N = 128;
     const pts = new THREE.EllipseCurve(0, 0, radius, radius, 0, Math.PI, false, 0)
         .getPoints(N)
@@ -34,8 +36,8 @@ function makeTrailArc(radius, color = 0xffffff, opacity = 0.28) {
     const c = new THREE.Color(color);
     const colorArr = new Float32Array((N + 1) * 3);
     for (let i = 0; i <= N; i++) {
-        const t = i / N; // 0 = queue (loin), 1 = tête (planète)
-        colorArr[i * 3] = c.r * t;
+        const t = reversed ? 1 - i / N : i / N;
+        colorArr[i * 3]     = c.r * t;
         colorArr[i * 3 + 1] = c.g * t;
         colorArr[i * 3 + 2] = c.b * t;
     }
@@ -171,11 +173,16 @@ export default function SolarSystemScene({
             scene.add(arc);
 
             const group = new THREE.Group();
+
+            // tiltGroup : axe de rotation incliné, fixe
+            const tiltGroup = new THREE.Group();
+            tiltGroup.rotation.z = THREE.MathUtils.degToRad(cfg.tilt);
+            group.add(tiltGroup);
+
             const mesh = makeSphere(cfg.size, cfg.color, cfg.emissive);
             mesh.userData = { type: 'planet', name: cfg.name };
-            if (cfg.name === 'terre') mesh.rotation.z = THREE.MathUtils.degToRad(23.4);
-            group.add(mesh);
-            if (cfg.name === 'saturne') group.add(makeSaturnRings(cfg.size));
+            tiltGroup.add(mesh);
+            if (cfg.name === 'saturne') tiltGroup.add(makeSaturnRings(cfg.size));
 
             const initAngle = (i / PLANET_DATA.length) * Math.PI * 2;
             group.position.set(Math.cos(initAngle) * cfg.r, 0, Math.sin(initAngle) * cfg.r);
@@ -274,7 +281,7 @@ export default function SolarSystemScene({
                 // Orbite
                 p.angle += THREE.MathUtils.degToRad(cfg.speed);
                 p.group.position.set(Math.cos(p.angle) * cfg.r, 0, Math.sin(p.angle) * cfg.r);
-                p.mesh.rotation.y += 0.004;
+                p.mesh.rotation.y += 0.004 * cfg.rotDir;
 
                 // Arc rotatif : rotation.y = -angle aligne le début de l'arc sur la planète
                 // (correction du sens de rotation Three.js vs EllipseCurve)
@@ -288,10 +295,10 @@ export default function SolarSystemScene({
 
             // Lunes
             moonsRef.current.forEach(m => {
-                m.angle += THREE.MathUtils.degToRad(m.speed);
+                m.angle -= THREE.MathUtils.degToRad(m.speed);
                 m.mesh.position.set(Math.cos(m.angle) * m.radius, 0, Math.sin(m.angle) * m.radius);
-                m.arc.rotation.y = Math.PI - m.angle;
-                m.mesh.rotation.y -= 0.008; // même sens que l'orbite (CCW vu du dessus)
+                m.arc.rotation.y = -m.angle;
+                m.mesh.rotation.y -= 0.008;
             });
 
             // Suivi cible
@@ -347,7 +354,7 @@ export default function SolarSystemScene({
             const moonOrbitR = pData.size * 2.2 + i * pData.size * 1.4;
 
             // Arc de lune 180° — dans l'espace local du groupe planète
-            const arc = makeTrailArc(moonOrbitR, 0xaaaaaa, 0.20);
+            const arc = makeTrailArc(moonOrbitR, 0xaaaaaa, 0.20, true);
             parent.group.add(arc);
 
             const moonSize = Math.max(pData.size * 0.20, 0.04);
