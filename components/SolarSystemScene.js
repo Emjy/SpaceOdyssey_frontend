@@ -20,6 +20,13 @@ const PLANET_DATA = [
     { name: 'pluton',  r: 58, size: 0.12, color: '#9a8070', emissive: '#302520', speed: 0.002, tilt: 122.53, rotDir: -1 },
 ];
 
+// Textures spécifiques par lune (ID de l'API le-systeme-solaire.net)
+const MOON_TEXTURES = {
+    europe:   '/textures/texture_europe.jpg',
+    io: '/textures/texture_io.jpg',
+    deimos: '/textures/texture_deimos.jpg'
+};
+
 const DEFAULT_CAM_DIST = 90;
 const PLANET_ORBIT_MIN = 10;
 const PLANET_ORBIT_MAX = 58;
@@ -29,6 +36,7 @@ const MOON_ORBIT_MIN = 1.2;
 const MOON_ORBIT_MAX = 7.8;
 const MOON_SPEED_MIN = 0.03;
 const MOON_SPEED_MAX = 0.18;
+const TARGET_SCREEN_FRACTION = 0.5;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -167,6 +175,26 @@ function getCompressedMoonSpeed(sideralOrbit, minPeriod, maxPeriod) {
     return THREE.MathUtils.lerp(MOON_SPEED_MAX, MOON_SPEED_MIN, normalized);
 }
 
+function getDistanceForScreenFraction(radius, camera, screenFraction = TARGET_SCREEN_FRACTION) {
+    if (!camera || !Number.isFinite(radius) || radius <= 0) return 0.35;
+
+    const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+    const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
+    const limitingFov = Math.min(verticalFov, horizontalFov);
+    const clampedFraction = THREE.MathUtils.clamp(screenFraction, 0.05, 0.95);
+    const distance = radius / (clampedFraction * Math.tan(limitingFov / 2));
+
+    return Math.max(distance, radius * 2);
+}
+
+function followTarget(controls, camera, desiredTarget, smoothing = 0.15) {
+    if (!controls || !camera || !desiredTarget) return;
+
+    const delta = desiredTarget.clone().sub(controls.target).multiplyScalar(smoothing);
+    controls.target.add(delta);
+    camera.position.add(delta);
+}
+
 // ─── Composant ───────────────────────────────────────────────────────────────
 
 export default function SolarSystemScene({
@@ -180,9 +208,6 @@ export default function SolarSystemScene({
     focusPlanet,
     focusAsteroid,
     focusMoon,
-    setFocusOnPlanet,
-    setFocusOnAsteroid,
-    setFocusOnMoon,
 }) {
     const [moonDataVersion, setMoonDataVersion] = useState(0);
     const mountRef = useRef(null);
@@ -194,12 +219,14 @@ export default function SolarSystemScene({
     const asteroidsRef = useRef([]); // [{ mesh, angle, r, speed }]
     const moonsRef = useRef([]);   // [{ mesh, arc, angle, speed, radius, parentName }]
     const moonDataCacheRef = useRef({});
-    const moonTexRef = useRef(null); // texture lune partagée
+    const moonTexRef = useRef(null);       // texture générique (fallback)
+    const moonTexCacheRef = useRef({});    // id → THREE.Texture (textures spécifiques)
 
     const selectedPlanetRef = useRef(selectedPlanet);
     const selectedAsteroidRef = useRef(selectedAsteroid);
     const selectedMoonRef = useRef(selectedMoon);
     const targetCamDistRef = useRef(DEFAULT_CAM_DIST);
+    const minCamDistRef = useRef(0.05);
     const focusMoonWorldPosRef = useRef(new THREE.Vector3());
     const focusMoonCamDirRef = useRef(new THREE.Vector3());
 
@@ -210,7 +237,10 @@ export default function SolarSystemScene({
         if (!moonEntry || !controls || !camera) return false;
 
         const moonSize = moonEntry.mesh.geometry.parameters.radius;
-        targetCamDistRef.current = THREE.MathUtils.clamp(moonSize * 10, 0.45, 1.2);
+        const focusDist = getDistanceForScreenFraction(moonSize, camera, 0.2);
+        minCamDistRef.current = getDistanceForScreenFraction(moonSize, camera, 0.5);
+        targetCamDistRef.current = focusDist;
+        moonEntry.mesh.updateWorldMatrix(true, false);
         moonEntry.mesh.getWorldPosition(focusMoonWorldPosRef.current);
         controls.target.copy(focusMoonWorldPosRef.current);
         focusMoonCamDirRef.current.subVectors(camera.position, controls.target);
@@ -230,32 +260,48 @@ export default function SolarSystemScene({
         if (selectedMoonRef.current || selectedAsteroidRef.current) return; // cible prioritaire
         if (selectedPlanet) {
             const p = PLANET_DATA.find(c => c.name === selectedPlanet);
-            targetCamDistRef.current = p ? Math.max(p.size * 22, 2.5) : DEFAULT_CAM_DIST;
+            const camera = cameraRef.current;
+            if (p && camera) {
+                minCamDistRef.current = getDistanceForScreenFraction(p.size, camera, 0.5);
+                targetCamDistRef.current = getDistanceForScreenFraction(p.size, camera, 0.3);
+            } else {
+                targetCamDistRef.current = DEFAULT_CAM_DIST;
+            }
         } else {
+            minCamDistRef.current = 0.05;
             targetCamDistRef.current = DEFAULT_CAM_DIST;
         }
     }, [selectedPlanet]);
 
     useEffect(() => {
         selectedMoonRef.current = selectedMoon;
-        if (selectedMoon) {
-            if (!focusCameraOnMoon(selectedMoon)) {
-                targetCamDistRef.current = 0.8;
-            }
-        } else if (!selectedAsteroidRef.current) {
+        if (!selectedMoon && !selectedAsteroidRef.current) {
             // Retour au zoom planète si encore sélectionnée
             const p = PLANET_DATA.find(c => c.name === selectedPlanetRef.current);
-            targetCamDistRef.current = p ? Math.max(p.size * 22, 2.5) : DEFAULT_CAM_DIST;
+            const camera = cameraRef.current;
+            if (p && camera) {
+                minCamDistRef.current = getDistanceForScreenFraction(p.size, camera, 0.5);
+                targetCamDistRef.current = getDistanceForScreenFraction(p.size, camera, 0.3);
+            } else {
+                targetCamDistRef.current = DEFAULT_CAM_DIST;
+            }
         }
-    }, [selectedMoon, moonDataVersion, moons, focusCameraOnMoon]);
+    }, [selectedMoon]);
 
     useEffect(() => {
         selectedAsteroidRef.current = selectedAsteroid;
         if (selectedAsteroid) {
             const asteroidEntry = asteroidsRef.current.find(a => a.mesh.userData.name === selectedAsteroid);
             const asteroidSize = asteroidEntry ? asteroidEntry.mesh.geometry.parameters.radius : 0.08;
-            targetCamDistRef.current = Math.max(asteroidSize * 34, 2.2);
+            const camera = cameraRef.current;
+            if (camera) {
+                minCamDistRef.current = getDistanceForScreenFraction(asteroidSize, camera, 0.5);
+                targetCamDistRef.current = getDistanceForScreenFraction(asteroidSize, camera, 0.3);
+            } else {
+                targetCamDistRef.current = Math.max(asteroidSize * 34, 2.2);
+            }
         } else if (!selectedPlanetRef.current && !selectedMoonRef.current) {
+            minCamDistRef.current = 0.05;
             targetCamDistRef.current = DEFAULT_CAM_DIST;
         }
     }, [selectedAsteroid]);
@@ -268,7 +314,7 @@ export default function SolarSystemScene({
         const scene = new THREE.Scene();
         sceneRef.current = scene;
 
-        const camera = new THREE.PerspectiveCamera(50, el.clientWidth / el.clientHeight, 0.1, 2000);
+        const camera = new THREE.PerspectiveCamera(50, el.clientWidth / el.clientHeight, 0.005, 2000);
         camera.position.set(0, 24, 36);
         camera.lookAt(0, 0, 0);
         cameraRef.current = camera;
@@ -406,16 +452,31 @@ export default function SolarSystemScene({
             sunMesh.material.needsUpdate = true;
         });
 
-        // Texture lune
+        const applyTexToMesh = (mesh, tex) => {
+            mesh.material.map = tex;
+            mesh.material.color.set(0xffffff);
+            mesh.material.emissive.set(0x000000);
+            mesh.material.emissiveIntensity = 0;
+            mesh.material.needsUpdate = true;
+        };
+
+        // Texture lune générique (fallback)
         loader.load('/textures/texture_moon.jpg', (tex) => {
             tex.colorSpace = THREE.SRGBColorSpace;
             moonTexRef.current = tex;
             moonsRef.current.forEach(m => {
-                m.mesh.material.map = tex;
-                m.mesh.material.color.set(0xffffff);
-                m.mesh.material.emissive.set(0x000000);
-                m.mesh.material.emissiveIntensity = 0;
-                m.mesh.material.needsUpdate = true;
+                const id = m.mesh.userData.name;
+                if (!moonTexCacheRef.current[id]) applyTexToMesh(m.mesh, tex);
+            });
+        });
+
+        // Textures spécifiques par lune
+        Object.entries(MOON_TEXTURES).forEach(([id, path]) => {
+            loader.load(path, (tex) => {
+                tex.colorSpace = THREE.SRGBColorSpace;
+                moonTexCacheRef.current[id] = tex;
+                const entry = moonsRef.current.find(m => m.mesh.userData.name === id);
+                if (entry) applyTexToMesh(entry.mesh, tex);
             });
         });
 
@@ -444,7 +505,6 @@ export default function SolarSystemScene({
         window.addEventListener('resize', onResize);
 
         // ── Zoom vers le curseur / pinch ──────────────────────────────────
-        const MIN_DIST = 2.4;
         const MAX_DIST = 180;
         const zoomRc = new THREE.Raycaster();
         const zoomAnchor = new THREE.Vector3();
@@ -463,7 +523,8 @@ export default function SolarSystemScene({
             const dist = camera.position.distanceTo(controls.target);
             const step = dist * 0.06 * sign;
             const newDist = dist + step;
-            if (newDist < MIN_DIST || newDist > MAX_DIST) return;
+            const minDist = minCamDistRef.current;
+            if (newDist < minDist || newDist > MAX_DIST) return;
 
             camera.getWorldDirection(cameraForward);
             targetPlane.setFromNormalAndCoplanarPoint(cameraForward, controls.target);
@@ -516,6 +577,7 @@ export default function SolarSystemScene({
         // ── Boucle de rendu ────────────────────────────────────────────────
         const camDir = new THREE.Vector3();
         const moonWorldPos = new THREE.Vector3();
+        const focusTargetWorldPos = new THREE.Vector3();
 
         const animate = () => {
             frameRef.current = requestAnimationFrame(animate);
@@ -575,15 +637,17 @@ export default function SolarSystemScene({
                 const moonEntry = moonsRef.current.find(m => m.mesh.userData.name === selMoon);
                 if (moonEntry) {
                     moonEntry.mesh.getWorldPosition(moonWorldPos);
-                    controls.target.lerp(moonWorldPos, 0.04);
+                    followTarget(controls, camera, moonWorldPos, 0.18);
                 }
             } else if (selAsteroid) {
                 const asteroidEntry = asteroidsRef.current.find(a => a.mesh.userData.name === selAsteroid);
                 if (asteroidEntry) {
-                    controls.target.lerp(asteroidEntry.mesh.position, 0.04);
+                    focusTargetWorldPos.copy(asteroidEntry.mesh.position);
+                    followTarget(controls, camera, focusTargetWorldPos, 0.15);
                 }
             } else if (sel && planetsRef.current[sel]) {
-                controls.target.lerp(planetsRef.current[sel].group.position, 0.04);
+                planetsRef.current[sel].group.getWorldPosition(focusTargetWorldPos);
+                followTarget(controls, camera, focusTargetWorldPos, 0.15);
             }
 
             // Zoom programmé — targetCamDistRef est mis à jour par les useEffect de focus
@@ -591,12 +655,16 @@ export default function SolarSystemScene({
             camDir.subVectors(camera.position, controls.target);
             const currentDist = camDir.length();
             const desiredDist = targetCamDistRef.current;
-            if (Math.abs(currentDist - desiredDist) > 0.01) {
-                const newDist = THREE.MathUtils.lerp(currentDist, desiredDist, 0.04);
+            // Pour les lunes : correction immédiate (rate=1) car elles bougent vite
+            // par rapport à focusDist — un lerp lent créerait un lag de plusieurs unités.
+            const camRate = selMoon ? 1.0 : 0.06;
+            if (Math.abs(currentDist - desiredDist) > 0.001) {
+                const newDist = THREE.MathUtils.lerp(currentDist, desiredDist, camRate);
                 camera.position.copy(controls.target.clone().add(camDir.normalize().multiplyScalar(newDist)));
             }
             // Quand aucune cible, synchroniser pour que le prochain focus parte de la bonne distance
             if (!selectedPlanetRef.current && !selectedMoonRef.current && !selectedAsteroidRef.current) {
+                minCamDistRef.current = 0.05;
                 targetCamDistRef.current = currentDist;
             }
 
@@ -672,8 +740,9 @@ export default function SolarSystemScene({
                 : Math.max(pData.size * 0.05, 0.025);
             const mesh = makeSphere(moonSize, '#c0c0c0', '#0a0a0a');
             mesh.userData = { type: 'moon', name: moonData.id, parentName: selectedPlanet };
-            if (moonTexRef.current) {
-                mesh.material.map = moonTexRef.current;
+            const tex = moonTexCacheRef.current[moonData.id] ?? moonTexRef.current;
+            if (tex) {
+                mesh.material.map = tex;
                 mesh.material.color.set(0xffffff);
                 mesh.material.emissive.set(0x000000);
                 mesh.material.emissiveIntensity = 0;
@@ -681,9 +750,11 @@ export default function SolarSystemScene({
             }
             parent.group.add(mesh);
 
+            const initAngle = (i / visibleMoons.length) * Math.PI * 2;
+            mesh.position.set(Math.cos(initAngle) * moonOrbitR, 0, Math.sin(initAngle) * moonOrbitR);
             moonsRef.current.push({
                 mesh, arc,
-                angle: (i / visibleMoons.length) * Math.PI * 2,
+                angle: initAngle,
                 speed: getCompressedMoonSpeed(moonBody?.sideralOrbit, minMoonPeriod, maxMoonPeriod)
                     ?? Math.max(0.04, 0.18 / (i + 1)),
                 radius: moonOrbitR,
@@ -692,9 +763,9 @@ export default function SolarSystemScene({
         });
 
         if (selectedMoon) {
-            requestAnimationFrame(() => {
-                focusCameraOnMoon(selectedMoon);
-            });
+            // Forcer la mise à jour des matrices monde avant de lire getWorldPosition
+            parent.group.updateWorldMatrix(true, true);
+            focusCameraOnMoon(selectedMoon);
         }
     }, [selectedPlanet, selectedMoon, moons, nbMoons, moonDataVersion, focusCameraOnMoon]);
 
@@ -759,10 +830,10 @@ export default function SolarSystemScene({
         if (!hits.length) return;
 
         const { type, name, parentName } = hits[0].object.userData;
-        if (type === 'planet') { setFocusOnPlanet(p => !p); focusPlanet(name); }
-        else if (type === 'asteroid') { setFocusOnAsteroid(p => !p); focusAsteroid(name); }
-        else if (type === 'moon') { setFocusOnMoon(p => !p); focusMoon(name, parentName); }
-    }, [focusAsteroid, focusPlanet, focusMoon, setFocusOnAsteroid, setFocusOnPlanet, setFocusOnMoon]);
+        if (type === 'planet') { focusPlanet(name); }
+        else if (type === 'asteroid') { focusAsteroid(name); }
+        else if (type === 'moon') { focusMoon(name, parentName); }
+    }, [focusAsteroid, focusPlanet, focusMoon]);
 
     return (
         <div

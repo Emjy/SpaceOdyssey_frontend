@@ -67,9 +67,6 @@ export default function HomePage() {
                     focusPlanet={focusPlanet}
                     focusAsteroid={focusAsteroid}
                     focusMoon={focusMoon}
-                    setFocusOnPlanet={setFocusOnPlanet}
-                    setFocusOnAsteroid={setFocusOnAsteroid}
-                    setFocusOnMoon={setFocusOnMoon}
                 />
             </div>
 
