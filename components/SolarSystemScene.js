@@ -565,6 +565,8 @@ export default function SolarSystemScene({
         controls.rotateSpeed = 0.65;
         ctrlRef.current = controls;
 
+        const starSpriteTexture = makeStarSpriteTexture();
+
         // Étoiles de fond
         const STAR_COUNT = 10000;
         const starPositions = new Float32Array(STAR_COUNT * 3);
@@ -587,14 +589,15 @@ export default function SolarSystemScene({
         starsGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
         starsGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
         scene.add(new THREE.Points(starsGeo, new THREE.PointsMaterial({
+            map: starSpriteTexture,
             vertexColors: true,
             size: 0.30,
             sizeAttenuation: true,
             transparent: true,
             opacity: 0.92,
+            depthWrite: false,
+            alphaTest: 0.02,
         })));
-
-        const starSpriteTexture = makeStarSpriteTexture();
         const galaxyDisk = new THREE.Group();
         galaxyRoot.add(galaxyDisk);
 
@@ -778,18 +781,71 @@ export default function SolarSystemScene({
             }));
         };
 
-        const buildBulgePopulation = (count, size, opacity, colorA, colorB) => {
+        const buildBulgePopulation = (count, size, opacity, colorA, colorB, options = {}) => {
+            const {
+                radiusMax = 30,
+                concentration = 1.52,
+                verticalScale = 0.58,
+                radialJitter = 0.12,
+                depthJitter = 0.1,
+                colorFalloff = 24,
+            } = options;
             const positions = [];
             const colors = [];
 
             for (let i = 0; i < count; i++) {
-                const r = Math.pow(Math.random(), 1.5) * 26;
+                const r = Math.pow(Math.random(), concentration) * radiusMax;
                 const theta = Math.random() * Math.PI * 2;
-                const ellipse = 1 + Math.sin(theta * 2.2) * 0.08;
-                const x = Math.cos(theta) * r * ellipse;
-                const z = Math.sin(theta) * r;
-                const y = (Math.random() - 0.5) * Math.max(0.5, 2.4 - r * 0.06);
-                const t = Math.min(r / 20, 1);
+                const phi = Math.acos(THREE.MathUtils.randFloatSpread(2));
+                const sinPhi = Math.sin(phi);
+                const radialScale = 0.94 + Math.random() * radialJitter;
+                const x = Math.cos(theta) * sinPhi * r * radialScale;
+                const z = Math.sin(theta) * sinPhi * r * (0.96 + Math.random() * depthJitter);
+                const y = Math.cos(phi) * r * verticalScale;
+                const t = Math.min(r / colorFalloff, 1);
+                const color = colorA.clone().lerp(colorB, t);
+
+                positions.push(x, y, z);
+                colors.push(color.r, color.g, color.b);
+            }
+
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+            return new THREE.Points(geo, new THREE.PointsMaterial({
+                map: starSpriteTexture,
+                size,
+                vertexColors: true,
+                transparent: true,
+                opacity,
+                sizeAttenuation: true,
+                depthWrite: false,
+                alphaTest: 0.02,
+                blending: THREE.AdditiveBlending,
+            }));
+        };
+
+        const buildBulgeHaloPopulation = (count, size, opacity, colorA, colorB, options = {}) => {
+            const {
+                radiusMax = 23,
+                concentration = 1.75,
+                verticalScale = 0.82,
+                radialJitter = 0.16,
+                colorFalloff = 18,
+            } = options;
+            const positions = [];
+            const colors = [];
+
+            for (let i = 0; i < count; i++) {
+                const r = Math.pow(Math.random(), concentration) * radiusMax;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(THREE.MathUtils.randFloatSpread(2));
+                const sinPhi = Math.sin(phi);
+                const x = Math.cos(theta) * sinPhi * r * (0.94 + Math.random() * radialJitter);
+                const z = Math.sin(theta) * sinPhi * r * (0.94 + Math.random() * radialJitter);
+                const y = Math.cos(phi) * r * verticalScale;
+                const t = Math.min(r / colorFalloff, 1);
                 const color = colorA.clone().lerp(colorB, t);
 
                 positions.push(x, y, z);
@@ -831,14 +887,37 @@ export default function SolarSystemScene({
             armPrimary: new THREE.Color('#e2ebff'),
             armSecondary: new THREE.Color('#cad8ef'),
         });
-        const galaxyBulge = buildBulgePopulation(11000, 0.48, 0.74, new THREE.Color('#fff7ea'), new THREE.Color('#ffd69a'));
-        const galaxyBulgeCore = buildBulgePopulation(6000, 0.68, 0.8, new THREE.Color('#fffef8'), new THREE.Color('#ffe3b8'));
+        const galaxyBulge = buildBulgePopulation(
+            15500,
+            0.48,
+            0.77,
+            new THREE.Color('#fff7ea'),
+            new THREE.Color('#ffd69a'),
+            { radiusMax: 52, concentration: 1.32, verticalScale: 0.34, radialJitter: 0.24, depthJitter: 0.2, colorFalloff: 40 }
+        );
+        const galaxyBulgeCore = buildBulgePopulation(
+            9800,
+            0.68,
+            0.84,
+            new THREE.Color('#fffef8'),
+            new THREE.Color('#ffe3b8'),
+            { radiusMax: 38, concentration: 1.72, verticalScale: 0.36, radialJitter: 0.2, depthJitter: 0.16, colorFalloff: 28 }
+        );
+        const galaxyBulgeHalo = buildBulgeHaloPopulation(
+            9200,
+            0.56,
+            0.72,
+            new THREE.Color('#fff8ec'),
+            new THREE.Color('#ffdcb1'),
+            { radiusMax: 50, concentration: 1.28, verticalScale: 0.52, radialJitter: 0.28, colorFalloff: 36 }
+        );
 
         galaxyDisk.add(galaxySmallStars);
         galaxyDisk.add(galaxyMidStars);
         galaxyDisk.add(galaxyGiantStars);
         galaxyDisk.add(galaxyBulge);
         galaxyDisk.add(galaxyBulgeCore);
+        galaxyDisk.add(galaxyBulgeHalo);
 
         const armGlowRibbons = armDefinitions.map((arm) => {
             const broadRibbon = buildArmRibbon(arm, {
@@ -904,12 +983,14 @@ export default function SolarSystemScene({
         haloGeo.setAttribute('position', new THREE.Float32BufferAttribute(haloPoints, 3));
         haloGeo.setAttribute('color', new THREE.Float32BufferAttribute(haloColors, 3));
         const halo = new THREE.Points(haloGeo, new THREE.PointsMaterial({
+            map: starSpriteTexture,
             size: 0.36,
             vertexColors: true,
             transparent: true,
             opacity: 0.18,
             sizeAttenuation: true,
             depthWrite: false,
+            alphaTest: 0.02,
         }));
         galaxyRoot.add(halo);
 
