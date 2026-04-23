@@ -532,50 +532,101 @@ export default function SolarSystemScene({
         })));
 
         const starSpriteTexture = makeStarSpriteTexture();
+        const galaxyDisk = new THREE.Group();
+        galaxyRoot.add(galaxyDisk);
+
         const coreGlowTexture = makeSoftDiscTexture({
-            innerColor: 'rgba(255,236,196,0.96)',
-            midColor: 'rgba(255,214,153,0.34)',
+            innerColor: 'rgba(255,244,224,0.98)',
+            midColor: 'rgba(255,215,166,0.38)',
             outerColor: 'rgba(255,255,255,0)',
             size: 256,
         });
+        const armGlowTexture = makeSoftDiscTexture({
+            innerColor: 'rgba(224,236,255,0.82)',
+            midColor: 'rgba(165,196,255,0.22)',
+            outerColor: 'rgba(0,0,0,0)',
+            size: 256,
+        });
+        const armDenseTexture = makeSoftDiscTexture({
+            innerColor: 'rgba(232,240,255,0.92)',
+            midColor: 'rgba(176,204,255,0.28)',
+            outerColor: 'rgba(0,0,0,0)',
+            size: 256,
+        });
+        const hiiTexture = makeSoftDiscTexture({
+            innerColor: 'rgba(255,194,206,0.92)',
+            midColor: 'rgba(255,108,138,0.26)',
+            outerColor: 'rgba(0,0,0,0)',
+            size: 256,
+        });
+        const dustTexture = makeSoftDiscTexture({
+            innerColor: 'rgba(18,14,12,0.9)',
+            midColor: 'rgba(6,5,5,0.34)',
+            outerColor: 'rgba(0,0,0,0)',
+            size: 256,
+        });
 
-        const galaxyArms = 2;
-        const buildGalaxyPopulation = (count, size, opacity, palette, radialSpread = 84, armBias = 0.84) => {
+        const armDefinitions = [
+            { phase: 0.34, twist: 0.165, width: 0.13, start: 10, end: 92, weight: 1.15, primary: true, sway: 0.06 },
+            { phase: Math.PI + 0.34, twist: 0.165, width: 0.13, start: 10, end: 92, weight: 1.15, primary: true, sway: 0.06 },
+            { phase: Math.PI / 2 + 0.82, twist: 0.152, width: 0.17, start: 16, end: 84, weight: 0.7, primary: false, sway: 0.05 },
+            { phase: (Math.PI * 3) / 2 + 0.82, twist: 0.152, width: 0.17, start: 16, end: 84, weight: 0.7, primary: false, sway: 0.05 },
+        ];
+        const armWeightSum = armDefinitions.reduce((sum, arm) => sum + arm.weight, 0);
+        const pickArm = () => {
+            let value = Math.random() * armWeightSum;
+            for (const arm of armDefinitions) {
+                value -= arm.weight;
+                if (value <= 0) return arm;
+            }
+            return armDefinitions[0];
+        };
+        const sampleArmPoint = (arm, radius, scatterScale = 1) => {
+            const localRadius = Math.max(radius - arm.start, 0);
+            const angleNoise = (Math.random() - 0.5) * (arm.width + radius * 0.0018) * 6 * scatterScale;
+            const wave = Math.sin(localRadius * 0.085 + arm.phase * 1.3) * arm.sway;
+            const angle = arm.phase + localRadius * arm.twist + wave + angleNoise;
+            const radialNoise = (Math.random() - 0.5) * 1.8;
+            return {
+                angle,
+                x: Math.cos(angle) * (radius + radialNoise),
+                z: Math.sin(angle) * (radius + radialNoise),
+            };
+        };
+
+        const buildGalaxyPopulation = (count, size, opacity, palette) => {
             const positions = [];
             const colors = [];
 
             for (let i = 0; i < count; i++) {
-                const t = Math.random();
-                let radius;
-                let angle;
-                let thickness;
+                const selector = Math.random();
+                let x = 0;
+                let y = 0;
+                let z = 0;
                 let color;
 
-                if (t < 0.28) {
-                    radius = Math.pow(Math.random(), 1.9) * 15;
-                    angle = Math.random() * Math.PI * 2;
-                    thickness = (1 - radius / 15) * 5.4;
-                    color = palette.core.clone().lerp(palette.disk, radius / 15);
-                } else if (t < armBias) {
-                    radius = 8 + Math.pow(Math.random(), 0.78) * (radialSpread - 8);
-                    const arm = i % galaxyArms;
-                    const armBase = (arm / galaxyArms) * Math.PI * 2;
-                    const spin = radius * 0.17;
-                    const armWidth = 0.11 + radius * 0.0024;
-                    angle = armBase + spin + (Math.random() - 0.5) * armWidth * 6;
-                    thickness = Math.max(0.14, 1.45 - radius * 0.012);
-                    color = palette.disk.clone().lerp(palette.arm, Math.min(radius / radialSpread, 1) * 0.9);
+                if (selector < 0.14) {
+                    const r = Math.pow(Math.random(), 1.6) * 22;
+                    const theta = Math.random() * Math.PI * 2;
+                    x = Math.cos(theta) * r;
+                    z = Math.sin(theta) * r;
+                    y = (Math.random() - 0.5) * (2.8 - r * 0.06);
+                    color = palette.core.clone().lerp(palette.disk, Math.min(r / 22, 1));
                 } else {
-                    radius = 10 + Math.pow(Math.random(), 0.92) * (radialSpread - 10);
-                    angle = Math.random() * Math.PI * 2;
-                    thickness = Math.max(0.12, 1.0 - radius * 0.008);
-                    color = palette.disk.clone().lerp(palette.outer, 0.3 + Math.min(radius / radialSpread, 1) * 0.45);
-                }
+                    const arm = pickArm();
+                    const radius = arm.start + Math.pow(Math.random(), arm.primary ? 0.72 : 0.82) * (arm.end - arm.start);
+                    const point = sampleArmPoint(arm, radius, arm.primary ? 0.7 : 0.95);
+                    x = point.x;
+                    z = point.z;
+                    y = (Math.random() - 0.5) * Math.max(0.12, 1.55 - radius * 0.012);
 
-                const radialNoise = (Math.random() - 0.5) * 1.9;
-                const x = Math.cos(angle) * (radius + radialNoise);
-                const z = Math.sin(angle) * (radius + radialNoise);
-                const y = (Math.random() - 0.5) * thickness;
+                    const edgeBlend = THREE.MathUtils.smoothstep(radius, 16, arm.end);
+                    const armColor = arm.primary ? palette.armPrimary : palette.armSecondary;
+                    color = palette.disk.clone().lerp(armColor, 0.45 + edgeBlend * 0.5);
+                    if (radius < 30) {
+                        color.lerp(palette.core, 0.25);
+                    }
+                }
 
                 positions.push(x, y, z);
                 colors.push(color.r, color.g, color.b);
@@ -598,67 +649,72 @@ export default function SolarSystemScene({
             }));
         };
 
-        const galaxySmallStars = buildGalaxyPopulation(26000, 0.34, 0.68, {
-            core: new THREE.Color('#ffe3b8'),
-            disk: new THREE.Color('#d8c3a2'),
-            arm: new THREE.Color('#a9c7f2'),
-            outer: new THREE.Color('#8ea8d6'),
-        }, 88, 0.94);
-        const galaxyMidStars = buildGalaxyPopulation(12000, 0.62, 0.82, {
-            core: new THREE.Color('#fff0d2'),
-            disk: new THREE.Color('#edd6b0'),
-            arm: new THREE.Color('#c7dcff'),
-            outer: new THREE.Color('#a8bee8'),
-        }, 86, 0.95);
-        const galaxyGiantStars = buildGalaxyPopulation(2400, 1.15, 0.92, {
-            core: new THREE.Color('#ffc98e'),
-            disk: new THREE.Color('#fff0db'),
-            arm: new THREE.Color('#dbe7ff'),
-            outer: new THREE.Color('#b4c7ee'),
-        }, 80, 0.96);
+        const buildBulgePopulation = (count, size, opacity, colorA, colorB) => {
+            const positions = [];
+            const colors = [];
 
-        galaxyRoot.add(galaxySmallStars);
-        galaxyRoot.add(galaxyMidStars);
-        galaxyRoot.add(galaxyGiantStars);
+            for (let i = 0; i < count; i++) {
+                const r = Math.pow(Math.random(), 1.5) * 26;
+                const theta = Math.random() * Math.PI * 2;
+                const ellipse = 1 + Math.sin(theta * 2.2) * 0.08;
+                const x = Math.cos(theta) * r * ellipse;
+                const z = Math.sin(theta) * r;
+                const y = (Math.random() - 0.5) * Math.max(0.5, 2.4 - r * 0.06);
+                const t = Math.min(r / 20, 1);
+                const color = colorA.clone().lerp(colorB, t);
 
-        // Bulbe central élargi — étoiles éparpillées en sphère aplatie
-        const bulgePositions = [];
-        const bulgeColors = [];
-        for (let i = 0; i < 14000; i++) {
-            // Distribution sphérique aplatie : r faiblement concentré vers le centre
-            const r = Math.pow(Math.random(), 1.1) * 28;
-            const theta = Math.random() * Math.PI * 2;
-            const phi = (Math.random() - 0.5) * Math.PI;
-            const flattenY = 0.38; // disque aplati
-            const x = r * Math.cos(theta) * Math.cos(phi);
-            const y = r * Math.sin(phi) * flattenY;
-            const z = r * Math.sin(theta) * Math.cos(phi);
-            bulgePositions.push(x, y, z);
-            // Couleur : blanc chaud au cœur, jaune-doré vers l'extérieur
-            const warm = new THREE.Color('#fff8e8').lerp(new THREE.Color('#ffd890'), Math.min(r / 28, 1) * 0.7);
-            bulgeColors.push(warm.r, warm.g, warm.b);
-        }
-        const bulgeGeo = new THREE.BufferGeometry();
-        bulgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(bulgePositions, 3));
-        bulgeGeo.setAttribute('color', new THREE.Float32BufferAttribute(bulgeColors, 3));
-        const galaxyBulge = new THREE.Points(bulgeGeo, new THREE.PointsMaterial({
-            map: starSpriteTexture,
-            size: 0.45,
-            vertexColors: true,
-            transparent: true,
-            opacity: 0.75,
-            sizeAttenuation: true,
-            depthWrite: false,
-            alphaTest: 0.02,
-            blending: THREE.AdditiveBlending,
-        }));
-        galaxyRoot.add(galaxyBulge);
+                positions.push(x, y, z);
+                colors.push(color.r, color.g, color.b);
+            }
+
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+            return new THREE.Points(geo, new THREE.PointsMaterial({
+                map: starSpriteTexture,
+                size,
+                vertexColors: true,
+                transparent: true,
+                opacity,
+                sizeAttenuation: true,
+                depthWrite: false,
+                alphaTest: 0.02,
+                blending: THREE.AdditiveBlending,
+            }));
+        };
+
+        const galaxySmallStars = buildGalaxyPopulation(34000, 0.32, 0.66, {
+            core: new THREE.Color('#fbe9cd'),
+            disk: new THREE.Color('#d7d4cb'),
+            armPrimary: new THREE.Color('#bfd6f5'),
+            armSecondary: new THREE.Color('#aebfd8'),
+        });
+        const galaxyMidStars = buildGalaxyPopulation(15500, 0.58, 0.82, {
+            core: new THREE.Color('#fff3df'),
+            disk: new THREE.Color('#ece1cd'),
+            armPrimary: new THREE.Color('#d5e4ff'),
+            armSecondary: new THREE.Color('#bccde9'),
+        });
+        const galaxyGiantStars = buildGalaxyPopulation(2600, 1.08, 0.9, {
+            core: new THREE.Color('#ffd49e'),
+            disk: new THREE.Color('#fff1dc'),
+            armPrimary: new THREE.Color('#e2ebff'),
+            armSecondary: new THREE.Color('#cad8ef'),
+        });
+        const galaxyBulge = buildBulgePopulation(11000, 0.48, 0.74, new THREE.Color('#fff7ea'), new THREE.Color('#ffd69a'));
+        const galaxyBulgeCore = buildBulgePopulation(6000, 0.68, 0.8, new THREE.Color('#fffef8'), new THREE.Color('#ffe3b8'));
+
+        galaxyDisk.add(galaxySmallStars);
+        galaxyDisk.add(galaxyMidStars);
+        galaxyDisk.add(galaxyGiantStars);
+        galaxyDisk.add(galaxyBulge);
+        galaxyDisk.add(galaxyBulgeCore);
 
         const coreGlowSpecs = [
-            { size: 28, opacity: 0.88, x: 0, z: 0, y: 0.04 },
-            { size: 42, opacity: 0.34, x: 1.8, z: -0.8, y: 0.02 },
-            { size: 58, opacity: 0.18, x: -1.5, z: 1.2, y: -0.02 },
-            { size: 78, opacity: 0.09, x: 0.5, z: 0.4, y: 0.01 },
+            { size: 24, opacity: 0.96, x: 0, z: 0, y: 0.03 },
+            { size: 42, opacity: 0.34, x: 0.6, z: -0.3, y: 0.02 },
+            { size: 70, opacity: 0.12, x: -0.4, z: 0.5, y: 0.0 },
         ];
         const coreGlows = coreGlowSpecs.map((spec) => {
             const glow = new THREE.Mesh(
@@ -673,118 +729,138 @@ export default function SolarSystemScene({
             );
             glow.position.set(spec.x, spec.y, spec.z);
             glow.rotation.x = -Math.PI / 2;
-            galaxyRoot.add(glow);
+            galaxyDisk.add(glow);
             return glow;
         });
 
         const haloGeo = new THREE.BufferGeometry();
         const haloPoints = [];
         const haloColors = [];
-        for (let i = 0; i < 2400; i++) {
-            const radius = 20 + Math.pow(Math.random(), 0.55) * 92;
+        for (let i = 0; i < 3200; i++) {
+            const radius = 18 + Math.pow(Math.random(), 0.58) * 98;
             const angle = Math.random() * Math.PI * 2;
             const x = Math.cos(angle) * radius;
             const z = Math.sin(angle) * radius;
-            const y = (Math.random() - 0.5) * (8 + radius * 0.045);
+            const y = (Math.random() - 0.5) * (10 + radius * 0.04);
+            const haloColor = new THREE.Color('#b8cae7').lerp(new THREE.Color('#fff2d2'), Math.random() * 0.3);
             haloPoints.push(x, y, z);
-            const haloColor = new THREE.Color('#bfd5ff').lerp(new THREE.Color('#fff1cb'), Math.random() * 0.35);
             haloColors.push(haloColor.r, haloColor.g, haloColor.b);
         }
         haloGeo.setAttribute('position', new THREE.Float32BufferAttribute(haloPoints, 3));
         haloGeo.setAttribute('color', new THREE.Float32BufferAttribute(haloColors, 3));
         const halo = new THREE.Points(haloGeo, new THREE.PointsMaterial({
-            size: 0.4,
+            size: 0.36,
             vertexColors: true,
             transparent: true,
-            opacity: 0.22,
+            opacity: 0.18,
             sizeAttenuation: true,
             depthWrite: false,
         }));
         galaxyRoot.add(halo);
 
-        // Nuages blancs organiques — nébuleuses lumineuses le long des bras
-        const whiteCloudTex = makeSoftDiscTexture({
-            innerColor: 'rgba(240,244,255,0.88)',
-            midColor:   'rgba(210,222,255,0.38)',
-            outerColor: 'rgba(0,0,0,0)',
-            size: 256,
-        });
-        const dustBands = [];
-        for (let i = 0; i < 110; i++) {
-            const arm = i % galaxyArms;
-            const radius = 8 + Math.pow(Math.random(), 0.7) * 72;
-            const armBase = (arm / galaxyArms) * Math.PI * 2;
-            const spin = radius * 0.17;
-            // Décalage léger autour du bras pour l'aspect organique
-            const scatter = (Math.random() - 0.5) * (0.14 + radius * 0.0030);
-            const angle = armBase + spin + scatter;
-            const w = 3 + Math.random() * 11;
-            const h = 2 + Math.random() * 7;
-            const band = new THREE.Mesh(
-                new THREE.PlaneGeometry(w, h),
+        const armMistClouds = [];
+        for (let i = 0; i < 300; i++) {
+            const arm = pickArm();
+            const radius = arm.start + Math.pow(Math.random(), 0.7) * (arm.end - arm.start);
+            const point = sampleArmPoint(arm, radius, 0.28);
+            const cloud = new THREE.Mesh(
+                new THREE.PlaneGeometry(7 + Math.random() * 20, 4 + Math.random() * 11),
                 new THREE.MeshBasicMaterial({
-                    map: whiteCloudTex,
+                    map: armGlowTexture,
                     transparent: true,
-                    opacity: 0.13 + Math.random() * 0.18,
+                    opacity: 0.12 + Math.random() * 0.13,
                     depthWrite: false,
                     alphaTest: 0.004,
                     blending: THREE.AdditiveBlending,
                 })
             );
-            band.position.set(
-                Math.cos(angle) * radius,
-                (Math.random() - 0.5) * 0.6,
-                Math.sin(angle) * radius
-            );
-            band.rotation.x = -Math.PI / 2;
-            band.rotation.z = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
-            dustBands.push(band);
-            galaxyRoot.add(band);
+            cloud.position.set(point.x, (Math.random() - 0.5) * 0.45, point.z);
+            cloud.rotation.x = -Math.PI / 2;
+            cloud.rotation.z = point.angle + Math.PI / 2 + (Math.random() - 0.5) * 0.34;
+            armMistClouds.push(cloud);
+            galaxyDisk.add(cloud);
         }
 
-        // Nuages sombres organiques — poches de poussière froides sur le bord interne
-        const darkCloudTex = makeSoftDiscTexture({
-            innerColor: 'rgba(4,3,2,0.82)',
-            midColor:   'rgba(2,1,1,0.34)',
-            outerColor: 'rgba(0,0,0,0)',
-            size: 256,
-        });
-        const gasClouds = [];
-        for (let i = 0; i < 80; i++) {
-            const arm = i % galaxyArms;
-            const radius = 10 + Math.pow(Math.random(), 0.75) * 65;
-            const armBase = (arm / galaxyArms) * Math.PI * 2;
-            const spin = radius * 0.17;
-            // Sur le bord interne du bras (légèrement en avance sur le spin)
-            const angle = armBase + spin - 0.16 + (Math.random() - 0.5) * 0.28;
-            const w = 4 + Math.random() * 13;
-            const h = 3 + Math.random() * 8;
+        const armDenseClouds = [];
+        for (let i = 0; i < 140; i++) {
+            const arm = pickArm();
+            const radius = Math.max(18, arm.start + Math.pow(Math.random(), 0.68) * (arm.end - arm.start));
+            const point = sampleArmPoint(arm, radius, 0.2);
             const cloud = new THREE.Mesh(
-                new THREE.PlaneGeometry(w, h),
+                new THREE.PlaneGeometry(10 + Math.random() * 24, 3.5 + Math.random() * 7),
                 new THREE.MeshBasicMaterial({
-                    map: darkCloudTex,
+                    map: armDenseTexture,
                     transparent: true,
-                    opacity: 0.30 + Math.random() * 0.28,
+                    opacity: 0.08 + Math.random() * 0.1,
+                    depthWrite: false,
+                    alphaTest: 0.004,
+                    blending: THREE.AdditiveBlending,
+                })
+            );
+            cloud.position.set(point.x, (Math.random() - 0.5) * 0.28, point.z);
+            cloud.rotation.x = -Math.PI / 2;
+            cloud.rotation.z = point.angle + Math.PI / 2 + (Math.random() - 0.5) * 0.16;
+            armDenseClouds.push(cloud);
+            galaxyDisk.add(cloud);
+        }
+
+        const dustBands = [];
+        for (let i = 0; i < 120; i++) {
+            const arm = pickArm();
+            const radius = Math.max(12, arm.start - 2 + Math.pow(Math.random(), 0.78) * (arm.end - arm.start - 4));
+            const point = sampleArmPoint(arm, radius, 0.44);
+            const laneRadius = radius - (arm.primary ? 1.4 : 0.8);
+            const laneAngle = point.angle - (arm.primary ? 0.055 : 0.035);
+            const lane = new THREE.Mesh(
+                new THREE.PlaneGeometry(4 + Math.random() * 11, 1.8 + Math.random() * 4.6),
+                new THREE.MeshBasicMaterial({
+                    map: dustTexture,
+                    transparent: true,
+                    opacity: 0.18 + Math.random() * 0.16,
                     depthWrite: false,
                     alphaTest: 0.004,
                     blending: THREE.NormalBlending,
                 })
             );
-            cloud.position.set(
-                Math.cos(angle) * radius,
-                (Math.random() - 0.5) * 0.5,
-                Math.sin(angle) * radius
+            lane.position.set(
+                Math.cos(laneAngle) * laneRadius,
+                (Math.random() - 0.5) * 0.22,
+                Math.sin(laneAngle) * laneRadius
             );
+            lane.rotation.x = -Math.PI / 2;
+            lane.rotation.z = laneAngle + Math.PI / 2 + (Math.random() - 0.5) * 0.18;
+            dustBands.push(lane);
+            galaxyDisk.add(lane);
+        }
+
+        const gasClouds = [];
+        for (let i = 0; i < 54; i++) {
+            const arm = pickArm();
+            const radius = Math.max(22, arm.start + Math.pow(Math.random(), 0.75) * (arm.end - arm.start));
+            const point = sampleArmPoint(arm, radius, 0.3);
+            const cloud = new THREE.Mesh(
+                new THREE.PlaneGeometry(1.2 + Math.random() * 3.8, 1.2 + Math.random() * 3.8),
+                new THREE.MeshBasicMaterial({
+                    map: hiiTexture,
+                    transparent: true,
+                    opacity: 0.22 + Math.random() * 0.22,
+                    depthWrite: false,
+                    alphaTest: 0.004,
+                    blending: THREE.AdditiveBlending,
+                })
+            );
+            cloud.position.set(point.x, (Math.random() - 0.5) * 0.16, point.z);
             cloud.rotation.x = -Math.PI / 2;
-            cloud.rotation.z = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.4;
+            cloud.rotation.z = Math.random() * Math.PI;
             gasClouds.push(cloud);
-            galaxyRoot.add(cloud);
+            galaxyDisk.add(cloud);
         }
 
         const galaxySunOrbit = new THREE.Group();
-        galaxyRoot.add(galaxySunOrbit);
+        galaxySunOrbit.rotation.y = -0.32;
+        galaxyDisk.add(galaxySunOrbit);
         const galaxySun = makeSphere(0.9, '#fff3b0', '#ffcf66');
-        galaxySun.position.set(24, 0.12, -6);
+        galaxySun.position.set(25.5, 0.1, 0);
         galaxySun.userData = { type: 'galaxy-sun' };
         galaxySunOrbit.add(galaxySun);
         galaxySunRef.current = galaxySun;
@@ -1059,21 +1135,21 @@ export default function SolarSystemScene({
             galaxyRoot.visible = isMilkyWayMode;
 
             if (isMilkyWayMode) {
-                galaxySmallStars.rotation.y += 0.0006;
-                galaxyMidStars.rotation.y += 0.00062;
-                galaxyGiantStars.rotation.y += 0.00066;
-                galaxyBulge.rotation.y += 0.00058;
-                halo.rotation.y += 0.00025;
+                const time = performance.now();
+                galaxyDisk.rotation.y += 0.00056;
+                halo.rotation.y += 0.00018;
                 coreGlows.forEach((glow, index) => {
-                    glow.material.opacity = coreGlowSpecs[index].opacity * (0.96 + Math.sin(Date.now() * 0.0004 + index) * 0.04);
+                    glow.material.opacity = coreGlowSpecs[index].opacity * (0.96 + Math.sin(time * 0.00035 + index) * 0.04);
                 });
-                dustBands.forEach((band, index) => {
-                    band.rotation.z += 0.00008 * (index % 2 === 0 ? 1 : -1);
+                armMistClouds.forEach((cloud, index) => {
+                    cloud.material.opacity = 0.09 + ((Math.sin(time * 0.00022 + index * 0.37) + 1) * 0.5) * 0.1;
+                });
+                armDenseClouds.forEach((cloud, index) => {
+                    cloud.material.opacity = 0.07 + ((Math.sin(time * 0.00018 + index * 0.19) + 1) * 0.5) * 0.08;
                 });
                 gasClouds.forEach((cloud, index) => {
-                    cloud.rotation.z += 0.00005 * (index % 3 === 0 ? 1 : -1);
+                    cloud.material.opacity = 0.18 + ((Math.sin(time * 0.00045 + index * 0.51) + 1) * 0.5) * 0.16;
                 });
-                galaxySunOrbit.rotation.y += 0.00078;
                 galaxySun.rotation.y += 0.01;
                 controls.update();
                 renderer.render(scene, camera);
