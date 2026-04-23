@@ -7,16 +7,16 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const PLANET_DATA = [
-    { name: 'mercure', r: 10,   size: 0.15, color: '#c8c8c8', emissive: '#181818', speed: 0.16 },
-    { name: 'venus',   r: 13,   size: 0.35, color: '#f0d080', emissive: '#2a1a00', speed: 0.10 },
-    { name: 'terre',   r: 16,   size: 0.38, color: '#4a80c0', emissive: '#05101e', speed: 0.07 },
-    { name: 'mars',    r: 19,   size: 0.22, color: '#d05010', emissive: '#1c0400', speed: 0.04 },
+    { name: 'mercure', r: 10,   size: 0.15, color: '#c8c8c8', emissive: '#555555', speed: 0.16 },
+    { name: 'venus',   r: 13,   size: 0.35, color: '#f0d080', emissive: '#6b4a00', speed: 0.10 },
+    { name: 'terre',   r: 16,   size: 0.38, color: '#4a80c0', emissive: '#0a2a50', speed: 0.07 },
+    { name: 'mars',    r: 19,   size: 0.22, color: '#d05010', emissive: '#501800', speed: 0.04 },
     // On laisse un grand vide pour la ceinture d'astéroïdes
-    { name: 'jupiter', r: 28,   size: 1.40, color: '#d8a060', emissive: '#1a0c00', speed: 0.016 },
-    { name: 'saturne', r: 36,   size: 1.20, color: '#ede0a0', emissive: '#1e1800', speed: 0.010 },
-    { name: 'uranus',  r: 45,   size: 0.75, color: '#88eef0', emissive: '#041618', speed: 0.006 },
-    { name: 'neptune', r: 52,   size: 0.72, color: '#3355e8', emissive: '#030514', speed: 0.004 },
-    { name: 'pluton',  r: 58,   size: 0.12, color: '#9a8070', emissive: '#0c0a08', speed: 0.002 },
+    { name: 'jupiter', r: 28,   size: 1.40, color: '#d8a060', emissive: '#4a2800', speed: 0.016 },
+    { name: 'saturne', r: 36,   size: 1.20, color: '#ede0a0', emissive: '#504000', speed: 0.010 },
+    { name: 'uranus',  r: 45,   size: 0.75, color: '#88eef0', emissive: '#104050', speed: 0.006 },
+    { name: 'neptune', r: 52,   size: 0.72, color: '#3355e8', emissive: '#0c1555', speed: 0.004 },
+    { name: 'pluton',  r: 58,   size: 0.12, color: '#9a8070', emissive: '#302520', speed: 0.002 },
 ];
 
 const DEFAULT_CAM_DIST = 90;
@@ -48,12 +48,13 @@ function makeTrailArc(radius, color = 0xffffff, opacity = 0.28) {
 function makeSphere(radius, color, emissive) {
     const geo = new THREE.SphereGeometry(radius, 64, 64);
     const mat = new THREE.MeshPhongMaterial({
-        color: new THREE.Color(color),
-        emissive: new THREE.Color(emissive),
-        specular: new THREE.Color(0x2a2a3e),
-        shininess: 18,
-        transparent: true,
-        opacity: 1.0,
+        color:             new THREE.Color(color),
+        emissive:          new THREE.Color(emissive),
+        emissiveIntensity: 2.5,
+        specular:          new THREE.Color(0x2a2a3e),
+        shininess:         18,
+        transparent:       true,
+        opacity:           1.0,
     });
     return new THREE.Mesh(geo, mat);
 }
@@ -149,13 +150,12 @@ export default function SolarSystemScene({
         starsGeo.setAttribute('position', new THREE.BufferAttribute(sp, 3));
         scene.add(new THREE.Points(starsGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.28, sizeAttenuation: true })));
 
-        // Éclairage — plus lumineux
-        scene.add(new THREE.AmbientLight(0x223355, 0.9));
-        const sunLight = new THREE.PointLight(0xfff5e0, 6.0, 300);
+        // Éclairage
+        // Ambiance faible → côté nuit sombre, côté jour tranché
+        scene.add(new THREE.AmbientLight(0x334466, 1.8));
+        // Soleil : distance=0 (pas de coupure), decay=1 (1/r au lieu de 1/r²) pour atteindre les planètes lointaines
+        const sunLight = new THREE.PointLight(0xfff5e0, 800, 0, 1);
         scene.add(sunLight);
-        const backLight = new THREE.DirectionalLight(0x445577, 0.25);
-        backLight.position.set(-40, -15, -30);
-        scene.add(backLight);
 
         // Soleil
         const sunMesh = makeSphere(5.5, '#ffe880', '#000000');
@@ -203,6 +203,8 @@ export default function SolarSystemScene({
                 if (!planet) return;
                 planet.mesh.material.map = tex;
                 planet.mesh.material.color.set(0xffffff);
+                planet.mesh.material.emissive.set(0x000000);
+                planet.mesh.material.emissiveIntensity = 0;
                 planet.mesh.material.needsUpdate = true;
             });
         });
@@ -230,6 +232,8 @@ export default function SolarSystemScene({
             moonsRef.current.forEach(m => {
                 m.mesh.material.map = tex;
                 m.mesh.material.color.set(0xffffff);
+                m.mesh.material.emissive.set(0x000000);
+                m.mesh.material.emissiveIntensity = 0;
                 m.mesh.material.needsUpdate = true;
             });
         });
@@ -287,7 +291,7 @@ export default function SolarSystemScene({
                 m.angle += THREE.MathUtils.degToRad(m.speed);
                 m.mesh.position.set(Math.cos(m.angle) * m.radius, 0, Math.sin(m.angle) * m.radius);
                 m.arc.rotation.y = Math.PI - m.angle;
-                m.mesh.rotation.y += 0.008;
+                m.mesh.rotation.y -= 0.008; // même sens que l'orbite (CCW vu du dessus)
             });
 
             // Suivi cible
@@ -344,7 +348,6 @@ export default function SolarSystemScene({
 
             // Arc de lune 180° — dans l'espace local du groupe planète
             const arc = makeTrailArc(moonOrbitR, 0xaaaaaa, 0.20);
-            arc.rotation.x = (i % 3 - 1) * 0.15;
             parent.group.add(arc);
 
             const moonSize = Math.max(pData.size * 0.20, 0.04);
@@ -353,6 +356,8 @@ export default function SolarSystemScene({
             if (moonTexRef.current) {
                 mesh.material.map = moonTexRef.current;
                 mesh.material.color.set(0xffffff);
+                mesh.material.emissive.set(0x000000);
+                mesh.material.emissiveIntensity = 0;
                 mesh.material.needsUpdate = true;
             }
             parent.group.add(mesh);
