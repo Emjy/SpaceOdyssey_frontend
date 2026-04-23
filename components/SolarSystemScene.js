@@ -89,6 +89,7 @@ function makeSaturnRings(planetRadius) {
 
 export default function SolarSystemScene({
     selectedPlanet,
+    selectedMoon,
     moons = [],
     nbMoons = 0,
     focusPlanet,
@@ -106,10 +107,12 @@ export default function SolarSystemScene({
     const moonTexRef = useRef(null); // texture lune partagée
 
     const selectedPlanetRef = useRef(selectedPlanet);
+    const selectedMoonRef = useRef(selectedMoon);
     const targetCamDistRef = useRef(DEFAULT_CAM_DIST);
 
     useEffect(() => {
         selectedPlanetRef.current = selectedPlanet;
+        if (selectedMoonRef.current) return; // lune prioritaire
         if (selectedPlanet) {
             const p = PLANET_DATA.find(c => c.name === selectedPlanet);
             targetCamDistRef.current = p ? Math.max(p.size * 22, 2.5) : DEFAULT_CAM_DIST;
@@ -117,6 +120,19 @@ export default function SolarSystemScene({
             targetCamDistRef.current = DEFAULT_CAM_DIST;
         }
     }, [selectedPlanet]);
+
+    useEffect(() => {
+        selectedMoonRef.current = selectedMoon;
+        if (selectedMoon) {
+            const moonEntry = moonsRef.current.find(m => m.mesh.userData.name === selectedMoon);
+            const moonSize = moonEntry ? moonEntry.mesh.geometry.parameters.radius : 0.08;
+            targetCamDistRef.current = Math.max(moonSize * 30, 1.2);
+        } else {
+            // Retour au zoom planète si encore sélectionnée
+            const p = PLANET_DATA.find(c => c.name === selectedPlanetRef.current);
+            targetCamDistRef.current = p ? Math.max(p.size * 22, 2.5) : DEFAULT_CAM_DIST;
+        }
+    }, [selectedMoon]);
 
     // ── Init scène ────────────────────────────────────────────────────────
     useEffect(() => {
@@ -138,7 +154,7 @@ export default function SolarSystemScene({
         el.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableZoom = false;
+        controls.enableZoom = false;  // géré manuellement (zoom vers curseur)
         controls.enablePan = false;
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
@@ -269,8 +285,79 @@ export default function SolarSystemScene({
         };
         window.addEventListener('resize', onResize);
 
+        // ── Zoom vers le curseur / pinch ──────────────────────────────────
+        const MIN_DIST = 2.4;
+        const MAX_DIST = 180;
+        const zoomRc = new THREE.Raycaster();
+        const zoomAnchor = new THREE.Vector3();
+        const zoomOffset = new THREE.Vector3();
+        const cameraForward = new THREE.Vector3();
+        const targetPlane = new THREE.Plane();
+
+        const applyZoom = (clientX, clientY, sign) => {
+            // sign > 0 = zoom out, sign < 0 = zoom in
+            const rect = el.getBoundingClientRect();
+            const ndx = ((clientX - rect.left) / rect.width) * 2 - 1;
+            const ndy = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+            zoomRc.setFromCamera(new THREE.Vector2(ndx, ndy), camera);
+
+            const dist = camera.position.distanceTo(controls.target);
+            const step = dist * 0.06 * sign;
+            const newDist = dist + step;
+            if (newDist < MIN_DIST || newDist > MAX_DIST) return;
+
+            camera.getWorldDirection(cameraForward);
+            targetPlane.setFromNormalAndCoplanarPoint(cameraForward, controls.target);
+
+            if (zoomRc.ray.intersectPlane(targetPlane, zoomAnchor)) {
+                const zoomRatio = 1 - (newDist / dist);
+                zoomOffset.copy(zoomAnchor).sub(controls.target).multiplyScalar(zoomRatio);
+                controls.target.add(zoomOffset);
+                camera.position.add(zoomOffset);
+            }
+
+            zoomOffset.copy(camera.position).sub(controls.target).setLength(newDist);
+            camera.position.copy(controls.target).add(zoomOffset);
+            targetCamDistRef.current = newDist;
+        };
+
+        const onWheel = (e) => {
+            e.preventDefault();
+            applyZoom(e.clientX, e.clientY, e.deltaY > 0 ? 1 : -1);
+        };
+
+        let pinchDist = 0;
+        const onTouchStart = (e) => {
+            if (e.touches.length === 2) {
+                pinchDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY,
+                );
+            }
+        };
+        const onTouchMove = (e) => {
+            if (e.touches.length !== 2 || !pinchDist) return;
+            const d = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY,
+            );
+            const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            // delta positif = doigts se rapprochent = zoom in
+            applyZoom(midX, midY, (pinchDist - d) * 0.04);
+            pinchDist = d;
+        };
+        const onTouchEnd = () => { pinchDist = 0; };
+
+        el.addEventListener('wheel', onWheel, { passive: false });
+        el.addEventListener('touchstart', onTouchStart, { passive: true });
+        el.addEventListener('touchmove', onTouchMove, { passive: true });
+        el.addEventListener('touchend', onTouchEnd);
+
         // ── Boucle de rendu ────────────────────────────────────────────────
         const camDir = new THREE.Vector3();
+        const moonWorldPos = new THREE.Vector3();
 
         const animate = () => {
             frameRef.current = requestAnimationFrame(animate);
@@ -290,10 +377,12 @@ export default function SolarSystemScene({
                 // (correction du sens de rotation Three.js vs EllipseCurve)
                 p.arc.rotation.y = Math.PI - p.angle;
 
-                // Opacité : fondu des planètes non sélectionnées
-                const targetOpacity = sel && cfg.name !== sel ? 0.06 : 1.0;
-                p.mesh.material.opacity = THREE.MathUtils.lerp(p.mesh.material.opacity, targetOpacity, 0.05);
-                p.arc.material.opacity = THREE.MathUtils.lerp(p.arc.material.opacity, sel && cfg.name !== sel ? 0.04 : 0.28, 0.05);
+                // Opacité : lors d'un focus, cacher tout sauf la planète sélectionnée
+                const isSel = cfg.name === sel;
+                const targetMeshOp = sel && !isSel ? 0 : 1.0;
+                const targetArcOp  = sel ? 0 : 0.28; // arcs masqués en mode focus
+                p.mesh.material.opacity = THREE.MathUtils.lerp(p.mesh.material.opacity, targetMeshOp, 0.06);
+                p.arc.material.opacity  = THREE.MathUtils.lerp(p.arc.material.opacity,  targetArcOp,  0.06);
             });
 
             // Lunes
@@ -305,19 +394,29 @@ export default function SolarSystemScene({
             });
 
             // Suivi cible
-            if (sel && planetsRef.current[sel]) {
+            const selMoon = selectedMoonRef.current;
+            if (selMoon) {
+                const moonEntry = moonsRef.current.find(m => m.mesh.userData.name === selMoon);
+                if (moonEntry) {
+                    moonEntry.mesh.getWorldPosition(moonWorldPos);
+                    controls.target.lerp(moonWorldPos, 0.04);
+                }
+            } else if (sel && planetsRef.current[sel]) {
                 controls.target.lerp(planetsRef.current[sel].group.position, 0.04);
-            } else {
-                controls.target.lerp(new THREE.Vector3(0, 0, 0), 0.02);
             }
 
-            // Zoom programmé
+            // Zoom programmé — targetCamDistRef est mis à jour par les useEffect de focus
+            // ET par applyZoom (zoom manuel), donc les deux coexistent sans conflit.
             camDir.subVectors(camera.position, controls.target);
             const currentDist = camDir.length();
             const desiredDist = targetCamDistRef.current;
-            if (Math.abs(currentDist - desiredDist) > 0.005) {
+            if (Math.abs(currentDist - desiredDist) > 0.01) {
                 const newDist = THREE.MathUtils.lerp(currentDist, desiredDist, 0.04);
                 camera.position.copy(controls.target.clone().add(camDir.normalize().multiplyScalar(newDist)));
+            }
+            // Quand aucune cible, synchroniser pour que le prochain focus parte de la bonne distance
+            if (!selectedPlanetRef.current && !selectedMoonRef.current) {
+                targetCamDistRef.current = currentDist;
             }
 
             controls.update();
@@ -330,6 +429,10 @@ export default function SolarSystemScene({
             controls.dispose();
             renderer.dispose();
             window.removeEventListener('resize', onResize);
+            el.removeEventListener('wheel', onWheel);
+            el.removeEventListener('touchstart', onTouchStart);
+            el.removeEventListener('touchmove', onTouchMove);
+            el.removeEventListener('touchend', onTouchEnd);
             if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps

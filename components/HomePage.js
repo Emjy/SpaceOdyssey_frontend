@@ -6,21 +6,18 @@ import { MdMenu, MdClose, MdInfo, MdInfoOutline } from 'react-icons/md';
 
 import styles from '../styles/HomePage.module.css';
 
-import usePlanetStates from '../hooks/usePlanetStates';
 import useSpaceData    from '../hooks/useSpaceData';
 import useFocusManager from '../hooks/useFocusManager';
 
 import NavigationMenu from './NavigationMenu';
 import Informations   from './Informations';
 
-// Three.js — chargement côté client uniquement
 const SolarSystemScene = dynamic(() => import('./SolarSystemScene'), { ssr: false });
 
 export default function HomePage() {
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
 
-    const { setPlanetStates } = usePlanetStates();
     const { planets, asteroids, loading } = useSpaceData();
 
     const {
@@ -46,7 +43,7 @@ export default function HomePage() {
         focusPlanet,
         focusAsteroid,
         focusMoon,
-    } = useFocusManager(setPlanetStates);
+    } = useFocusManager(planets);
 
     if (loading) {
         return (
@@ -59,7 +56,6 @@ export default function HomePage() {
     return (
         <div className={styles.pageBackground}>
 
-            {/* Scène Three.js — plein écran en arrière-plan */}
             <div className={styles.sceneLayer}>
                 <SolarSystemScene
                     selectedPlanet={selectedPlanet}
@@ -73,7 +69,6 @@ export default function HomePage() {
                 />
             </div>
 
-            {/* Barre supérieure */}
             <header className={`${styles.panel} ${styles.topBar}`}>
                 <div className={styles.topBarTitleGroup}>
                     <div className={styles.eyebrow}>Orbital Atlas</div>
@@ -95,7 +90,6 @@ export default function HomePage() {
                 </div>
             </header>
 
-            {/* Menu gauche */}
             <aside className={`${styles.leftDock} ${!mobileNavOpen ? styles.leftDockHidden : ''}`}>
                 <NavigationMenu
                     planets={planets}
@@ -124,7 +118,6 @@ export default function HomePage() {
                 />
             </aside>
 
-            {/* Panneau d'info droit */}
             <aside className={styles.rightDock}>
                 <div className={styles.rightContainer}>
                     {infos ? (
@@ -137,7 +130,6 @@ export default function HomePage() {
                 </div>
             </aside>
 
-            {/* Panneau d'info mobile */}
             <div className={`${styles.mobileInfoPanel} ${!mobileInfoOpen ? styles.mobileInfoPanelHidden : ''}`}>
                 {infos ? (
                     <Informations infos={infos} />
@@ -148,7 +140,6 @@ export default function HomePage() {
                 )}
             </div>
 
-            {/* FABs mobiles */}
             <button
                 className={styles.mobileMenuFab}
                 onClick={() => { setMobileNavOpen(v => !v); setMobileInfoOpen(false); }}

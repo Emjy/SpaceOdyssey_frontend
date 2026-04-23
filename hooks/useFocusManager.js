@@ -1,78 +1,80 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { infoObjet, fetchMoons } from '../functions/utils';
-import {
-    MILKY_WAY_VIEW,
-    SAGITTARIUS_VIEW,
-    SOLAR_SYSTEM_VIEW,
-    ASTEROID_BELT_VIEW,
-    getPlanetView,
-    getMoonView
-} from '../constants/viewConfigurations';
+import { fetchBody, getMoonStubsFromPlanet } from '../lib/solarApi';
 
-/**
- * Hook personnalisé pour gérer tous les états de focus et la navigation
- * @param {Function} setPlanetStates - Fonction pour mettre à jour les états des planètes
- * @returns {Object} États et fonctions de gestion du focus
- */
-export default function useFocusManager(setPlanetStates) {
-    // États de focus
-    const [focusSA, setFocusSA] = useState(true);
-    const [focusSolarSystem, setFocusSolarSystem] = useState(true);
+const SPECIAL_OBJECTS = {
+    milkyWay: {
+        id: 'milkyWay',
+        englishName: 'Milky Way',
+        bodyType: 'Galaxy',
+        numberOfStars: 100000000000,
+        numberOfPlanets: 100000000000,
+    },
+    sagittariusA: {
+        id: 'sagittariusA',
+        englishName: 'Sagittarius A*',
+        bodyType: 'Black Hole',
+        mass: { massValue: 4.154, massExponent: 6 },
+        discoveredBy: 'National Radio Astronomy Observatory',
+        discoveryDate: '1974',
+    },
+    soleil: {
+        id: 'soleil',
+        englishName: 'Sun',
+        bodyType: 'Star',
+        meanRadius: 696340,
+        gravity: 274,
+        density: 1.41,
+        avgTemp: 5778,
+        mass: { massValue: 1.989, massExponent: 30 },
+    },
+};
+
+export default function useFocusManager(planets = []) {
     const [focusOnPlanet, setFocusOnPlanet] = useState(false);
     const [focusOnMoon, setFocusOnMoon] = useState(true);
     const [focusOnAsteroid, setFocusOnAsteroid] = useState(false);
     const [focusOneMoon, setFocusOneMoon] = useState(false);
+    const [focusSA, setFocusSA] = useState(true);
+    const [focusSolarSystem, setFocusSolarSystem] = useState(true);
 
-    // États de sélection
     const [selectedMilkyWay, setSelectedMilkyWay] = useState(null);
     const [selectedSolarSystem, setSelectedSolarSystem] = useState(null);
     const [selectedPlanet, setSelectedPlanet] = useState(null);
     const [selectedAsteroid, setSelectedAsteroid] = useState(null);
     const [selectedMoon, setSelectedMoon] = useState(null);
 
-    // Données
     const [infos, setInfos] = useState(false);
     const [moons, setMoons] = useState([]);
     const [nbMoons, setNbMoons] = useState(4);
 
-    // Focus sur la Voie Lactée
     const focusMilkyWay = useCallback(() => {
-        setPlanetStates(MILKY_WAY_VIEW);
-        infoObjet('milkyWay', setInfos);
-
+        setInfos(SPECIAL_OBJECTS.milkyWay);
         setSelectedMoon(null);
         setFocusOnPlanet(false);
         setSelectedMilkyWay(null);
         setFocusOneMoon(false);
         setSelectedPlanet(null);
         setMoons([]);
-    }, [setPlanetStates]);
+    }, []);
 
-    // Focus sur Sagittarius A
     const focusSagittarusA = useCallback(() => {
-        setPlanetStates(SAGITTARIUS_VIEW);
-        infoObjet('sagittariusA', setInfos);
-    }, [setPlanetStates]);
+        setInfos(SPECIAL_OBJECTS.sagittariusA);
+    }, []);
 
-    // Focus sur le Système Solaire
     const focusOnSolarSystem = useCallback(() => {
         setSelectedSolarSystem('Planets');
         setSelectedPlanet(null);
         setSelectedMilkyWay('Solar System');
-        setPlanetStates(SOLAR_SYSTEM_VIEW);
-        infoObjet('soleil', setInfos);
+        setInfos(SPECIAL_OBJECTS.soleil);
         setFocusOnPlanet(false);
         setFocusOneMoon(false);
         setMoons([]);
         setNbMoons(4);
         setSelectedMoon(null);
-    }, [setPlanetStates]);
+    }, []);
 
-    // Focus sur une planète
-    // - 1er clic : vue système solaire centrée sur la planète (zoom moyen)
-    // - 2ème clic sur la même planète : zoom rapproché + lunes visibles
     const focusPlanet = useCallback(async (planetName) => {
         const isAlreadySelected = selectedPlanet === planetName;
         const isZoomedIn = isAlreadySelected && focusOnPlanet;
@@ -80,79 +82,55 @@ export default function useFocusManager(setPlanetStates) {
         setSelectedPlanet(planetName);
         setSelectedMoon(null);
         setFocusOneMoon(false);
+        setSelectedMilkyWay('Solar System');
+        setSelectedSolarSystem('Planets');
 
-        await fetchMoons(planetName, setMoons);
+        const planetData = planets.find(p => p.id === planetName);
+        if (planetData) setInfos(planetData);
 
         if (isZoomedIn) {
-            // 2ème clic : retour vue système solaire
             setFocusOnPlanet(false);
             setNbMoons(4);
-            setPlanetStates(SOLAR_SYSTEM_VIEW);
-        } else if (isAlreadySelected) {
-            // planète déjà sélectionnée → zoom rapproché
-            setFocusOnPlanet(true);
-            setNbMoons(8);
-            setPlanetStates(getPlanetView(planetName, true));
         } else {
-            // Nouvelle planète → vue rapprochée directe
             setFocusOnPlanet(true);
             setNbMoons(8);
-            setPlanetStates(getPlanetView(planetName, true));
+            setMoons(planetData ? getMoonStubsFromPlanet(planetData) : []);
         }
+    }, [selectedPlanet, focusOnPlanet, planets]);
 
-        infoObjet(planetName, setInfos);
-    }, [selectedPlanet, focusOnPlanet, setPlanetStates]);
-
-    // Focus sur un astéroïde
     const focusAsteroid = useCallback(async (asteroidName) => {
         setNbMoons(0);
         setSelectedAsteroid(asteroidName);
 
-        if (!asteroidName) {
-            // Vue ceinture complète
-            setPlanetStates(ASTEROID_BELT_VIEW);
-            setFocusOnAsteroid(false);
-        } else if (focusOnAsteroid && selectedAsteroid === asteroidName) {
-            // Déjà zoomé sur cet astéroïde → retour ceinture
+        if (!asteroidName || (focusOnAsteroid && selectedAsteroid === asteroidName)) {
             setFocusOnAsteroid(false);
             setSelectedAsteroid('');
-            setPlanetStates(ASTEROID_BELT_VIEW);
         } else {
-            // Zoom sur l'astéroïde sélectionné
             setFocusOnAsteroid(true);
-            setPlanetStates({
-                ...ASTEROID_BELT_VIEW,
-                milkyWaySize: 0,
-                sagittarusA: 0,
-                sunSize: 0,
-                indexSun: 0
-            });
-            infoObjet(asteroidName, setInfos);
         }
-    }, [focusOnAsteroid, selectedAsteroid, setPlanetStates]);
+    }, [focusOnAsteroid, selectedAsteroid]);
 
-    // Focus sur une lune
-    const focusMoon = useCallback((moonName, planetName) => {
+    const focusMoon = useCallback(async (moonName, planetName) => {
         const isAlreadySelected = selectedMoon === moonName;
 
         if (isAlreadySelected && focusOneMoon) {
-            // Déjà zoomé sur cette lune → retour vue planète
             setSelectedMoon(null);
             setFocusOneMoon(false);
             setNbMoons(8);
-            setPlanetStates(getMoonView(planetName, false));
         } else {
-            // Zoom sur la lune
             setSelectedMoon(moonName);
             setFocusOneMoon(true);
             setNbMoons(1);
-            setPlanetStates(getMoonView(planetName, true));
-            infoObjet(moonName, setInfos);
+            try {
+                const moonBody = await fetchBody(moonName);
+                setInfos(moonBody);
+            } catch {
+                setInfos({ id: moonName, englishName: moonName, bodyType: 'Moon' });
+            }
         }
-    }, [selectedMoon, focusOneMoon, setPlanetStates]);
+    }, [selectedMoon, focusOneMoon]);
 
     return {
-        // États
         focusSA, setFocusSA,
         focusSolarSystem, setFocusSolarSystem,
         focusOnPlanet, setFocusOnPlanet,
@@ -168,7 +146,6 @@ export default function useFocusManager(setPlanetStates) {
         moons, setMoons,
         nbMoons,
 
-        // Fonctions
         focusMilkyWay,
         focusSagittarusA,
         focusOnSolarSystem,
