@@ -37,6 +37,11 @@ const MOON_ORBIT_MAX = 7.8;
 const MOON_SPEED_MIN = 0.03;
 const MOON_SPEED_MAX = 0.18;
 const TARGET_SCREEN_FRACTION = 0.5;
+const MOON_VISIBLE_SIZE_FACTOR = 2.4;
+const MOON_VISIBLE_SIZE_MIN = 0.018;
+const MOON_VISIBLE_SIZE_MAX_FACTOR = 0.12;
+const MOON_FOCUS_MIN_RADIUS = 0.035;
+const SELECTED_MOON_VISIBLE_MIN = 0.018;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -187,12 +192,42 @@ function getDistanceForScreenFraction(radius, camera, screenFraction = TARGET_SC
     return Math.max(distance, radius * 2);
 }
 
-function followTarget(controls, camera, desiredTarget, smoothing = 0.15) {
+function followTarget(controls, camera, desiredTarget, smoothing = 1) {
     if (!controls || !camera || !desiredTarget) return;
 
     const delta = desiredTarget.clone().sub(controls.target).multiplyScalar(smoothing);
     controls.target.add(delta);
     camera.position.add(delta);
+}
+
+function getActiveTargetMinDistance(camera, selectedMoon, selectedAsteroid, selectedPlanet, moons, asteroids, planetsMap) {
+    if (!camera) return 0.05;
+
+    if (selectedMoon) {
+        const moonEntry = moons.find(m => m.mesh.userData.name === selectedMoon);
+        const moonSize = moonEntry?.mesh.geometry.parameters.radius;
+        if (Number.isFinite(moonSize) && moonSize > 0) {
+            const zoomLockRadius = Math.max(moonSize, MOON_FOCUS_MIN_RADIUS);
+            return getDistanceForScreenFraction(zoomLockRadius, camera, 0.5);
+        }
+    }
+
+    if (selectedAsteroid) {
+        const asteroidEntry = asteroids.find(a => a.mesh.userData.name === selectedAsteroid);
+        const asteroidSize = asteroidEntry?.mesh.geometry.parameters.radius;
+        if (Number.isFinite(asteroidSize) && asteroidSize > 0) {
+            return getDistanceForScreenFraction(asteroidSize, camera, 0.5);
+        }
+    }
+
+    if (selectedPlanet && planetsMap[selectedPlanet]) {
+        const planetSize = planetsMap[selectedPlanet].mesh.geometry.parameters.radius;
+        if (Number.isFinite(planetSize) && planetSize > 0) {
+            return getDistanceForScreenFraction(planetSize, camera, 0.5);
+        }
+    }
+
+    return 0.05;
 }
 
 // ─── Composant ───────────────────────────────────────────────────────────────
@@ -238,7 +273,7 @@ export default function SolarSystemScene({
 
         const moonSize = moonEntry.mesh.geometry.parameters.radius;
         const focusDist = getDistanceForScreenFraction(moonSize, camera, 0.2);
-        minCamDistRef.current = getDistanceForScreenFraction(moonSize, camera, 0.5);
+        minCamDistRef.current = getDistanceForScreenFraction(Math.max(moonSize, MOON_FOCUS_MIN_RADIUS), camera, 0.5);
         targetCamDistRef.current = focusDist;
         moonEntry.mesh.updateWorldMatrix(true, false);
         moonEntry.mesh.getWorldPosition(focusMoonWorldPosRef.current);
@@ -344,7 +379,7 @@ export default function SolarSystemScene({
         // Ambiance faible → côté nuit sombre, côté jour tranché
         scene.add(new THREE.AmbientLight(0x334466, 1.8));
         // Soleil : distance=0 (pas de coupure), decay=1 (1/r au lieu de 1/r²) pour atteindre les planètes lointaines
-        const sunLight = new THREE.PointLight(0xfff5e0, 800, 0, 1);
+        const sunLight = new THREE.PointLight(0xfff5e0, 420, 0, 1);
         scene.add(sunLight);
 
         // Soleil
@@ -523,7 +558,16 @@ export default function SolarSystemScene({
             const dist = camera.position.distanceTo(controls.target);
             const step = dist * 0.06 * sign;
             const newDist = dist + step;
-            const minDist = minCamDistRef.current;
+            const minDist = getActiveTargetMinDistance(
+                camera,
+                selectedMoonRef.current,
+                selectedAsteroidRef.current,
+                selectedPlanetRef.current,
+                moonsRef.current,
+                asteroidsRef.current,
+                planetsRef.current,
+            );
+            minCamDistRef.current = minDist;
             if (newDist < minDist || newDist > MAX_DIST) return;
 
             camera.getWorldDirection(cameraForward);
@@ -637,28 +681,40 @@ export default function SolarSystemScene({
                 const moonEntry = moonsRef.current.find(m => m.mesh.userData.name === selMoon);
                 if (moonEntry) {
                     moonEntry.mesh.getWorldPosition(moonWorldPos);
-                    followTarget(controls, camera, moonWorldPos, 0.18);
+                    followTarget(controls, camera, moonWorldPos);
                 }
             } else if (selAsteroid) {
                 const asteroidEntry = asteroidsRef.current.find(a => a.mesh.userData.name === selAsteroid);
                 if (asteroidEntry) {
                     focusTargetWorldPos.copy(asteroidEntry.mesh.position);
-                    followTarget(controls, camera, focusTargetWorldPos, 0.15);
+                    followTarget(controls, camera, focusTargetWorldPos);
                 }
             } else if (sel && planetsRef.current[sel]) {
                 planetsRef.current[sel].group.getWorldPosition(focusTargetWorldPos);
-                followTarget(controls, camera, focusTargetWorldPos, 0.15);
+                followTarget(controls, camera, focusTargetWorldPos);
             }
 
             // Zoom programmé — targetCamDistRef est mis à jour par les useEffect de focus
             // ET par applyZoom (zoom manuel), donc les deux coexistent sans conflit.
             camDir.subVectors(camera.position, controls.target);
             const currentDist = camDir.length();
-            const desiredDist = targetCamDistRef.current;
+            const minAllowedDist = getActiveTargetMinDistance(
+                camera,
+                selectedMoonRef.current,
+                selectedAsteroidRef.current,
+                selectedPlanetRef.current,
+                moonsRef.current,
+                asteroidsRef.current,
+                planetsRef.current,
+            );
+            minCamDistRef.current = minAllowedDist;
+            const desiredDist = Math.max(targetCamDistRef.current, minAllowedDist);
             // Pour les lunes : correction immédiate (rate=1) car elles bougent vite
             // par rapport à focusDist — un lerp lent créerait un lag de plusieurs unités.
             const camRate = selMoon ? 1.0 : 0.06;
-            if (Math.abs(currentDist - desiredDist) > 0.001) {
+            if (currentDist < minAllowedDist - 0.001) {
+                camera.position.copy(controls.target.clone().add(camDir.normalize().multiplyScalar(minAllowedDist)));
+            } else if (Math.abs(currentDist - desiredDist) > 0.001) {
                 const newDist = THREE.MathUtils.lerp(currentDist, desiredDist, camRate);
                 camera.position.copy(controls.target.clone().add(camDir.normalize().multiplyScalar(newDist)));
             }
@@ -731,13 +787,16 @@ export default function SolarSystemScene({
             const arc = makeTrailArc(moonOrbitR, 0xaaaaaa, 0.20, true);
             parent.group.add(arc);
 
-            const moonSize = moonBody?.meanRadius && parentBody?.meanRadius
-                ? THREE.MathUtils.clamp(
-                    pData.size * (moonBody.meanRadius / parentBody.meanRadius),
-                    0.018,
-                    pData.size * 0.12
-                )
+            const physicalMoonSize = moonBody?.meanRadius && parentBody?.meanRadius
+                ? pData.size * (moonBody.meanRadius / parentBody.meanRadius)
                 : Math.max(pData.size * 0.05, 0.025);
+            const moonSize = selectedMoon
+                ? Math.max(physicalMoonSize, SELECTED_MOON_VISIBLE_MIN)
+                : THREE.MathUtils.clamp(
+                    physicalMoonSize * MOON_VISIBLE_SIZE_FACTOR,
+                    MOON_VISIBLE_SIZE_MIN,
+                    pData.size * MOON_VISIBLE_SIZE_MAX_FACTOR
+                );
             const mesh = makeSphere(moonSize, '#c0c0c0', '#0a0a0a');
             mesh.userData = { type: 'moon', name: moonData.id, parentName: selectedPlanet };
             const tex = moonTexCacheRef.current[moonData.id] ?? moonTexRef.current;
