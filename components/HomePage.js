@@ -16,6 +16,7 @@ const SolarSystemScene = dynamic(() => import('./SolarSystemScene'), { ssr: fals
 
 export default function HomePage() {
     const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
+    const [resetViewNonce, setResetViewNonce] = useState(0);
 
     const { planets, asteroids, loading } = useSpaceData();
 
@@ -27,6 +28,7 @@ export default function HomePage() {
         setFocusSolarSystem,
 
         focusOneMoon,
+        focusOnPlanet,
         selectedMilkyWay, setSelectedMilkyWay,
         selectedSolarSystem, setSelectedSolarSystem,
         selectedPlanet,
@@ -52,6 +54,11 @@ export default function HomePage() {
         );
     }
 
+    const handleResetView = () => {
+        focusOnSolarSystem();
+        setResetViewNonce((value) => value + 1);
+    };
+
     return (
         <div className={styles.pageBackground}>
 
@@ -59,6 +66,8 @@ export default function HomePage() {
                 <SolarSystemScene
                     planets={planets}
                     asteroids={asteroids}
+                    focusOnPlanet={focusOnPlanet}
+                    resetViewNonce={resetViewNonce}
                     selectedPlanet={selectedPlanet}
                     selectedAsteroid={selectedAsteroid}
                     selectedMoon={selectedMoon}
@@ -98,6 +107,14 @@ export default function HomePage() {
                 currentView={selectedSolarSystem || 'Système solaire'}
                 currentTarget={selectedPlanet || selectedAsteroid || selectedMoon || '—'}
             />
+
+            <button
+                className={`${styles.panel} ${styles.resetViewButton}`}
+                onClick={handleResetView}
+                type="button"
+            >
+                Reset View
+            </button>
 
             <aside className={styles.rightDock}>
                 <div className={styles.rightContainer}>
