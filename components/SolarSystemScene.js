@@ -532,22 +532,10 @@ export default function SolarSystemScene({
         })));
 
         const starSpriteTexture = makeStarSpriteTexture();
-        const dustTexture = makeSoftDiscTexture({
-            innerColor: 'rgba(196,164,122,0.34)',
-            midColor: 'rgba(104,84,64,0.16)',
-            outerColor: 'rgba(0,0,0,0)',
-            size: 256,
-        });
         const coreGlowTexture = makeSoftDiscTexture({
             innerColor: 'rgba(255,236,196,0.96)',
             midColor: 'rgba(255,214,153,0.34)',
             outerColor: 'rgba(255,255,255,0)',
-            size: 256,
-        });
-        const gasCloudTexture = makeSoftDiscTexture({
-            innerColor: 'rgba(154,176,230,0.32)',
-            midColor: 'rgba(216,194,154,0.14)',
-            outerColor: 'rgba(0,0,0,0)',
             size: 256,
         });
 
@@ -610,28 +598,61 @@ export default function SolarSystemScene({
             }));
         };
 
-        const galaxySmallStars = buildGalaxyPopulation(10000, 0.34, 0.68, {
+        const galaxySmallStars = buildGalaxyPopulation(26000, 0.34, 0.68, {
             core: new THREE.Color('#ffe3b8'),
             disk: new THREE.Color('#d8c3a2'),
             arm: new THREE.Color('#a9c7f2'),
             outer: new THREE.Color('#8ea8d6'),
-        }, 88, 0.9);
-        const galaxyMidStars = buildGalaxyPopulation(5200, 0.62, 0.82, {
+        }, 88, 0.94);
+        const galaxyMidStars = buildGalaxyPopulation(12000, 0.62, 0.82, {
             core: new THREE.Color('#fff0d2'),
             disk: new THREE.Color('#edd6b0'),
             arm: new THREE.Color('#c7dcff'),
             outer: new THREE.Color('#a8bee8'),
-        }, 86, 0.92);
-        const galaxyGiantStars = buildGalaxyPopulation(1100, 1.15, 0.92, {
+        }, 86, 0.95);
+        const galaxyGiantStars = buildGalaxyPopulation(2400, 1.15, 0.92, {
             core: new THREE.Color('#ffc98e'),
             disk: new THREE.Color('#fff0db'),
             arm: new THREE.Color('#dbe7ff'),
             outer: new THREE.Color('#b4c7ee'),
-        }, 80, 0.94);
+        }, 80, 0.96);
 
         galaxyRoot.add(galaxySmallStars);
         galaxyRoot.add(galaxyMidStars);
         galaxyRoot.add(galaxyGiantStars);
+
+        // Bulbe central élargi — étoiles éparpillées en sphère aplatie
+        const bulgePositions = [];
+        const bulgeColors = [];
+        for (let i = 0; i < 14000; i++) {
+            // Distribution sphérique aplatie : r faiblement concentré vers le centre
+            const r = Math.pow(Math.random(), 1.1) * 28;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = (Math.random() - 0.5) * Math.PI;
+            const flattenY = 0.38; // disque aplati
+            const x = r * Math.cos(theta) * Math.cos(phi);
+            const y = r * Math.sin(phi) * flattenY;
+            const z = r * Math.sin(theta) * Math.cos(phi);
+            bulgePositions.push(x, y, z);
+            // Couleur : blanc chaud au cœur, jaune-doré vers l'extérieur
+            const warm = new THREE.Color('#fff8e8').lerp(new THREE.Color('#ffd890'), Math.min(r / 28, 1) * 0.7);
+            bulgeColors.push(warm.r, warm.g, warm.b);
+        }
+        const bulgeGeo = new THREE.BufferGeometry();
+        bulgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(bulgePositions, 3));
+        bulgeGeo.setAttribute('color', new THREE.Float32BufferAttribute(bulgeColors, 3));
+        const galaxyBulge = new THREE.Points(bulgeGeo, new THREE.PointsMaterial({
+            map: starSpriteTexture,
+            size: 0.45,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.75,
+            sizeAttenuation: true,
+            depthWrite: false,
+            alphaTest: 0.02,
+            blending: THREE.AdditiveBlending,
+        }));
+        galaxyRoot.add(galaxyBulge);
 
         const coreGlowSpecs = [
             { size: 28, opacity: 0.88, x: 0, z: 0, y: 0.04 },
@@ -681,46 +702,72 @@ export default function SolarSystemScene({
         }));
         galaxyRoot.add(halo);
 
+        // Nuages blancs organiques — nébuleuses lumineuses le long des bras
+        const whiteCloudTex = makeSoftDiscTexture({
+            innerColor: 'rgba(240,244,255,0.88)',
+            midColor:   'rgba(210,222,255,0.38)',
+            outerColor: 'rgba(0,0,0,0)',
+            size: 256,
+        });
         const dustBands = [];
-        for (let i = 0; i < 26; i++) {
+        for (let i = 0; i < 110; i++) {
+            const arm = i % galaxyArms;
+            const radius = 8 + Math.pow(Math.random(), 0.7) * 72;
+            const armBase = (arm / galaxyArms) * Math.PI * 2;
+            const spin = radius * 0.17;
+            // Décalage léger autour du bras pour l'aspect organique
+            const scatter = (Math.random() - 0.5) * (0.14 + radius * 0.0030);
+            const angle = armBase + spin + scatter;
+            const w = 3 + Math.random() * 11;
+            const h = 2 + Math.random() * 7;
             const band = new THREE.Mesh(
-                new THREE.PlaneGeometry(18 + Math.random() * 22, 4 + Math.random() * 6),
+                new THREE.PlaneGeometry(w, h),
                 new THREE.MeshBasicMaterial({
-                    map: dustTexture,
+                    map: whiteCloudTex,
                     transparent: true,
-                    opacity: 0.12 + Math.random() * 0.08,
+                    opacity: 0.13 + Math.random() * 0.18,
                     depthWrite: false,
-                    blending: THREE.MultiplyBlending,
+                    alphaTest: 0.004,
+                    blending: THREE.AdditiveBlending,
                 })
             );
-            const radius = 10 + Math.random() * 46;
-            const angle = Math.random() * Math.PI * 2;
             band.position.set(
                 Math.cos(angle) * radius,
-                (Math.random() - 0.5) * 0.8,
+                (Math.random() - 0.5) * 0.6,
                 Math.sin(angle) * radius
             );
             band.rotation.x = -Math.PI / 2;
-            band.rotation.z = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.45;
+            band.rotation.z = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
             dustBands.push(band);
             galaxyRoot.add(band);
         }
 
+        // Nuages sombres organiques — poches de poussière froides sur le bord interne
+        const darkCloudTex = makeSoftDiscTexture({
+            innerColor: 'rgba(4,3,2,0.82)',
+            midColor:   'rgba(2,1,1,0.34)',
+            outerColor: 'rgba(0,0,0,0)',
+            size: 256,
+        });
         const gasClouds = [];
-        for (let i = 0; i < 34; i++) {
+        for (let i = 0; i < 80; i++) {
             const arm = i % galaxyArms;
-            const radius = 12 + Math.random() * 60;
+            const radius = 10 + Math.pow(Math.random(), 0.75) * 65;
             const armBase = (arm / galaxyArms) * Math.PI * 2;
             const spin = radius * 0.17;
-            const angle = armBase + spin + (Math.random() - 0.5) * (0.18 + radius * 0.002);
+            // Sur le bord interne du bras (légèrement en avance sur le spin)
+            const angle = armBase + spin - 0.16 + (Math.random() - 0.5) * 0.28;
+            const w = 4 + Math.random() * 13;
+            const h = 3 + Math.random() * 8;
             const cloud = new THREE.Mesh(
-                new THREE.PlaneGeometry(8 + Math.random() * 18, 5 + Math.random() * 11),
+                new THREE.PlaneGeometry(w, h),
                 new THREE.MeshBasicMaterial({
-                    map: gasCloudTexture,
+                    map: darkCloudTex,
                     transparent: true,
-                    opacity: 0.11 + Math.random() * 0.07,
+                    opacity: 0.30 + Math.random() * 0.28,
                     depthWrite: false,
-                    blending: THREE.AdditiveBlending,
+                    alphaTest: 0.004,
+                    blending: THREE.NormalBlending,
                 })
             );
             cloud.position.set(
@@ -729,7 +776,7 @@ export default function SolarSystemScene({
                 Math.sin(angle) * radius
             );
             cloud.rotation.x = -Math.PI / 2;
-            cloud.rotation.z = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.35;
+            cloud.rotation.z = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.4;
             gasClouds.push(cloud);
             galaxyRoot.add(cloud);
         }
@@ -1015,6 +1062,7 @@ export default function SolarSystemScene({
                 galaxySmallStars.rotation.y += 0.0006;
                 galaxyMidStars.rotation.y += 0.00062;
                 galaxyGiantStars.rotation.y += 0.00066;
+                galaxyBulge.rotation.y += 0.00058;
                 halo.rotation.y += 0.00025;
                 coreGlows.forEach((glow, index) => {
                     glow.material.opacity = coreGlowSpecs[index].opacity * (0.96 + Math.sin(Date.now() * 0.0004 + index) * 0.04);
