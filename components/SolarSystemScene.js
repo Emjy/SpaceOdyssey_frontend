@@ -627,7 +627,6 @@ export default function SolarSystemScene({
             outerColor: 'rgba(0,0,0,0)',
             size: 256,
         });
-
         const armDefinitions = [
             { phase: 0.28, twist: 0.168, width: 0.125, start: 5, end: 92, weight: 1.3, primary: true, sway: 0.045 },
             { phase: Math.PI + 0.28, twist: 0.168, width: 0.125, start: 5, end: 92, weight: 1.3, primary: true, sway: 0.045 },
@@ -675,6 +674,7 @@ export default function SolarSystemScene({
             innerRadius = arm.start,
             outerRadius = arm.end,
             steps = 180,
+            thicknessLift = 0,
         }) => {
             const positions = [];
             const uvs = [];
@@ -691,10 +691,11 @@ export default function SolarSystemScene({
                 const normal = new THREE.Vector2(-tangent.y, tangent.x);
                 const width = THREE.MathUtils.lerp(widthStart, widthEnd, Math.pow(t, 0.72));
                 const halfWidth = width * 0.5;
+                const centerY = Math.sin(t * Math.PI * 2.2 + arm.phase * 1.4) * THREE.MathUtils.lerp(thicknessLift, thicknessLift * 0.22, t);
 
                 positions.push(
-                    center.x - normal.x * halfWidth, 0, center.z - normal.y * halfWidth,
-                    center.x + normal.x * halfWidth, 0, center.z + normal.y * halfWidth
+                    center.x - normal.x * halfWidth, centerY, center.z - normal.y * halfWidth,
+                    center.x + normal.x * halfWidth, centerY, center.z + normal.y * halfWidth
                 );
                 uvs.push(t, 0, t, 1);
                 colors.push(color.r, color.g, color.b, color.r, color.g, color.b);
@@ -726,7 +727,7 @@ export default function SolarSystemScene({
             );
         };
 
-        const buildGalaxyPopulation = (count, size, opacity, palette) => {
+        const buildGalaxyPopulation = (count, size, opacity, palette, thicknessScale = 1) => {
             const positions = [];
             const colors = [];
 
@@ -742,7 +743,7 @@ export default function SolarSystemScene({
                     const theta = Math.random() * Math.PI * 2;
                     x = Math.cos(theta) * r;
                     z = Math.sin(theta) * r;
-                    y = (Math.random() - 0.5) * (2.8 - r * 0.06);
+                    y = (Math.random() - 0.5) * (2.8 - r * 0.06) * thicknessScale;
                     color = palette.core.clone().lerp(palette.disk, Math.min(r / 22, 1));
                 } else {
                     const arm = pickArm();
@@ -750,7 +751,7 @@ export default function SolarSystemScene({
                     const point = sampleArmPoint(arm, radius, arm.primary ? 0.92 : 1.08);
                     x = point.x;
                     z = point.z;
-                    y = (Math.random() - 0.5) * Math.max(0.12, 1.55 - radius * 0.012);
+                    y = (Math.random() - 0.5) * Math.max(0.12, 1.55 - radius * 0.012) * thicknessScale;
 
                     const edgeBlend = THREE.MathUtils.smoothstep(radius, 16, arm.end);
                     const armColor = arm.primary ? palette.armPrimary : palette.armSecondary;
@@ -788,6 +789,8 @@ export default function SolarSystemScene({
                 verticalScale = 0.58,
                 radialJitter = 0.12,
                 depthJitter = 0.1,
+                centerDepthSpread = 0,
+                edgeDepthSpread = 0,
                 colorFalloff = 24,
             } = options;
             const positions = [];
@@ -800,7 +803,13 @@ export default function SolarSystemScene({
                 const sinPhi = Math.sin(phi);
                 const radialScale = 0.94 + Math.random() * radialJitter;
                 const x = Math.cos(theta) * sinPhi * r * radialScale;
-                const z = Math.sin(theta) * sinPhi * r * (0.96 + Math.random() * depthJitter);
+                const depthSpread = THREE.MathUtils.lerp(
+                    centerDepthSpread,
+                    edgeDepthSpread,
+                    Math.pow(Math.min(r / Math.max(radiusMax, 1), 1), 0.82)
+                );
+                const z = Math.sin(theta) * sinPhi * r * (0.96 + Math.random() * depthJitter)
+                    + (Math.random() - 0.5) * depthSpread;
                 const y = Math.cos(phi) * r * verticalScale;
                 const t = Math.min(r / colorFalloff, 1);
                 const color = colorA.clone().lerp(colorB, t);
@@ -832,6 +841,8 @@ export default function SolarSystemScene({
                 concentration = 1.75,
                 verticalScale = 0.82,
                 radialJitter = 0.16,
+                centerDepthSpread = 0,
+                edgeDepthSpread = 0,
                 colorFalloff = 18,
             } = options;
             const positions = [];
@@ -843,7 +854,13 @@ export default function SolarSystemScene({
                 const phi = Math.acos(THREE.MathUtils.randFloatSpread(2));
                 const sinPhi = Math.sin(phi);
                 const x = Math.cos(theta) * sinPhi * r * (0.94 + Math.random() * radialJitter);
-                const z = Math.sin(theta) * sinPhi * r * (0.94 + Math.random() * radialJitter);
+                const depthSpread = THREE.MathUtils.lerp(
+                    centerDepthSpread,
+                    edgeDepthSpread,
+                    Math.pow(Math.min(r / Math.max(radiusMax, 1), 1), 0.82)
+                );
+                const z = Math.sin(theta) * sinPhi * r * (0.94 + Math.random() * radialJitter)
+                    + (Math.random() - 0.5) * depthSpread;
                 const y = Math.cos(phi) * r * verticalScale;
                 const t = Math.min(r / colorFalloff, 1);
                 const color = colorA.clone().lerp(colorB, t);
@@ -874,26 +891,35 @@ export default function SolarSystemScene({
             disk: new THREE.Color('#d7d4cb'),
             armPrimary: new THREE.Color('#bfd6f5'),
             armSecondary: new THREE.Color('#aebfd8'),
-        });
+        }, 1.45);
         const galaxyMidStars = buildGalaxyPopulation(20500, 0.58, 0.84, {
             core: new THREE.Color('#fff3df'),
             disk: new THREE.Color('#ece1cd'),
             armPrimary: new THREE.Color('#d5e4ff'),
             armSecondary: new THREE.Color('#bccde9'),
-        });
+        }, 1.32);
         const galaxyGiantStars = buildGalaxyPopulation(3400, 1.08, 0.9, {
             core: new THREE.Color('#ffd49e'),
             disk: new THREE.Color('#fff1dc'),
             armPrimary: new THREE.Color('#e2ebff'),
             armSecondary: new THREE.Color('#cad8ef'),
-        });
+        }, 1.24);
         const galaxyBulge = buildBulgePopulation(
             15500,
             0.48,
             0.77,
             new THREE.Color('#fff7ea'),
             new THREE.Color('#ffd69a'),
-            { radiusMax: 52, concentration: 1.32, verticalScale: 0.34, radialJitter: 0.24, depthJitter: 0.2, colorFalloff: 40 }
+            {
+                radiusMax: 52,
+                concentration: 1.32,
+                verticalScale: 0.34,
+                radialJitter: 0.24,
+                depthJitter: 0.2,
+                centerDepthSpread: 12.5,
+                edgeDepthSpread: 0.9,
+                colorFalloff: 40,
+            }
         );
         const galaxyBulgeCore = buildBulgePopulation(
             9800,
@@ -901,7 +927,16 @@ export default function SolarSystemScene({
             0.84,
             new THREE.Color('#fffef8'),
             new THREE.Color('#ffe3b8'),
-            { radiusMax: 38, concentration: 1.72, verticalScale: 0.36, radialJitter: 0.2, depthJitter: 0.16, colorFalloff: 28 }
+            {
+                radiusMax: 38,
+                concentration: 1.72,
+                verticalScale: 0.36,
+                radialJitter: 0.2,
+                depthJitter: 0.16,
+                centerDepthSpread: 10,
+                edgeDepthSpread: 0.75,
+                colorFalloff: 28,
+            }
         );
         const galaxyBulgeHalo = buildBulgeHaloPopulation(
             9200,
@@ -909,7 +944,15 @@ export default function SolarSystemScene({
             0.72,
             new THREE.Color('#fff8ec'),
             new THREE.Color('#ffdcb1'),
-            { radiusMax: 50, concentration: 1.28, verticalScale: 0.52, radialJitter: 0.28, colorFalloff: 36 }
+            {
+                radiusMax: 50,
+                concentration: 1.28,
+                verticalScale: 0.52,
+                radialJitter: 0.28,
+                centerDepthSpread: 8,
+                edgeDepthSpread: 0.7,
+                colorFalloff: 36,
+            }
         );
 
         galaxyDisk.add(galaxySmallStars);
@@ -918,7 +961,6 @@ export default function SolarSystemScene({
         galaxyDisk.add(galaxyBulge);
         galaxyDisk.add(galaxyBulgeCore);
         galaxyDisk.add(galaxyBulgeHalo);
-
         const armGlowRibbons = armDefinitions.map((arm) => {
             const broadRibbon = buildArmRibbon(arm, {
                 texture: armRibbonTexture,
@@ -929,6 +971,7 @@ export default function SolarSystemScene({
                 innerRadius: arm.start,
                 outerRadius: arm.end,
                 steps: arm.primary ? 220 : 190,
+                thicknessLift: arm.primary ? 0.85 : 0.58,
             });
             const coreRibbon = buildArmRibbon(arm, {
                 texture: armRibbonCoreTexture,
@@ -939,6 +982,7 @@ export default function SolarSystemScene({
                 innerRadius: arm.start,
                 outerRadius: arm.end,
                 steps: arm.primary ? 220 : 190,
+                thicknessLift: arm.primary ? 0.46 : 0.3,
             });
             galaxyDisk.add(broadRibbon);
             galaxyDisk.add(coreRibbon);
