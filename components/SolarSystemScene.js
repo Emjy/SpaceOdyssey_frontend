@@ -250,7 +250,10 @@ export default function SolarSystemScene({
             tex.colorSpace = THREE.SRGBColorSpace;
             const saturn = planetsRef.current['saturne'];
             if (!saturn) return;
-            const ring = saturn.group.children.find(c => c.geometry?.type === 'RingGeometry');
+            let ring = null;
+            saturn.group.traverse(obj => {
+                if (obj.geometry?.type === 'RingGeometry') ring = obj;
+            });
             if (!ring) return;
             ring.material.map = tex;
             ring.material.color.set(0xffffff);

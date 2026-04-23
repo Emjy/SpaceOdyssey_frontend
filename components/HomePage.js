@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
+import { MdMenu, MdClose, MdInfo, MdInfoOutline } from 'react-icons/md';
 
 import styles from '../styles/HomePage.module.css';
 
@@ -16,8 +17,9 @@ import Informations   from './Informations';
 const SolarSystemScene = dynamic(() => import('./SolarSystemScene'), { ssr: false });
 
 export default function HomePage() {
-    // usePlanetStates reste présent car useFocusManager en dépend (pour les infos/navigation)
-    // mais ses valeurs ne pilotent plus le rendu visuel (Three.js gère ça)
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
+
     const { setPlanetStates } = usePlanetStates();
     const { planets, asteroids, loading } = useSpaceData();
 
@@ -94,7 +96,7 @@ export default function HomePage() {
             </header>
 
             {/* Menu gauche */}
-            <aside className={styles.leftDock}>
+            <aside className={`${styles.leftDock} ${!mobileNavOpen ? styles.leftDockHidden : ''}`}>
                 <NavigationMenu
                     planets={planets}
                     asteroids={asteroids}
@@ -134,6 +136,35 @@ export default function HomePage() {
                     )}
                 </div>
             </aside>
+
+            {/* Panneau d'info mobile */}
+            <div className={`${styles.mobileInfoPanel} ${!mobileInfoOpen ? styles.mobileInfoPanelHidden : ''}`}>
+                {infos ? (
+                    <Informations infos={infos} />
+                ) : (
+                    <div className={`${styles.panel} ${styles.emptyInfo}`}>
+                        Sélectionne un objet pour afficher sa fiche.
+                    </div>
+                )}
+            </div>
+
+            {/* FABs mobiles */}
+            <button
+                className={styles.mobileMenuFab}
+                onClick={() => { setMobileNavOpen(v => !v); setMobileInfoOpen(false); }}
+                type="button"
+                aria-label="Menu de navigation"
+            >
+                {mobileNavOpen ? <MdClose /> : <MdMenu />}
+            </button>
+            <button
+                className={styles.mobileInfoFab}
+                onClick={() => { setMobileInfoOpen(v => !v); setMobileNavOpen(false); }}
+                type="button"
+                aria-label="Informations"
+            >
+                {mobileInfoOpen ? <MdInfo /> : <MdInfoOutline />}
+            </button>
 
         </div>
     );

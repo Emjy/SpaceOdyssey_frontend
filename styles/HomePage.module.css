@@ -137,6 +137,17 @@
     border-color: rgba(162, 194, 255, 0.28);
 }
 
+.menuContentWrapper {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.25s ease;
+    overflow: hidden;
+}
+
+.secondaryButtonsOpen .menuContentWrapper {
+    grid-template-rows: 1fr;
+}
+
 .menuTitle {
     width: 100%;
     display: grid;
@@ -171,6 +182,7 @@
     flex-direction: column;
     gap: 8px;
     padding: 8px 0 2px;
+    min-height: 0;
 }
 
 .secondaryButton {
@@ -288,6 +300,10 @@
     font-family: var(--font-mono-ui);
 }
 
+.mobileMenuFab {
+    display: none;
+}
+
 @media screen and (max-width: 1280px) {
     .topBar {
         width: min(500px, calc(100vw - 560px));
@@ -307,25 +323,107 @@
         right: 12px;
         top: 12px;
         width: auto;
+        transform: none;
+    }
+
+    .heroCopy {
+        display: none;
     }
 
     .leftDock {
         top: auto;
         bottom: 12px;
         left: 12px;
-        width: calc(50vw - 16px);
-        max-height: 42vh;
+        right: 12px;
+        width: auto;
+        max-height: 48vh;
+        transform: translateY(0);
+        transition: transform 0.3s ease, opacity 0.3s ease;
+        opacity: 1;
+        z-index: 70;
+    }
+
+    .leftDockHidden {
+        transform: translateY(calc(100% + 24px));
+        opacity: 0;
+        pointer-events: none;
     }
 
     .rightDock {
-        top: auto;
-        bottom: 12px;
-        right: 12px;
-        width: calc(50vw - 16px);
-        max-height: 42vh;
+        display: none;
     }
 
-    .heroCopy {
-        display: none;
+    .mobileMenuFab {
+        display: flex;
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 80;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: 1px solid rgba(126, 231, 255, 0.3);
+        background: rgba(7, 14, 26, 0.9);
+        color: var(--accent);
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 1.4rem;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+        transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .mobileMenuFab:hover {
+        transform: scale(1.08);
+        border-color: rgba(126, 231, 255, 0.5);
+        background: rgba(12, 22, 40, 0.95);
+    }
+
+    .mobileInfoFab {
+        display: flex;
+        position: fixed;
+        bottom: 20px;
+        right: 76px;
+        z-index: 80;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: 1px solid rgba(162, 194, 255, 0.2);
+        background: rgba(7, 14, 26, 0.9);
+        color: var(--text-soft);
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 1.4rem;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .mobileInfoFab:hover {
+        transform: scale(1.08);
+        border-color: rgba(162, 194, 255, 0.4);
+    }
+
+    .mobileInfoPanel {
+        position: fixed;
+        bottom: 80px;
+        left: 12px;
+        right: 12px;
+        max-height: 50vh;
+        overflow-y: auto;
+        z-index: 75;
+        transform: translateY(0);
+        transition: transform 0.3s ease, opacity 0.3s ease;
+        opacity: 1;
+    }
+
+    .mobileInfoPanelHidden {
+        transform: translateY(calc(100% + 24px));
+        opacity: 0;
+        pointer-events: none;
     }
 }
