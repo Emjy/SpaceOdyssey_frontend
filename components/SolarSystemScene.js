@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { fetchBody } from '../lib/solarApi';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,14 @@ const PLANET_DATA = [
 ];
 
 const DEFAULT_CAM_DIST = 90;
+const PLANET_ORBIT_MIN = 10;
+const PLANET_ORBIT_MAX = 58;
+const PLANET_SPEED_MIN = 0.002;
+const PLANET_SPEED_MAX = 0.16;
+const MOON_ORBIT_MIN = 1.2;
+const MOON_ORBIT_MAX = 7.8;
+const MOON_SPEED_MIN = 0.03;
+const MOON_SPEED_MAX = 0.18;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,34 +94,140 @@ function makeSaturnRings(planetRadius) {
     return ring;
 }
 
+function getCompressedPlanetRadius(planetName, planets) {
+    const fallback = PLANET_DATA.find(p => p.name === planetName)?.r ?? PLANET_ORBIT_MIN;
+    const orbitValues = planets
+        .map(planet => planet.semimajorAxis)
+        .filter(value => Number.isFinite(value) && value > 0);
+
+    const planetData = planets.find(planet => planet.id === planetName);
+    const semimajorAxis = planetData?.semimajorAxis;
+    if (!Number.isFinite(semimajorAxis) || semimajorAxis <= 0 || orbitValues.length < 2) {
+        return fallback;
+    }
+
+    const minOrbit = Math.min(...orbitValues);
+    const maxOrbit = Math.max(...orbitValues);
+    const minLog = Math.log10(minOrbit);
+    const maxLog = Math.log10(maxOrbit);
+    const valueLog = Math.log10(semimajorAxis);
+
+    if (maxLog === minLog) return fallback;
+
+    const normalized = (valueLog - minLog) / (maxLog - minLog);
+    return THREE.MathUtils.lerp(PLANET_ORBIT_MIN, PLANET_ORBIT_MAX, normalized);
+}
+
+function getCompressedPlanetSpeed(planetName, planets) {
+    const fallback = PLANET_DATA.find(p => p.name === planetName)?.speed ?? PLANET_SPEED_MIN;
+    const orbitPeriods = planets
+        .map(planet => planet.sideralOrbit)
+        .filter(value => Number.isFinite(value) && value > 0);
+
+    const planetData = planets.find(planet => planet.id === planetName);
+    const sideralOrbit = planetData?.sideralOrbit;
+    if (!Number.isFinite(sideralOrbit) || sideralOrbit <= 0 || orbitPeriods.length < 2) {
+        return fallback;
+    }
+
+    const minLog = Math.log10(Math.min(...orbitPeriods));
+    const maxLog = Math.log10(Math.max(...orbitPeriods));
+    const valueLog = Math.log10(sideralOrbit);
+    if (maxLog === minLog) return fallback;
+
+    const normalized = (valueLog - minLog) / (maxLog - minLog);
+    return THREE.MathUtils.lerp(PLANET_SPEED_MAX, PLANET_SPEED_MIN, normalized);
+}
+
+function getCompressedMoonRadius(semimajorAxis, minAxis, maxAxis) {
+    if (!Number.isFinite(semimajorAxis) || semimajorAxis <= 0 || !Number.isFinite(minAxis) || !Number.isFinite(maxAxis) || minAxis <= 0 || maxAxis <= 0) {
+        return null;
+    }
+
+    const minLog = Math.log10(minAxis);
+    const maxLog = Math.log10(maxAxis);
+    const valueLog = Math.log10(semimajorAxis);
+    if (maxLog === minLog) return (MOON_ORBIT_MIN + MOON_ORBIT_MAX) / 2;
+
+    const normalized = (valueLog - minLog) / (maxLog - minLog);
+    return THREE.MathUtils.lerp(MOON_ORBIT_MIN, MOON_ORBIT_MAX, normalized);
+}
+
+function getCompressedMoonSpeed(sideralOrbit, minPeriod, maxPeriod) {
+    if (!Number.isFinite(sideralOrbit) || sideralOrbit <= 0 || !Number.isFinite(minPeriod) || !Number.isFinite(maxPeriod) || minPeriod <= 0 || maxPeriod <= 0) {
+        return null;
+    }
+
+    const minLog = Math.log10(minPeriod);
+    const maxLog = Math.log10(maxPeriod);
+    const valueLog = Math.log10(sideralOrbit);
+    if (maxLog === minLog) return (MOON_SPEED_MIN + MOON_SPEED_MAX) / 2;
+
+    const normalized = (valueLog - minLog) / (maxLog - minLog);
+    return THREE.MathUtils.lerp(MOON_SPEED_MAX, MOON_SPEED_MIN, normalized);
+}
+
 // ─── Composant ───────────────────────────────────────────────────────────────
 
 export default function SolarSystemScene({
+    planets = [],
+    asteroids = [],
     selectedPlanet,
+    selectedAsteroid,
     selectedMoon,
     moons = [],
     nbMoons = 0,
     focusPlanet,
+    focusAsteroid,
     focusMoon,
     setFocusOnPlanet,
+    setFocusOnAsteroid,
     setFocusOnMoon,
 }) {
+    const [moonDataVersion, setMoonDataVersion] = useState(0);
     const mountRef = useRef(null);
     const frameRef = useRef(null);
     const sceneRef = useRef(null);
     const cameraRef = useRef(null);
     const ctrlRef = useRef(null);
-    const planetsRef = useRef({});   // name → { group, mesh, arc, angle, r, speed }
+    const planetsRef = useRef({});   // name → { group, mesh, arc, ring, angle, r, speed }
+    const asteroidsRef = useRef([]); // [{ mesh, angle, r, speed }]
     const moonsRef = useRef([]);   // [{ mesh, arc, angle, speed, radius, parentName }]
+    const moonDataCacheRef = useRef({});
     const moonTexRef = useRef(null); // texture lune partagée
 
     const selectedPlanetRef = useRef(selectedPlanet);
+    const selectedAsteroidRef = useRef(selectedAsteroid);
     const selectedMoonRef = useRef(selectedMoon);
     const targetCamDistRef = useRef(DEFAULT_CAM_DIST);
+    const focusMoonWorldPosRef = useRef(new THREE.Vector3());
+    const focusMoonCamDirRef = useRef(new THREE.Vector3());
+
+    const focusCameraOnMoon = useCallback((moonName) => {
+        const controls = ctrlRef.current;
+        const camera = cameraRef.current;
+        const moonEntry = moonsRef.current.find(m => m.mesh.userData.name === moonName);
+        if (!moonEntry || !controls || !camera) return false;
+
+        const moonSize = moonEntry.mesh.geometry.parameters.radius;
+        targetCamDistRef.current = THREE.MathUtils.clamp(moonSize * 10, 0.45, 1.2);
+        moonEntry.mesh.getWorldPosition(focusMoonWorldPosRef.current);
+        controls.target.copy(focusMoonWorldPosRef.current);
+        focusMoonCamDirRef.current.subVectors(camera.position, controls.target);
+        if (focusMoonCamDirRef.current.lengthSq() === 0) {
+            focusMoonCamDirRef.current.set(0, 0.4, 1);
+        }
+        camera.position.copy(
+            controls.target.clone().add(
+                focusMoonCamDirRef.current.normalize().multiplyScalar(targetCamDistRef.current)
+            )
+        );
+        return true;
+    }, []);
 
     useEffect(() => {
         selectedPlanetRef.current = selectedPlanet;
-        if (selectedMoonRef.current) return; // lune prioritaire
+        if (selectedMoonRef.current || selectedAsteroidRef.current) return; // cible prioritaire
         if (selectedPlanet) {
             const p = PLANET_DATA.find(c => c.name === selectedPlanet);
             targetCamDistRef.current = p ? Math.max(p.size * 22, 2.5) : DEFAULT_CAM_DIST;
@@ -124,15 +239,26 @@ export default function SolarSystemScene({
     useEffect(() => {
         selectedMoonRef.current = selectedMoon;
         if (selectedMoon) {
-            const moonEntry = moonsRef.current.find(m => m.mesh.userData.name === selectedMoon);
-            const moonSize = moonEntry ? moonEntry.mesh.geometry.parameters.radius : 0.08;
-            targetCamDistRef.current = Math.max(moonSize * 30, 1.2);
-        } else {
+            if (!focusCameraOnMoon(selectedMoon)) {
+                targetCamDistRef.current = 0.8;
+            }
+        } else if (!selectedAsteroidRef.current) {
             // Retour au zoom planète si encore sélectionnée
             const p = PLANET_DATA.find(c => c.name === selectedPlanetRef.current);
             targetCamDistRef.current = p ? Math.max(p.size * 22, 2.5) : DEFAULT_CAM_DIST;
         }
-    }, [selectedMoon]);
+    }, [selectedMoon, moonDataVersion, moons, focusCameraOnMoon]);
+
+    useEffect(() => {
+        selectedAsteroidRef.current = selectedAsteroid;
+        if (selectedAsteroid) {
+            const asteroidEntry = asteroidsRef.current.find(a => a.mesh.userData.name === selectedAsteroid);
+            const asteroidSize = asteroidEntry ? asteroidEntry.mesh.geometry.parameters.radius : 0.08;
+            targetCamDistRef.current = Math.max(asteroidSize * 34, 2.2);
+        } else if (!selectedPlanetRef.current && !selectedMoonRef.current) {
+            targetCamDistRef.current = DEFAULT_CAM_DIST;
+        }
+    }, [selectedAsteroid]);
 
     // ── Init scène ────────────────────────────────────────────────────────
     useEffect(() => {
@@ -184,8 +310,10 @@ export default function SolarSystemScene({
 
         // Planètes
         PLANET_DATA.forEach((cfg, i) => {
+            const orbitRadius = getCompressedPlanetRadius(cfg.name, planets);
+            const orbitSpeed = getCompressedPlanetSpeed(cfg.name, planets);
             // Arc de traîne 180° — sera tourné chaque frame
-            const arc = makeTrailArc(cfg.r);
+            const arc = makeTrailArc(orbitRadius);
             scene.add(arc);
 
             const group = new THREE.Group();
@@ -198,13 +326,43 @@ export default function SolarSystemScene({
             const mesh = makeSphere(cfg.size, cfg.color, cfg.emissive);
             mesh.userData = { type: 'planet', name: cfg.name };
             tiltGroup.add(mesh);
-            if (cfg.name === 'saturne') tiltGroup.add(makeSaturnRings(cfg.size));
+            let ring = null;
+            if (cfg.name === 'saturne') {
+                ring = makeSaturnRings(cfg.size);
+                tiltGroup.add(ring);
+            }
 
             const initAngle = (i / PLANET_DATA.length) * Math.PI * 2;
-            group.position.set(Math.cos(initAngle) * cfg.r, 0, Math.sin(initAngle) * cfg.r);
+            group.position.set(Math.cos(initAngle) * orbitRadius, 0, Math.sin(initAngle) * orbitRadius);
             scene.add(group);
 
-            planetsRef.current[cfg.name] = { group, mesh, arc, angle: initAngle, r: cfg.r, speed: cfg.speed };
+            planetsRef.current[cfg.name] = { group, mesh, arc, ring, angle: initAngle, r: orbitRadius, speed: orbitSpeed };
+        });
+
+        const marsRadius = getCompressedPlanetRadius('mars', planets);
+        const jupiterRadius = getCompressedPlanetRadius('jupiter', planets);
+        const asteroidBeltInner = marsRadius + (jupiterRadius - marsRadius) * 0.28;
+        const asteroidBeltOuter = marsRadius + (jupiterRadius - marsRadius) * 0.62;
+
+        asteroids.forEach((asteroid, i) => {
+            const beltSpread = Math.max(asteroidBeltOuter - asteroidBeltInner, 1.5);
+            const orbitRadius = asteroidBeltInner + (i / Math.max(asteroids.length - 1, 1)) * beltSpread + ((i % 3) - 1) * 0.22;
+            const size = THREE.MathUtils.clamp((asteroid.meanRadius ?? 40) / 900, 0.035, 0.18);
+            const mesh = makeSphere(size, '#a59a8a', '#120f0b');
+            const angle = (i / Math.max(asteroids.length, 1)) * Math.PI * 2;
+            const height = ((i % 5) - 2) * 0.08;
+
+            mesh.position.set(Math.cos(angle) * orbitRadius, height, Math.sin(angle) * orbitRadius);
+            mesh.userData = { type: 'asteroid', name: asteroid.id };
+            scene.add(mesh);
+
+            asteroidsRef.current.push({
+                mesh,
+                angle,
+                r: orbitRadius,
+                speed: 0.004 + (i % 5) * 0.0005,
+                y: height,
+            });
         });
 
         // Textures planètes
@@ -363,14 +521,15 @@ export default function SolarSystemScene({
             frameRef.current = requestAnimationFrame(animate);
 
             const sel = selectedPlanetRef.current;
+            const selAsteroid = selectedAsteroidRef.current;
 
             PLANET_DATA.forEach(cfg => {
                 const p = planetsRef.current[cfg.name];
                 if (!p) return;
 
                 // Orbite
-                p.angle += THREE.MathUtils.degToRad(cfg.speed);
-                p.group.position.set(Math.cos(p.angle) * cfg.r, 0, Math.sin(p.angle) * cfg.r);
+                p.angle += THREE.MathUtils.degToRad(p.speed);
+                p.group.position.set(Math.cos(p.angle) * p.r, 0, Math.sin(p.angle) * p.r);
                 p.mesh.rotation.y += 0.004 * cfg.rotDir;
 
                 // Arc rotatif : rotation.y = -angle aligne le début de l'arc sur la planète
@@ -383,6 +542,23 @@ export default function SolarSystemScene({
                 const targetArcOp  = sel ? 0 : 0.28; // arcs masqués en mode focus
                 p.mesh.material.opacity = THREE.MathUtils.lerp(p.mesh.material.opacity, targetMeshOp, 0.06);
                 p.arc.material.opacity  = THREE.MathUtils.lerp(p.arc.material.opacity,  targetArcOp,  0.06);
+                if (p.ring?.material) {
+                    const targetRingOp = sel ? (isSel ? 0.75 : 0) : 0.75;
+                    p.ring.material.opacity = THREE.MathUtils.lerp(p.ring.material.opacity, targetRingOp, 0.06);
+                }
+            });
+
+            asteroidsRef.current.forEach((asteroid) => {
+                asteroid.angle += asteroid.speed;
+                asteroid.mesh.position.set(
+                    Math.cos(asteroid.angle) * asteroid.r,
+                    asteroid.y,
+                    Math.sin(asteroid.angle) * asteroid.r
+                );
+
+                const isSel = asteroid.mesh.userData.name === selAsteroid;
+                const targetOpacity = sel ? 0 : (selAsteroid ? (isSel ? 1 : 0.25) : 0.85);
+                asteroid.mesh.material.opacity = THREE.MathUtils.lerp(asteroid.mesh.material.opacity, targetOpacity, 0.08);
             });
 
             // Lunes
@@ -401,6 +577,11 @@ export default function SolarSystemScene({
                     moonEntry.mesh.getWorldPosition(moonWorldPos);
                     controls.target.lerp(moonWorldPos, 0.04);
                 }
+            } else if (selAsteroid) {
+                const asteroidEntry = asteroidsRef.current.find(a => a.mesh.userData.name === selAsteroid);
+                if (asteroidEntry) {
+                    controls.target.lerp(asteroidEntry.mesh.position, 0.04);
+                }
             } else if (sel && planetsRef.current[sel]) {
                 controls.target.lerp(planetsRef.current[sel].group.position, 0.04);
             }
@@ -415,7 +596,7 @@ export default function SolarSystemScene({
                 camera.position.copy(controls.target.clone().add(camDir.normalize().multiplyScalar(newDist)));
             }
             // Quand aucune cible, synchroniser pour que le prochain focus parte de la bonne distance
-            if (!selectedPlanetRef.current && !selectedMoonRef.current) {
+            if (!selectedPlanetRef.current && !selectedMoonRef.current && !selectedAsteroidRef.current) {
                 targetCamDistRef.current = currentDist;
             }
 
@@ -428,6 +609,11 @@ export default function SolarSystemScene({
             cancelAnimationFrame(frameRef.current);
             controls.dispose();
             renderer.dispose();
+            asteroidsRef.current.forEach(({ mesh }) => {
+                mesh.geometry.dispose();
+                mesh.material.dispose();
+            });
+            asteroidsRef.current = [];
             window.removeEventListener('resize', onResize);
             el.removeEventListener('wheel', onWheel);
             el.removeEventListener('touchstart', onTouchStart);
@@ -456,14 +642,34 @@ export default function SolarSystemScene({
         const parent = planetsRef.current[selectedPlanet];
         if (!pData || !parent) return;
 
-        moons.slice(0, nbMoons).forEach((moonData, i) => {
-            const moonOrbitR = pData.size * 2.2 + i * pData.size * 1.4;
+        const visibleMoons = selectedMoon
+            ? moons.filter((moon) => moon.id === selectedMoon)
+            : moons.slice(0, nbMoons);
+        const parentBody = planets.find((planet) => planet.id === selectedPlanet);
+        const moonBodies = visibleMoons.map(moon => moonDataCacheRef.current[moon.id]).filter(Boolean);
+        const semimajorAxes = moonBodies.map(body => body?.semimajorAxis).filter(value => Number.isFinite(value) && value > 0);
+        const orbitPeriods = moonBodies.map(body => body?.sideralOrbit).filter(value => Number.isFinite(value) && value > 0);
+        const minMoonAxis = semimajorAxes.length ? Math.min(...semimajorAxes) : null;
+        const maxMoonAxis = semimajorAxes.length ? Math.max(...semimajorAxes) : null;
+        const minMoonPeriod = orbitPeriods.length ? Math.min(...orbitPeriods) : null;
+        const maxMoonPeriod = orbitPeriods.length ? Math.max(...orbitPeriods) : null;
+
+        visibleMoons.forEach((moonData, i) => {
+            const moonBody = moonDataCacheRef.current[moonData.id];
+            const moonOrbitR = getCompressedMoonRadius(moonBody?.semimajorAxis, minMoonAxis, maxMoonAxis)
+                ?? (pData.size * 2.8 + i * pData.size * 1.1);
 
             // Arc de lune 180° — dans l'espace local du groupe planète
             const arc = makeTrailArc(moonOrbitR, 0xaaaaaa, 0.20, true);
             parent.group.add(arc);
 
-            const moonSize = Math.max(pData.size * 0.20, 0.04);
+            const moonSize = moonBody?.meanRadius && parentBody?.meanRadius
+                ? THREE.MathUtils.clamp(
+                    pData.size * (moonBody.meanRadius / parentBody.meanRadius),
+                    0.018,
+                    pData.size * 0.12
+                )
+                : Math.max(pData.size * 0.05, 0.025);
             const mesh = makeSphere(moonSize, '#c0c0c0', '#0a0a0a');
             mesh.userData = { type: 'moon', name: moonData.id, parentName: selectedPlanet };
             if (moonTexRef.current) {
@@ -477,14 +683,51 @@ export default function SolarSystemScene({
 
             moonsRef.current.push({
                 mesh, arc,
-                angle: (i / moons.length) * Math.PI * 2,
-                // Vitesse lente : 0.06 à 0.25 deg/frame selon l'orbite
-                speed: Math.max(0.06, 0.5 / (i + 1)),
+                angle: (i / visibleMoons.length) * Math.PI * 2,
+                speed: getCompressedMoonSpeed(moonBody?.sideralOrbit, minMoonPeriod, maxMoonPeriod)
+                    ?? Math.max(0.04, 0.18 / (i + 1)),
                 radius: moonOrbitR,
                 parentName: selectedPlanet,
             });
         });
-    }, [selectedPlanet, moons, nbMoons]);
+
+        if (selectedMoon) {
+            requestAnimationFrame(() => {
+                focusCameraOnMoon(selectedMoon);
+            });
+        }
+    }, [selectedPlanet, selectedMoon, moons, nbMoons, moonDataVersion, focusCameraOnMoon]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const moonIds = moons.map(moon => moon.id).filter(Boolean);
+        const missingIds = moonIds.filter(id => !moonDataCacheRef.current[id]);
+
+        if (!selectedPlanet || !missingIds.length) return undefined;
+
+        Promise.all(
+            missingIds.map(async (id) => {
+                try {
+                    const body = await fetchBody(id);
+                    return [id, body];
+                } catch {
+                    return [id, null];
+                }
+            })
+        ).then((entries) => {
+            if (cancelled) return;
+            let didUpdate = false;
+            entries.forEach(([id, body]) => {
+                moonDataCacheRef.current[id] = body;
+                didUpdate = true;
+            });
+            if (didUpdate) setMoonDataVersion(version => version + 1);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedPlanet, moons]);
 
     // ── Raycasting ────────────────────────────────────────────────────────
     const pointerRef = useRef({ down: false, moved: false });
@@ -509,6 +752,7 @@ export default function SolarSystemScene({
 
         const meshes = [
             ...Object.values(planetsRef.current).map(p => p.mesh),
+            ...asteroidsRef.current.map(a => a.mesh),
             ...moonsRef.current.map(m => m.mesh),
         ];
         const hits = rc.intersectObjects(meshes);
@@ -516,8 +760,9 @@ export default function SolarSystemScene({
 
         const { type, name, parentName } = hits[0].object.userData;
         if (type === 'planet') { setFocusOnPlanet(p => !p); focusPlanet(name); }
+        else if (type === 'asteroid') { setFocusOnAsteroid(p => !p); focusAsteroid(name); }
         else if (type === 'moon') { setFocusOnMoon(p => !p); focusMoon(name, parentName); }
-    }, [focusPlanet, focusMoon, setFocusOnPlanet, setFocusOnMoon]);
+    }, [focusAsteroid, focusPlanet, focusMoon, setFocusOnAsteroid, setFocusOnPlanet, setFocusOnMoon]);
 
     return (
         <div

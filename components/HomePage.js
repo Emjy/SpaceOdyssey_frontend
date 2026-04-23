@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { MdMenu, MdClose, MdInfo, MdInfoOutline } from 'react-icons/md';
+import { MdInfo, MdInfoOutline } from 'react-icons/md';
 
 import styles from '../styles/HomePage.module.css';
 
@@ -15,7 +15,6 @@ import Informations   from './Informations';
 const SolarSystemScene = dynamic(() => import('./SolarSystemScene'), { ssr: false });
 
 export default function HomePage() {
-    const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
 
     const { planets, asteroids, loading } = useSpaceData();
@@ -43,7 +42,7 @@ export default function HomePage() {
         focusPlanet,
         focusAsteroid,
         focusMoon,
-    } = useFocusManager(planets);
+    } = useFocusManager(planets, asteroids);
 
     if (loading) {
         return (
@@ -58,65 +57,50 @@ export default function HomePage() {
 
             <div className={styles.sceneLayer}>
                 <SolarSystemScene
+                    planets={planets}
+                    asteroids={asteroids}
                     selectedPlanet={selectedPlanet}
+                    selectedAsteroid={selectedAsteroid}
                     selectedMoon={selectedMoon}
                     moons={moons}
                     nbMoons={nbMoons}
                     focusPlanet={focusPlanet}
+                    focusAsteroid={focusAsteroid}
                     focusMoon={focusMoon}
                     setFocusOnPlanet={setFocusOnPlanet}
+                    setFocusOnAsteroid={setFocusOnAsteroid}
                     setFocusOnMoon={setFocusOnMoon}
                 />
             </div>
 
-            <header className={`${styles.panel} ${styles.topBar}`}>
-                <div className={styles.topBarTitleGroup}>
-                    <div className={styles.eyebrow}>Orbital Atlas</div>
-                    <h1 className={styles.heroTitle}>Space Odyssey</h1>
-                    <p className={styles.heroCopy}>
-                        Drag pour pivoter · cliquez sur une planète pour la sélectionner
-                    </p>
-                </div>
-                <div className={styles.stageMeta}>
-                    <div className={styles.footerChip}>
-                        Vue : {selectedSolarSystem || 'Système solaire'}
-                    </div>
-                    <div className={styles.footerChip}>
-                        Cible : {selectedPlanet || selectedMoon || '—'}
-                    </div>
-                    <div className={styles.footerChip}>
-                        {planets.length + asteroids.length} corps célestes
-                    </div>
-                </div>
-            </header>
-
-            <aside className={`${styles.leftDock} ${!mobileNavOpen ? styles.leftDockHidden : ''}`}>
-                <NavigationMenu
-                    planets={planets}
-                    asteroids={asteroids}
-                    moons={moons}
-                    selectedMilkyWay={selectedMilkyWay}
-                    selectedSolarSystem={selectedSolarSystem}
-                    selectedPlanet={selectedPlanet}
-                    selectedAsteroid={selectedAsteroid}
-                    selectedMoon={selectedMoon}
-                    focusMilkyWay={focusMilkyWay}
-                    focusSagittarusA={focusSagittarusA}
-                    focusOnSolarSystem={focusOnSolarSystem}
-                    focusPlanet={focusPlanet}
-                    focusAsteroid={focusAsteroid}
-                    focusMoon={focusMoon}
-                    setFocusSA={setFocusSA}
-                    setFocusSolarSystem={setFocusSolarSystem}
-                    setFocusOnPlanet={setFocusOnPlanet}
-                    setFocusOnAsteroid={setFocusOnAsteroid}
-                    setFocusOnMoon={setFocusOnMoon}
-                    setSelectedMilkyWay={setSelectedMilkyWay}
-                    setSelectedSolarSystem={setSelectedSolarSystem}
-                    setSelectedAsteroid={setSelectedAsteroid}
-                    setMoons={setMoons}
-                />
-            </aside>
+            <NavigationMenu
+                planets={planets}
+                asteroids={asteroids}
+                moons={moons}
+                selectedMilkyWay={selectedMilkyWay}
+                selectedSolarSystem={selectedSolarSystem}
+                selectedPlanet={selectedPlanet}
+                selectedAsteroid={selectedAsteroid}
+                selectedMoon={selectedMoon}
+                focusMilkyWay={focusMilkyWay}
+                focusSagittarusA={focusSagittarusA}
+                focusOnSolarSystem={focusOnSolarSystem}
+                focusPlanet={focusPlanet}
+                focusAsteroid={focusAsteroid}
+                focusMoon={focusMoon}
+                setFocusSA={setFocusSA}
+                setFocusSolarSystem={setFocusSolarSystem}
+                setFocusOnPlanet={setFocusOnPlanet}
+                setFocusOnAsteroid={setFocusOnAsteroid}
+                setFocusOnMoon={setFocusOnMoon}
+                setSelectedMilkyWay={setSelectedMilkyWay}
+                setSelectedSolarSystem={setSelectedSolarSystem}
+                setSelectedAsteroid={setSelectedAsteroid}
+                setMoons={setMoons}
+                bodyCount={planets.length + asteroids.length}
+                currentView={selectedSolarSystem || 'Système solaire'}
+                currentTarget={selectedPlanet || selectedAsteroid || selectedMoon || '—'}
+            />
 
             <aside className={styles.rightDock}>
                 <div className={styles.rightContainer}>
@@ -141,16 +125,8 @@ export default function HomePage() {
             </div>
 
             <button
-                className={styles.mobileMenuFab}
-                onClick={() => { setMobileNavOpen(v => !v); setMobileInfoOpen(false); }}
-                type="button"
-                aria-label="Menu de navigation"
-            >
-                {mobileNavOpen ? <MdClose /> : <MdMenu />}
-            </button>
-            <button
                 className={styles.mobileInfoFab}
-                onClick={() => { setMobileInfoOpen(v => !v); setMobileNavOpen(false); }}
+                onClick={() => { setMobileInfoOpen(v => !v); }}
                 type="button"
                 aria-label="Informations"
             >

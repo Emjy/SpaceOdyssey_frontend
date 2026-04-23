@@ -31,7 +31,7 @@ const SPECIAL_OBJECTS = {
     },
 };
 
-export default function useFocusManager(planets = []) {
+export default function useFocusManager(planets = [], asteroids = []) {
     const [focusOnPlanet, setFocusOnPlanet] = useState(false);
     const [focusOnMoon, setFocusOnMoon] = useState(true);
     const [focusOnAsteroid, setFocusOnAsteroid] = useState(false);
@@ -53,22 +53,32 @@ export default function useFocusManager(planets = []) {
         setInfos(SPECIAL_OBJECTS.milkyWay);
         setSelectedMoon(null);
         setFocusOnPlanet(false);
+        setFocusOnAsteroid(false);
         setSelectedMilkyWay(null);
         setFocusOneMoon(false);
         setSelectedPlanet(null);
+        setSelectedAsteroid(null);
         setMoons([]);
     }, []);
 
     const focusSagittarusA = useCallback(() => {
+        setSelectedPlanet(null);
+        setSelectedAsteroid(null);
+        setSelectedMoon(null);
+        setFocusOnPlanet(false);
+        setFocusOnAsteroid(false);
+        setFocusOneMoon(false);
         setInfos(SPECIAL_OBJECTS.sagittariusA);
     }, []);
 
     const focusOnSolarSystem = useCallback(() => {
         setSelectedSolarSystem('Planets');
         setSelectedPlanet(null);
+        setSelectedAsteroid(null);
         setSelectedMilkyWay('Solar System');
         setInfos(SPECIAL_OBJECTS.soleil);
         setFocusOnPlanet(false);
+        setFocusOnAsteroid(false);
         setFocusOneMoon(false);
         setMoons([]);
         setNbMoons(4);
@@ -80,10 +90,12 @@ export default function useFocusManager(planets = []) {
         const isZoomedIn = isAlreadySelected && focusOnPlanet;
 
         setSelectedPlanet(planetName);
+        setSelectedAsteroid(null);
         setSelectedMoon(null);
         setFocusOneMoon(false);
         setSelectedMilkyWay('Solar System');
         setSelectedSolarSystem('Planets');
+        setFocusOnAsteroid(false);
 
         const planetData = planets.find(p => p.id === planetName);
         if (planetData) setInfos(planetData);
@@ -100,15 +112,34 @@ export default function useFocusManager(planets = []) {
 
     const focusAsteroid = useCallback(async (asteroidName) => {
         setNbMoons(0);
+        setSelectedPlanet(null);
+        setSelectedMoon(null);
+        setFocusOnPlanet(false);
+        setFocusOneMoon(false);
+        setMoons([]);
+        setSelectedMilkyWay('Solar System');
+        setSelectedSolarSystem('Asteroid Belt');
         setSelectedAsteroid(asteroidName);
 
         if (!asteroidName || (focusOnAsteroid && selectedAsteroid === asteroidName)) {
             setFocusOnAsteroid(false);
             setSelectedAsteroid('');
+            setInfos(SPECIAL_OBJECTS.soleil);
         } else {
             setFocusOnAsteroid(true);
+            try {
+                const asteroidData = asteroids.find(a => a.id === asteroidName);
+                if (asteroidData) {
+                    setInfos(asteroidData);
+                } else {
+                    const body = await fetchBody(asteroidName);
+                    setInfos(body);
+                }
+            } catch {
+                setInfos({ id: asteroidName, englishName: asteroidName, bodyType: 'Asteroid' });
+            }
         }
-    }, [focusOnAsteroid, selectedAsteroid]);
+    }, [focusOnAsteroid, selectedAsteroid, asteroids]);
 
     const focusMoon = useCallback(async (moonName, planetName) => {
         const isAlreadySelected = selectedMoon === moonName;
