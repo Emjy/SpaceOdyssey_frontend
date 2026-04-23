@@ -806,7 +806,7 @@ export default function SolarSystemScene({
                 const depthSpread = THREE.MathUtils.lerp(
                     centerDepthSpread,
                     edgeDepthSpread,
-                    Math.pow(Math.min(r / Math.max(radiusMax, 1), 1), 1.35)
+                    Math.pow(Math.min(r / Math.max(radiusMax, 1), 1), 0.78)
                 );
                 const z = Math.sin(theta) * sinPhi * r * (0.96 + Math.random() * depthJitter)
                     + (Math.random() - 0.5) * depthSpread;
@@ -857,7 +857,7 @@ export default function SolarSystemScene({
                 const depthSpread = THREE.MathUtils.lerp(
                     centerDepthSpread,
                     edgeDepthSpread,
-                    Math.pow(Math.min(r / Math.max(radiusMax, 1), 1), 1.35)
+                    Math.pow(Math.min(r / Math.max(radiusMax, 1), 1), 0.78)
                 );
                 const z = Math.sin(theta) * sinPhi * r * (0.94 + Math.random() * radialJitter)
                     + (Math.random() - 0.5) * depthSpread;
@@ -916,8 +916,8 @@ export default function SolarSystemScene({
                 verticalScale: 0.34,
                 radialJitter: 0.24,
                 depthJitter: 0.2,
-                centerDepthSpread: 20,
-                edgeDepthSpread: 0.7,
+                centerDepthSpread: 32,
+                edgeDepthSpread: 0.35,
                 colorFalloff: 40,
             }
         );
@@ -933,8 +933,8 @@ export default function SolarSystemScene({
                 verticalScale: 0.36,
                 radialJitter: 0.2,
                 depthJitter: 0.16,
-                centerDepthSpread: 16,
-                edgeDepthSpread: 0.55,
+                centerDepthSpread: 25,
+                edgeDepthSpread: 0.3,
                 colorFalloff: 28,
             }
         );
@@ -949,8 +949,8 @@ export default function SolarSystemScene({
                 concentration: 1.28,
                 verticalScale: 0.52,
                 radialJitter: 0.28,
-                centerDepthSpread: 13,
-                edgeDepthSpread: 0.5,
+                centerDepthSpread: 19,
+                edgeDepthSpread: 0.28,
                 colorFalloff: 36,
             }
         );
