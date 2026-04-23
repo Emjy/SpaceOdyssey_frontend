@@ -43,6 +43,15 @@ const MOON_VISIBLE_SIZE_MAX_FACTOR = 0.12;
 const MOON_FOCUS_MIN_RADIUS = 0.035;
 const SELECTED_MOON_VISIBLE_MIN = 0.018;
 const SUN_RADIUS = 5.5;
+const GALAXY_ROTATION_SPEED = 0.00014;
+const GALAXY_HALO_ROTATION_SPEED = 0.00004;
+const GALAXY_SUN_ORBIT_RADIUS = 64;
+const GALAXY_SUN_FOCUS_DISTANCE = 6.2;
+const GALAXY_TO_SOLAR_APPROACH_STEP = 0.008;
+const GALAXY_TO_SOLAR_FADE_TRIGGER = 0.58;
+const SOLAR_SYSTEM_INTRO_STEP = 0.012;
+const SOLAR_SYSTEM_DEFAULT_POSITION = { x: 0, y: 24, z: 36 };
+const SOLAR_SYSTEM_INTRO_POSITION = { x: 0, y: 62, z: 118 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -397,6 +406,27 @@ export default function SolarSystemScene({
     const solarSystemRootRef = useRef(null);
     const galaxyRootRef = useRef(null);
     const galaxySunRef = useRef(null);
+    const isMilkyWayModeRef = useRef(selectedMilkyWay !== 'Solar System');
+    const overlayRef = useRef(null);
+    const sunTooltipRef = useRef(null);
+    const raycasterRef = useRef(new THREE.Raycaster());
+    const pointerNdcRef = useRef(new THREE.Vector2());
+    const pointerRef = useRef({ down: false, moved: false });
+    const galaxyTransitionRef = useRef({
+        phase: 'idle',
+        progress: 0,
+        startDistance: DEFAULT_CAM_DIST,
+        startCamera: new THREE.Vector3(),
+        startTarget: new THREE.Vector3(),
+        cameraDir: new THREE.Vector3(0, 0, 1),
+        sunWorld: new THREE.Vector3(),
+        introStartCamera: new THREE.Vector3(),
+        introEndCamera: new THREE.Vector3(
+            SOLAR_SYSTEM_DEFAULT_POSITION.x,
+            SOLAR_SYSTEM_DEFAULT_POSITION.y,
+            SOLAR_SYSTEM_DEFAULT_POSITION.z
+        ),
+    });
 
     const moonsHostPlanet = useMemo(() => {
         if (selectedMoon && selectedPlanet) return selectedPlanet;
@@ -406,6 +436,10 @@ export default function SolarSystemScene({
 
     const isMilkyWayMode = selectedMilkyWay !== 'Solar System';
 
+    useEffect(() => {
+        isMilkyWayModeRef.current = isMilkyWayMode;
+    }, [isMilkyWayMode]);
+
     const focusCameraOnGalaxy = useCallback(() => {
         const camera = cameraRef.current;
         const controls = ctrlRef.current;
@@ -414,10 +448,68 @@ export default function SolarSystemScene({
         controls.target.set(0, 0, 0);
         camera.position.set(-24, 38, 88);
         camera.lookAt(0, 0, 0);
+        controls.enabled = true;
         minCamDistRef.current = 12;
         targetCamDistRef.current = camera.position.distanceTo(controls.target);
         controls.update();
     }, []);
+
+    const setOverlayOpacity = useCallback((opacity) => {
+        if (!overlayRef.current) return;
+        overlayRef.current.style.opacity = `${THREE.MathUtils.clamp(opacity, 0, 1)}`;
+    }, []);
+
+    const hideSunTooltip = useCallback(() => {
+        if (sunTooltipRef.current) sunTooltipRef.current.style.opacity = '0';
+        if (mountRef.current) mountRef.current.style.cursor = pointerRef.current.down ? 'grabbing' : 'grab';
+    }, []);
+
+    const showSunTooltip = useCallback((x, y) => {
+        if (!sunTooltipRef.current) return;
+        sunTooltipRef.current.style.left = `${x}px`;
+        sunTooltipRef.current.style.top = `${y}px`;
+        sunTooltipRef.current.style.opacity = '1';
+        if (mountRef.current) mountRef.current.style.cursor = 'pointer';
+    }, []);
+
+    const getPointerHit = useCallback((clientX, clientY, objects) => {
+        const el = mountRef.current;
+        const camera = cameraRef.current;
+        if (!el || !camera || !objects.length) return null;
+
+        const rect = el.getBoundingClientRect();
+        pointerNdcRef.current.set(
+            ((clientX - rect.left) / rect.width) * 2 - 1,
+            ((clientY - rect.top) / rect.height) * -2 + 1
+        );
+        raycasterRef.current.setFromCamera(pointerNdcRef.current, camera);
+
+        return raycasterRef.current.intersectObjects(objects)[0] ?? null;
+    }, []);
+
+    const startGalaxySunTransition = useCallback(() => {
+        const camera = cameraRef.current;
+        const controls = ctrlRef.current;
+        const galaxySun = galaxySunRef.current;
+        if (!camera || !controls || !galaxySun) return;
+
+        const transition = galaxyTransitionRef.current;
+        if (transition.phase !== 'idle') return;
+
+        galaxySun.updateWorldMatrix(true, false);
+        galaxySun.getWorldPosition(transition.sunWorld);
+        transition.phase = 'galaxy-approach';
+        transition.progress = 0;
+        transition.startCamera.copy(camera.position);
+        transition.startTarget.copy(controls.target);
+        transition.startDistance = camera.position.distanceTo(controls.target);
+        transition.cameraDir.subVectors(camera.position, controls.target).normalize();
+        if (transition.cameraDir.lengthSq() === 0) {
+            transition.cameraDir.set(-0.28, 0.42, 1).normalize();
+        }
+        hideSunTooltip();
+        setOverlayOpacity(0);
+    }, [hideSunTooltip, setOverlayOpacity]);
 
     const focusCameraOnMoon = useCallback((moonName) => {
         const controls = ctrlRef.current;
@@ -507,15 +599,25 @@ export default function SolarSystemScene({
         if (!camera || !controls) return;
 
         controls.target.set(0, 0, 0);
-        camera.position.set(0, 24, 36);
+        camera.position.set(
+            SOLAR_SYSTEM_DEFAULT_POSITION.x,
+            SOLAR_SYSTEM_DEFAULT_POSITION.y,
+            SOLAR_SYSTEM_DEFAULT_POSITION.z
+        );
         camera.lookAt(0, 0, 0);
+        controls.enabled = true;
+        galaxyTransitionRef.current.phase = 'idle';
+        setOverlayOpacity(0);
         minCamDistRef.current = getDistanceForScreenFraction(SUN_RADIUS, camera, 0.5);
         targetCamDistRef.current = camera.position.distanceTo(controls.target);
         controls.update();
-    }, [resetViewNonce]);
+    }, [resetViewNonce, setOverlayOpacity]);
 
     useEffect(() => {
+        hideSunTooltip();
         if (isMilkyWayMode) {
+            galaxyTransitionRef.current.phase = 'idle';
+            setOverlayOpacity(0);
             focusCameraOnGalaxy();
             return;
         }
@@ -524,13 +626,43 @@ export default function SolarSystemScene({
         const controls = ctrlRef.current;
         if (!camera || !controls) return;
 
+        const transition = galaxyTransitionRef.current;
         controls.target.set(0, 0, 0);
-        camera.position.set(0, 24, 36);
+        if (transition.phase === 'await-solar-system' || transition.phase === 'solar-arrival') {
+            camera.position.set(
+                SOLAR_SYSTEM_INTRO_POSITION.x,
+                SOLAR_SYSTEM_INTRO_POSITION.y,
+                SOLAR_SYSTEM_INTRO_POSITION.z
+            );
+            camera.lookAt(0, 0, 0);
+            controls.enabled = false;
+            transition.phase = 'solar-arrival';
+            transition.progress = 0;
+            transition.introStartCamera.copy(camera.position);
+            transition.introEndCamera.set(
+                SOLAR_SYSTEM_DEFAULT_POSITION.x,
+                SOLAR_SYSTEM_DEFAULT_POSITION.y,
+                SOLAR_SYSTEM_DEFAULT_POSITION.z
+            );
+            minCamDistRef.current = getDistanceForScreenFraction(SUN_RADIUS, camera, 0.5);
+            targetCamDistRef.current = transition.introEndCamera.length();
+            setOverlayOpacity(1);
+            controls.update();
+            return;
+        }
+
+        camera.position.set(
+            SOLAR_SYSTEM_DEFAULT_POSITION.x,
+            SOLAR_SYSTEM_DEFAULT_POSITION.y,
+            SOLAR_SYSTEM_DEFAULT_POSITION.z
+        );
         camera.lookAt(0, 0, 0);
+        controls.enabled = true;
         minCamDistRef.current = getDistanceForScreenFraction(SUN_RADIUS, camera, 0.5);
         targetCamDistRef.current = camera.position.distanceTo(controls.target);
+        setOverlayOpacity(0);
         controls.update();
-    }, [focusCameraOnGalaxy, isMilkyWayMode]);
+    }, [focusCameraOnGalaxy, hideSunTooltip, isMilkyWayMode, setOverlayOpacity]);
 
     // ── Init scène ────────────────────────────────────────────────────────
     useEffect(() => {
@@ -546,8 +678,23 @@ export default function SolarSystemScene({
         scene.add(solarSystemRoot);
         scene.add(galaxyRoot);
 
+        const transitionPhase = galaxyTransitionRef.current.phase;
         const camera = new THREE.PerspectiveCamera(50, el.clientWidth / el.clientHeight, 0.005, 2000);
-        camera.position.set(0, 24, 36);
+        if (isMilkyWayModeRef.current) {
+            camera.position.set(-24, 38, 88);
+        } else if (transitionPhase === 'await-solar-system' || transitionPhase === 'solar-arrival') {
+            camera.position.set(
+                SOLAR_SYSTEM_INTRO_POSITION.x,
+                SOLAR_SYSTEM_INTRO_POSITION.y,
+                SOLAR_SYSTEM_INTRO_POSITION.z
+            );
+        } else {
+            camera.position.set(
+                SOLAR_SYSTEM_DEFAULT_POSITION.x,
+                SOLAR_SYSTEM_DEFAULT_POSITION.y,
+                SOLAR_SYSTEM_DEFAULT_POSITION.z
+            );
+        }
         camera.lookAt(0, 0, 0);
         cameraRef.current = camera;
 
@@ -563,6 +710,18 @@ export default function SolarSystemScene({
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
         controls.rotateSpeed = 0.65;
+        if (!isMilkyWayModeRef.current && (transitionPhase === 'await-solar-system' || transitionPhase === 'solar-arrival')) {
+            controls.enabled = false;
+            galaxyTransitionRef.current.phase = 'solar-arrival';
+            galaxyTransitionRef.current.progress = 0;
+            galaxyTransitionRef.current.introStartCamera.copy(camera.position);
+            galaxyTransitionRef.current.introEndCamera.set(
+                SOLAR_SYSTEM_DEFAULT_POSITION.x,
+                SOLAR_SYSTEM_DEFAULT_POSITION.y,
+                SOLAR_SYSTEM_DEFAULT_POSITION.z
+            );
+            setOverlayOpacity(1);
+        }
         ctrlRef.current = controls;
 
         const starSpriteTexture = makeStarSpriteTexture();
@@ -1090,13 +1249,11 @@ export default function SolarSystemScene({
             galaxyDisk.add(cloud);
         }
 
-        const galaxySunOrbit = new THREE.Group();
-        galaxySunOrbit.rotation.y = -0.32;
-        galaxyDisk.add(galaxySunOrbit);
+        const galaxySunPoint = getArmCenterPoint(armDefinitions[0], GALAXY_SUN_ORBIT_RADIUS);
         const galaxySun = makeSphere(0.9, '#fff3b0', '#ffcf66');
-        galaxySun.position.set(25.5, 0.1, 0);
+        galaxySun.position.set(galaxySunPoint.x, 0.16, galaxySunPoint.z);
         galaxySun.userData = { type: 'galaxy-sun' };
-        galaxySunOrbit.add(galaxySun);
+        galaxyDisk.add(galaxySun);
         galaxySunRef.current = galaxySun;
 
         // Éclairage
@@ -1216,6 +1373,15 @@ export default function SolarSystemScene({
             sunMesh.material.emissive.set(0xffffff);
 
             sunMesh.material.needsUpdate = true;
+
+            if (galaxySunRef.current) {
+                galaxySunRef.current.material.map = tex;
+                galaxySunRef.current.material.emissiveMap = tex;
+                galaxySunRef.current.material.color.set(0xffffff);
+                galaxySunRef.current.material.emissive.set(0xffffff);
+                galaxySunRef.current.material.emissiveIntensity = 1.9;
+                galaxySunRef.current.material.needsUpdate = true;
+            }
         });
 
         const applyTexToMesh = (mesh, tex) => {
@@ -1361,17 +1527,21 @@ export default function SolarSystemScene({
         const camDir = new THREE.Vector3();
         const moonWorldPos = new THREE.Vector3();
         const focusTargetWorldPos = new THREE.Vector3();
+        const transitionCameraPos = new THREE.Vector3();
+        const transitionTarget = new THREE.Vector3();
 
         const animate = () => {
             frameRef.current = requestAnimationFrame(animate);
 
-            solarSystemRoot.visible = !isMilkyWayMode;
-            galaxyRoot.visible = isMilkyWayMode;
+            const isMilkyWay = isMilkyWayModeRef.current;
+            solarSystemRoot.visible = !isMilkyWay;
+            galaxyRoot.visible = isMilkyWay;
 
-            if (isMilkyWayMode) {
+            if (isMilkyWay) {
                 const time = performance.now();
-                galaxyDisk.rotation.y += 0.00056;
-                halo.rotation.y += 0.00018;
+                const transition = galaxyTransitionRef.current;
+                galaxyDisk.rotation.y += GALAXY_ROTATION_SPEED;
+                halo.rotation.y += GALAXY_HALO_ROTATION_SPEED;
                 coreGlows.forEach((glow, index) => {
                     glow.material.opacity = coreGlowSpecs[index].opacity * (0.96 + Math.sin(time * 0.00035 + index) * 0.04);
                 });
@@ -1383,6 +1553,46 @@ export default function SolarSystemScene({
                     cloud.material.opacity = 0.18 + ((Math.sin(time * 0.00045 + index * 0.51) + 1) * 0.5) * 0.16;
                 });
                 galaxySun.rotation.y += 0.01;
+                if (transition.phase === 'galaxy-approach') {
+                    galaxySun.updateWorldMatrix(true, false);
+                    galaxySun.getWorldPosition(transition.sunWorld);
+                    transition.progress = Math.min(transition.progress + GALAXY_TO_SOLAR_APPROACH_STEP, 1);
+                    const eased = 1 - Math.pow(1 - transition.progress, 3);
+                    transitionTarget.lerpVectors(transition.startTarget, transition.sunWorld, eased);
+                    controls.target.copy(transitionTarget);
+                    transitionCameraPos.copy(transition.cameraDir).multiplyScalar(
+                        THREE.MathUtils.lerp(transition.startDistance, GALAXY_SUN_FOCUS_DISTANCE, eased)
+                    );
+                    camera.position.copy(controls.target).add(transitionCameraPos);
+                    setOverlayOpacity(THREE.MathUtils.smoothstep(transition.progress, GALAXY_TO_SOLAR_FADE_TRIGGER, 1));
+                    controls.enabled = false;
+                    if (transition.progress >= 1) {
+                        transition.phase = 'await-solar-system';
+                        focusOnSolarSystem();
+                    }
+                } else {
+                    controls.enabled = true;
+                    setOverlayOpacity(0);
+                }
+                controls.update();
+                renderer.render(scene, camera);
+                return;
+            }
+
+            const transition = galaxyTransitionRef.current;
+            if (transition.phase === 'solar-arrival') {
+                transition.progress = Math.min(transition.progress + SOLAR_SYSTEM_INTRO_STEP, 1);
+                const eased = 1 - Math.pow(1 - transition.progress, 4);
+                camera.position.lerpVectors(transition.introStartCamera, transition.introEndCamera, eased);
+                controls.target.set(0, 0, 0);
+                setOverlayOpacity(1 - THREE.MathUtils.smoothstep(transition.progress, 0.08, 0.9));
+                if (transition.progress >= 1) {
+                    transition.phase = 'idle';
+                    controls.enabled = true;
+                    minCamDistRef.current = getDistanceForScreenFraction(SUN_RADIUS, camera, 0.5);
+                    targetCamDistRef.current = camera.position.distanceTo(controls.target);
+                    setOverlayOpacity(0);
+                }
                 controls.update();
                 renderer.render(scene, camera);
                 return;
@@ -1530,7 +1740,7 @@ export default function SolarSystemScene({
             el.removeEventListener('touchend', onTouchEnd);
             if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
         };
-    }, [isMilkyWayMode]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Lunes ─────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -1659,25 +1869,41 @@ export default function SolarSystemScene({
     }, [moonsHostPlanet, moons]);
 
     // ── Raycasting ────────────────────────────────────────────────────────
-    const pointerRef = useRef({ down: false, moved: false });
-    const handlePointerDown = useCallback(() => { pointerRef.current = { down: true, moved: false }; }, []);
-    const handlePointerMove = useCallback(() => { if (pointerRef.current.down) pointerRef.current.moved = true; }, []);
+    const handlePointerDown = useCallback(() => {
+        pointerRef.current = { down: true, moved: false };
+        hideSunTooltip();
+        if (mountRef.current) mountRef.current.style.cursor = 'grabbing';
+    }, [hideSunTooltip]);
+
+    const handlePointerMove = useCallback((e) => {
+        if (pointerRef.current.down) {
+            pointerRef.current.moved = true;
+            return;
+        }
+
+        if (!isMilkyWayMode || galaxyTransitionRef.current.phase !== 'idle' || !galaxySunRef.current) {
+            hideSunTooltip();
+            return;
+        }
+
+        const hit = getPointerHit(e.clientX, e.clientY, [galaxySunRef.current]);
+        if (!hit || hit.object.userData.type !== 'galaxy-sun') {
+            hideSunTooltip();
+            return;
+        }
+
+        const rect = mountRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        showSunTooltip(e.clientX - rect.left, e.clientY - rect.top);
+    }, [getPointerHit, hideSunTooltip, isMilkyWayMode, showSunTooltip]);
 
     const handlePointerUp = useCallback((e) => {
         const { down, moved } = pointerRef.current;
         pointerRef.current = { down: false, moved: false };
+        if (mountRef.current) mountRef.current.style.cursor = 'grab';
         if (!down || moved) return;
 
-        const el = mountRef.current, cam = cameraRef.current, sc = sceneRef.current;
-        if (!el || !cam || !sc) return;
-
-        const rect = el.getBoundingClientRect();
-        const mouse = new THREE.Vector2(
-            ((e.clientX - rect.left) / rect.width) * 2 - 1,
-            ((e.clientY - rect.top) / rect.height) * -2 + 1,
-        );
-        const rc = new THREE.Raycaster();
-        rc.setFromCamera(mouse, cam);
+        if (galaxyTransitionRef.current.phase !== 'idle') return;
 
         const meshes = [
             ...Object.values(planetsRef.current).map(p => p.mesh),
@@ -1685,23 +1911,65 @@ export default function SolarSystemScene({
             ...moonsRef.current.map(m => m.mesh),
             ...(galaxySunRef.current ? [galaxySunRef.current] : []),
         ];
-        const hits = rc.intersectObjects(meshes);
-        if (!hits.length) return;
+        const hit = getPointerHit(e.clientX, e.clientY, meshes);
+        if (!hit) return;
 
-        const { type, name, parentName } = hits[0].object.userData;
-        if (type === 'galaxy-sun') { focusOnSolarSystem(); }
+        const { type, name, parentName } = hit.object.userData;
+        if (type === 'galaxy-sun') { startGalaxySunTransition(); }
         else if (type === 'planet') { focusPlanet(name); }
         else if (type === 'asteroid') { focusAsteroid(name); }
         else if (type === 'moon') { focusMoon(name, parentName); }
-    }, [focusAsteroid, focusMoon, focusOnSolarSystem, focusPlanet]);
+    }, [focusAsteroid, focusMoon, focusPlanet, getPointerHit, startGalaxySunTransition]);
+
+    const handlePointerLeave = useCallback(() => {
+        pointerRef.current = { down: false, moved: false };
+        hideSunTooltip();
+        if (mountRef.current) mountRef.current.style.cursor = 'grab';
+    }, [hideSunTooltip]);
 
     return (
-        <div
-            ref={mountRef}
-            style={{ position: 'absolute', inset: 0, cursor: 'grab' }}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-        />
+        <div style={{ position: 'absolute', inset: 0 }}>
+            <div
+                ref={mountRef}
+                style={{ position: 'absolute', inset: 0, cursor: 'grab' }}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerLeave={handlePointerLeave}
+            />
+            <div
+                ref={overlayRef}
+                style={{
+                    position: 'absolute',
+                    inset: 0,
+                    opacity: 0,
+                    pointerEvents: 'none',
+                    background: 'radial-gradient(circle at center, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.22) 38%, rgba(0,0,0,0.96) 100%)',
+                }}
+            />
+            <div
+                ref={sunTooltipRef}
+                style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    opacity: 0,
+                    pointerEvents: 'none',
+                    transform: 'translate(-50%, calc(-100% - 14px))',
+                    padding: '6px 10px',
+                    borderRadius: 999,
+                    background: 'rgba(6, 10, 16, 0.88)',
+                    border: '1px solid rgba(255, 243, 183, 0.28)',
+                    color: '#fff3bf',
+                    fontSize: '12px',
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    backdropFilter: 'blur(6px)',
+                    WebkitBackdropFilter: 'blur(6px)',
+                }}
+            >
+                Soleil
+            </div>
+        </div>
     );
 }

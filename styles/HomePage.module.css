@@ -30,16 +30,18 @@
     left: 18px;
     width: min(980px, calc(100vw - 326px));
     min-width: 320px;
-    padding: 8px 10px;
+    padding: 4px 0;
     z-index: 50;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
+    gap: 8px;
     pointer-events: auto;
     border: 0;
-    background: rgba(7, 14, 26, 0.38);
+    background: transparent;
     box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 
 .leftDock {
@@ -94,10 +96,15 @@
 .topNav {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
     min-width: 0;
-    width: 100%;
+    max-width: 100%;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(7, 14, 26, 0.62), rgba(7, 14, 26, 0.22));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
 .navGroup {
@@ -107,50 +114,58 @@
 .navTrigger {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    border-radius: 14px;
+    gap: 4px;
+    padding: 2px 0;
+    border-radius: 0;
     border: 0;
-    background: rgba(12, 22, 40, 0.48);
-    color: var(--text-main);
+    background: transparent;
+    color: rgba(236, 244, 255, 0.9);
     cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease;
+    transition: color 0.2s ease, opacity 0.2s ease;
+    font-size: 0.96rem;
+    line-height: 1;
 }
 
 .navTrigger:hover,
 .navTriggerOpen {
-    background: rgba(18, 31, 55, 0.78);
+    color: #ffffff;
 }
 
 .navTriggerLabel {
-    max-width: 180px;
+    max-width: 220px;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
 }
 
+.navTriggerIcon {
+    font-size: 1rem;
+    opacity: 0.58;
+}
+
 .navChevron {
-    color: rgba(162, 194, 255, 0.5);
+    color: rgba(162, 194, 255, 0.42);
     flex: 0 0 auto;
+    font-size: 1rem;
 }
 
 .navDropdown {
     position: absolute;
-    top: calc(100% + 8px);
+    top: calc(100% + 10px);
     left: 0;
     min-width: 220px;
-    max-height: 320px;
+    max-height: min(380px, 62vh);
     overflow-y: auto;
-    padding: 8px;
+    padding: 10px 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    border-radius: 18px;
+    gap: 2px;
+    border-radius: 14px;
     border: 0;
-    background: rgba(7, 14, 26, 0.84);
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
+    background: rgba(6, 12, 20, 0.86);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     z-index: 120;
 }
 
@@ -160,9 +175,9 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 10px 12px;
+    padding: 9px 16px;
     border: 0;
-    border-radius: 12px;
+    border-radius: 0;
     background: transparent;
     color: var(--text-soft);
     text-align: left;
@@ -172,12 +187,21 @@
 
 .navDropdownItem:hover,
 .navDropdownItemActive {
-    background: rgba(126, 231, 255, 0.08);
+    background: rgba(126, 231, 255, 0.06);
     color: var(--text-main);
 }
 
 .navDropdownTick {
     color: var(--accent);
+}
+
+.navDropdownSection {
+    padding: 10px 16px 6px;
+    color: rgba(162, 194, 255, 0.58);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-family: var(--font-mono-ui);
 }
 
 .footerChip {
