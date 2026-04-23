@@ -5,6 +5,8 @@ import { MdChevronRight, MdKeyboardArrowDown } from 'react-icons/md';
 import { milkyWay, solarSystem } from '../data/solarSystem';
 import styles from '../styles/HomePage.module.css';
 
+const displayLabel = (label) => (label === 'Solar System' ? 'Soleil' : label);
+
 const NavigationMenu = memo(({
     planets,
     asteroids,
@@ -38,10 +40,10 @@ const NavigationMenu = memo(({
     const navItems = [
         {
             id: 'milkyway',
-            label: selectedMilkyWay || 'Milky Way',
+            label: displayLabel(selectedMilkyWay || 'Milky Way'),
             items: milkyWay.map((item) => ({
                 id: item,
-                label: item,
+                label: displayLabel(item),
                 active: selectedMilkyWay === item,
                 onClick: () => {
                     setSelectedMilkyWay(item);
@@ -53,7 +55,7 @@ const NavigationMenu = memo(({
         },
         selectedMilkyWay === 'Solar System' ? {
             id: 'solarsystem',
-            label: selectedSolarSystem || 'Solar System',
+            label: selectedSolarSystem || 'Soleil',
             items: solarSystem.map((item) => ({
                 id: item,
                 label: item,
@@ -69,7 +71,7 @@ const NavigationMenu = memo(({
                 },
             })),
         } : null,
-        selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Planets' ? {
+        selectedMilkyWay === 'Solar System' ? {
             id: 'planets',
             label: selectedPlanet ? planets.find((item) => item.id === selectedPlanet)?.englishName || selectedPlanet : 'Planets',
             items: planets.map((item) => ({
@@ -82,7 +84,7 @@ const NavigationMenu = memo(({
                 },
             })),
         } : null,
-        selectedMilkyWay === 'Solar System' && selectedSolarSystem === 'Asteroid Belt' ? {
+        selectedMilkyWay === 'Solar System' ? {
             id: 'asteroids',
             label: selectedAsteroid ? asteroids.find((item) => item.id === selectedAsteroid)?.englishName || selectedAsteroid : 'Asteroids',
             items: asteroids.map((item) => ({
@@ -96,7 +98,7 @@ const NavigationMenu = memo(({
                 },
             })),
         } : null,
-        moonItems.length > 0 && selectedSolarSystem === 'Planets' ? {
+        moonItems.length > 0 ? {
             id: 'moons',
             label: selectedMoon ? moonItems.find((item) => item.id === selectedMoon)?.englishName || selectedMoon : 'Moons',
             items: moonItems.map((item) => ({

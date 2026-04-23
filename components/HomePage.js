@@ -68,11 +68,13 @@ export default function HomePage() {
                     asteroids={asteroids}
                     focusOnPlanet={focusOnPlanet}
                     resetViewNonce={resetViewNonce}
+                    selectedMilkyWay={selectedMilkyWay}
                     selectedPlanet={selectedPlanet}
                     selectedAsteroid={selectedAsteroid}
                     selectedMoon={selectedMoon}
                     moons={moons}
                     nbMoons={nbMoons}
+                    focusOnSolarSystem={focusOnSolarSystem}
                     focusPlanet={focusPlanet}
                     focusAsteroid={focusAsteroid}
                     focusMoon={focusMoon}
@@ -104,7 +106,7 @@ export default function HomePage() {
                 setSelectedAsteroid={setSelectedAsteroid}
                 setMoons={setMoons}
                 bodyCount={planets.length + asteroids.length}
-                currentView={selectedSolarSystem || 'Système solaire'}
+                currentView={selectedSolarSystem || 'Soleil'}
                 currentTarget={selectedPlanet || selectedAsteroid || selectedMoon || '—'}
             />
 
