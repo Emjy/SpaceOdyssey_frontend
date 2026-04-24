@@ -175,7 +175,7 @@ Composant générique de menu déroulant.
 ## Flux de Données
 
 ```
-API (Backend)
+API Routes Next.js
     ↓
 useSpaceData (fetch planets, asteroids)
     ↓

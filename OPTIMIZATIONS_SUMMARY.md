@@ -130,7 +130,7 @@ Modules dédiés:
 
 ```mermaid
 graph TD
-    A[API Backend] --> B[useSpaceData]
+    A[API Routes Next.js] --> B[useSpaceData]
     B --> C[HomePage]
     C --> D[useFocusManager]
     C --> E[NavigationMenu]

@@ -151,7 +151,7 @@ export default function useFocusManager(planets = [], asteroids = []) {
         } else {
             setSelectedMoon(moonName);
             setFocusOneMoon(true);
-            setNbMoons(1);
+            setNbMoons(8);
             try {
                 const moonBody = await fetchBody(moonName);
                 setInfos(moonBody);

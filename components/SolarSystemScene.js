@@ -20,12 +20,9 @@ const PLANET_DATA = [
     { name: 'pluton',  r: 58, size: 0.12, color: '#9a8070', emissive: '#302520', speed: 0.002, tilt: 122.53, rotDir: -1 },
 ];
 
-// Textures spécifiques par lune (ID de l'API le-systeme-solaire.net)
-const MOON_TEXTURES = {
-    europe:   '/textures/texture_europe.jpg',
-    io: '/textures/texture_io.jpg',
-    deimos: '/textures/texture_deimos.jpg'
-};
+// Convention : /textures/moons/{api_id}.jpg
+// Ajouter un fichier dans ce dossier suffit — aucune modif de code requise.
+const MOON_TEXTURE_BASE = '/textures/moons';
 
 const DEFAULT_CAM_DIST = 90;
 const PLANET_ORBIT_MIN = 10;
@@ -52,6 +49,17 @@ const GALAXY_TO_SOLAR_FADE_TRIGGER = 0.58;
 const SOLAR_SYSTEM_INTRO_STEP = 0.012;
 const SOLAR_SYSTEM_DEFAULT_POSITION = { x: 0, y: 24, z: 36 };
 const SOLAR_SYSTEM_INTRO_POSITION = { x: 0, y: 62, z: 118 };
+const FRAME_TIME_60FPS = 1000 / 60;
+const GALAXY_IDLE_FPS = 48;
+const SOLAR_SYSTEM_IDLE_FPS = 36;
+const INTERACTION_BOOST_MS = 900;
+const SUN_BOIL_AMPLITUDE = 0.2;
+const SUN_BOIL_SPEED = 0.00115;
+const SUN_PULSE_SPEED = 0.00062;
+const IRREGULAR_MOON_SHAPES = {
+    phobos: { seed: 1.73, amplitude: 0.22 },
+    deimos: { seed: 4.21, amplitude: 0.14 },
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,8 +93,8 @@ function makeTrailArc(radius, color = 0xffffff, opacity = 0.4, reversed = false)
     return new THREE.Line(geo, mat);
 }
 
-function makeSphere(radius, color, emissive) {
-    const geo = new THREE.SphereGeometry(radius, 64, 64);
+function makeSphere(radius, color, emissive, segments = radius >= 3 ? 64 : radius >= 0.6 ? 48 : radius >= 0.18 ? 32 : 24) {
+    const geo = new THREE.SphereGeometry(radius, segments, segments);
     const mat = new THREE.MeshPhongMaterial({
         color:             new THREE.Color(color),
         emissive:          new THREE.Color(emissive),
@@ -97,6 +105,238 @@ function makeSphere(radius, color, emissive) {
         opacity:           1.0,
     });
     return new THREE.Mesh(geo, mat);
+}
+
+function parseBodyDimensions(dimension) {
+    if (typeof dimension !== 'string') return null;
+
+    const values = dimension
+        .match(/-?\d+(?:[.,]\d+)?/g)
+        ?.map((value) => Number.parseFloat(value.replace(',', '.')))
+        .filter((value) => Number.isFinite(value) && value > 0);
+
+    if (!values || values.length < 3) return null;
+    return values.slice(0, 3);
+}
+
+function normalizeStretch(x = 1, y = 1, z = 1) {
+    return {
+        x: THREE.MathUtils.clamp(x, 0.65, 1.45),
+        y: THREE.MathUtils.clamp(y, 0.65, 1.45),
+        z: THREE.MathUtils.clamp(z, 0.65, 1.45),
+    };
+}
+
+function getMoonStretch(moonBody) {
+    const parsedDimensions = parseBodyDimensions(moonBody?.dimension);
+    if (parsedDimensions) {
+        const [x, y, z] = parsedDimensions;
+        const avg = (x + y + z) / 3;
+        if (avg > 0) {
+            return normalizeStretch(x / avg, y / avg, z / avg);
+        }
+    }
+
+    const meanRadius = moonBody?.meanRadius;
+    const equaRadius = moonBody?.equaRadius;
+    const polarRadius = moonBody?.polarRadius;
+    if (Number.isFinite(meanRadius) && meanRadius > 0) {
+        const equatorialRatio = Number.isFinite(equaRadius) && equaRadius > 0 ? equaRadius / meanRadius : 1;
+        const polarRatio = Number.isFinite(polarRadius) && polarRadius > 0 ? polarRadius / meanRadius : 1;
+        return normalizeStretch(equatorialRatio, polarRatio, equatorialRatio);
+    }
+
+    return null;
+}
+
+function applyMoonStretch(geometry, stretch) {
+    if (!stretch) return;
+
+    const position = geometry.attributes.position;
+    const vertex = new THREE.Vector3();
+
+    for (let i = 0; i < position.count; i++) {
+        vertex.fromBufferAttribute(position, i);
+        vertex.set(
+            vertex.x * stretch.x,
+            vertex.y * stretch.y,
+            vertex.z * stretch.z
+        );
+        position.setXYZ(i, vertex.x, vertex.y, vertex.z);
+    }
+
+    position.needsUpdate = true;
+}
+
+function deformMoonGeometry(geometry, { seed, amplitude }) {
+    const position = geometry.attributes.position;
+    const normal = geometry.attributes.normal;
+    const vertex = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+
+    for (let i = 0; i < position.count; i++) {
+        vertex.fromBufferAttribute(position, i);
+        direction.fromBufferAttribute(normal, i);
+
+        const waviness =
+            Math.sin((direction.x + seed) * 4.7) * 0.5 +
+            Math.cos((direction.y - seed * 0.7) * 5.9) * 0.3 +
+            Math.sin((direction.z + seed * 1.3) * 7.1) * 0.2;
+        const displacement = 1 + waviness * amplitude;
+
+        vertex.multiplyScalar(displacement);
+        position.setXYZ(i, vertex.x, vertex.y, vertex.z);
+    }
+
+    position.needsUpdate = true;
+    geometry.computeVertexNormals();
+}
+
+function getMoonColor(moonBody) {
+    const density = moonBody?.density;
+    const avgTemp = moonBody?.avgTemp;
+
+    let r = 0.69, g = 0.65, b = 0.62;
+    let er = 0.04, eg = 0.04, eb = 0.04;
+
+    if (Number.isFinite(density) && density > 0) {
+        if (density < 1.3) {
+            // Lune glacée (Enceladus, Mimas) : blanc-bleu
+            r = 0.80; g = 0.88; b = 0.95;
+            er = 0.05; eg = 0.07; eb = 0.10;
+        } else if (density < 1.8) {
+            // Glace/roche mixte (Titan, Rhea, Callisto) : gris-bleuté
+            r = 0.65; g = 0.68; b = 0.72;
+            er = 0.04; eg = 0.04; eb = 0.05;
+        } else if (density < 2.5) {
+            // Rocheuse (Ganymede, Triton) : gris moyen
+            r = 0.58; g = 0.55; b = 0.52;
+            er = 0.04; eg = 0.03; eb = 0.03;
+        } else if (density < 3.5) {
+            // Silicate dense (Luna, Europa) : gris-beige
+            r = 0.60; g = 0.58; b = 0.55;
+            er = 0.05; eg = 0.04; eb = 0.03;
+        } else {
+            // Très dense (métallique) : gris sombre
+            r = 0.50; g = 0.47; b = 0.43;
+            er = 0.04; eg = 0.03; eb = 0.02;
+        }
+    }
+
+    if (Number.isFinite(avgTemp) && avgTemp > 0) {
+        if (avgTemp < 100) {
+            r -= 0.06; b += 0.06;
+        } else if (avgTemp > 240) {
+            r += 0.05; g += 0.02; b -= 0.05;
+        }
+    }
+
+    const clamp = v => Math.max(0, Math.min(1, v));
+    const toHex = (rv, gv, bv) => {
+        const ri = Math.round(clamp(rv) * 255);
+        const gi = Math.round(clamp(gv) * 255);
+        const bi = Math.round(clamp(bv) * 255);
+        return `#${ri.toString(16).padStart(2, '0')}${gi.toString(16).padStart(2, '0')}${bi.toString(16).padStart(2, '0')}`;
+    };
+
+    return { color: toHex(r, g, b), emissive: toHex(er, eg, eb) };
+}
+
+function makeMoonMesh(moonId, moonBody, radius, color, emissive, segments = 24) {
+    const mesh = makeSphere(radius, color, emissive, segments);
+    const stretch = getMoonStretch(moonBody);
+    const shapePreset = IRREGULAR_MOON_SHAPES[moonId];
+
+    applyMoonStretch(mesh.geometry, stretch);
+
+    if (shapePreset) {
+        deformMoonGeometry(mesh.geometry, shapePreset);
+    } else if (stretch) {
+        mesh.geometry.computeVertexNormals();
+    }
+
+    mesh.geometry.computeBoundingSphere();
+    mesh.userData.renderRadius = mesh.geometry.boundingSphere?.radius ?? radius;
+    return mesh;
+}
+
+function getObjectRenderRadius(mesh) {
+    return mesh?.userData?.renderRadius
+        ?? mesh?.geometry?.boundingSphere?.radius
+        ?? mesh?.geometry?.parameters?.radius
+        ?? null;
+}
+
+function primeBoilingMesh(mesh, amplitude = SUN_BOIL_AMPLITUDE) {
+    const geometry = mesh?.geometry;
+    const position = geometry?.attributes?.position;
+    if (!geometry || !position) return;
+
+    const basePositions = new Float32Array(position.array);
+    const directions = new Float32Array(position.count * 3);
+    const phases = new Float32Array(position.count);
+    const weights = new Float32Array(position.count);
+    const vertex = new THREE.Vector3();
+
+    for (let i = 0; i < position.count; i++) {
+        vertex.fromArray(basePositions, i * 3);
+        if (vertex.lengthSq() === 0) {
+            vertex.set(0, 1, 0);
+        } else {
+            vertex.normalize();
+        }
+
+        directions[i * 3] = vertex.x;
+        directions[i * 3 + 1] = vertex.y;
+        directions[i * 3 + 2] = vertex.z;
+
+        const harmonicSeed = vertex.x * 12.7 + vertex.y * 8.3 + vertex.z * 5.9;
+        phases[i] = harmonicSeed * Math.PI;
+        weights[i] = 0.58 + 0.42 * Math.abs(Math.sin(harmonicSeed * 1.73));
+    }
+
+    mesh.userData.boiling = {
+        amplitude,
+        basePositions,
+        directions,
+        phases,
+        weights,
+    };
+}
+
+function updateBoilingMesh(mesh, timeMs) {
+    const boiling = mesh?.userData?.boiling;
+    const geometry = mesh?.geometry;
+    const position = geometry?.attributes?.position;
+    if (!boiling || !geometry || !position) return;
+
+    const {
+        amplitude,
+        basePositions,
+        directions,
+        phases,
+        weights,
+    } = boiling;
+
+    const array = position.array;
+    const time = timeMs * SUN_BOIL_SPEED;
+
+    for (let i = 0; i < position.count; i++) {
+        const idx = i * 3;
+        const waveA = Math.sin(time + phases[i]);
+        const waveB = Math.cos(time * 1.83 + phases[i] * 1.37);
+        const waveC = Math.sin(time * 0.57 + phases[i] * 2.11);
+        const displacement = amplitude * weights[i] * (waveA * 0.52 + waveB * 0.3 + waveC * 0.18);
+
+        array[idx] = basePositions[idx] + directions[idx] * displacement;
+        array[idx + 1] = basePositions[idx + 1] + directions[idx + 1] * displacement;
+        array[idx + 2] = basePositions[idx + 2] + directions[idx + 2] * displacement;
+    }
+
+    position.needsUpdate = true;
+    geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    mesh.userData.renderRadius = geometry.boundingSphere?.radius ?? mesh.userData.renderRadius;
 }
 
 function makeStarSpriteTexture() {
@@ -338,7 +578,7 @@ function getActiveTargetMinDistance(camera, selectedMoon, selectedAsteroid, sele
 
     if (selectedMoon) {
         const moonEntry = moons.find(m => m.mesh.userData.name === selectedMoon);
-        const moonSize = moonEntry?.mesh.geometry.parameters.radius;
+        const moonSize = getObjectRenderRadius(moonEntry?.mesh);
         if (Number.isFinite(moonSize) && moonSize > 0) {
             const zoomLockRadius = Math.max(moonSize, MOON_FOCUS_MIN_RADIUS);
             return getDistanceForScreenFraction(zoomLockRadius, camera, 0.5);
@@ -392,8 +632,7 @@ export default function SolarSystemScene({
     const asteroidsRef = useRef([]); // [{ mesh, angle, r, speed }]
     const moonsRef = useRef([]);   // [{ mesh, arc, angle, speed, radius, parentName }]
     const moonDataCacheRef = useRef({});
-    const moonTexRef = useRef(null);       // texture générique (fallback)
-    const moonTexCacheRef = useRef({});    // id → THREE.Texture (textures spécifiques)
+    const moonTexCacheRef = useRef({});    // id → THREE.Texture (textures spécifiques par lune)
 
     const selectedPlanetRef = useRef(selectedPlanet);
     const selectedAsteroidRef = useRef(selectedAsteroid);
@@ -427,6 +666,8 @@ export default function SolarSystemScene({
             SOLAR_SYSTEM_DEFAULT_POSITION.z
         ),
     });
+    const sceneVisibilityRef = useRef(true);
+    const interactionBoostUntilRef = useRef(0);
 
     const moonsHostPlanet = useMemo(() => {
         if (selectedMoon && selectedPlanet) return selectedPlanet;
@@ -439,6 +680,11 @@ export default function SolarSystemScene({
     useEffect(() => {
         isMilkyWayModeRef.current = isMilkyWayMode;
     }, [isMilkyWayMode]);
+
+    const markInteractionHot = useCallback((duration = INTERACTION_BOOST_MS) => {
+        if (typeof performance === 'undefined') return;
+        interactionBoostUntilRef.current = performance.now() + duration;
+    }, []);
 
     const focusCameraOnGalaxy = useCallback(() => {
         const camera = cameraRef.current;
@@ -517,7 +763,7 @@ export default function SolarSystemScene({
         const moonEntry = moonsRef.current.find(m => m.mesh.userData.name === moonName);
         if (!moonEntry || !controls || !camera) return false;
 
-        const moonSize = moonEntry.mesh.geometry.parameters.radius;
+        const moonSize = getObjectRenderRadius(moonEntry.mesh);
         const focusDist = getDistanceForScreenFraction(moonSize, camera, 0.2);
         minCamDistRef.current = getDistanceForScreenFraction(Math.max(moonSize, MOON_FOCUS_MIN_RADIUS), camera, 0.5);
         targetCamDistRef.current = focusDist;
@@ -723,6 +969,11 @@ export default function SolarSystemScene({
             setOverlayOpacity(1);
         }
         ctrlRef.current = controls;
+        const handleControlsInteraction = () => {
+            markInteractionHot();
+        };
+        controls.addEventListener('start', handleControlsInteraction);
+        controls.addEventListener('change', handleControlsInteraction);
 
         const starSpriteTexture = makeStarSpriteTexture();
 
@@ -1250,7 +1501,7 @@ export default function SolarSystemScene({
         }
 
         const galaxySunPoint = getArmCenterPoint(armDefinitions[0], GALAXY_SUN_ORBIT_RADIUS);
-        const galaxySun = makeSphere(0.9, '#fff3b0', '#ffcf66');
+        const galaxySun = makeSphere(0.9, '#fff3b0', '#ffcf66', 32);
         galaxySun.position.set(galaxySunPoint.x, 0.16, galaxySunPoint.z);
         galaxySun.userData = { type: 'galaxy-sun' };
         galaxyDisk.add(galaxySun);
@@ -1268,6 +1519,7 @@ export default function SolarSystemScene({
         sunMesh.material.emissive.set(0xffaa22);
         sunMesh.material.emissiveIntensity = 2.5;
         sunMesh.userData = { type: 'sun' };
+        primeBoilingMesh(sunMesh);
         solarSystemRoot.add(sunMesh);
 
         // Planètes
@@ -1293,7 +1545,7 @@ export default function SolarSystemScene({
             tiltGroup.rotation.z = THREE.MathUtils.degToRad(cfg.tilt);
             group.add(tiltGroup);
 
-            const mesh = makeSphere(cfg.size, cfg.color, cfg.emissive);
+            const mesh = makeSphere(cfg.size, cfg.color, cfg.emissive, 48);
             mesh.userData = { type: 'planet', name: cfg.name };
             tiltGroup.add(mesh);
             let ring = null;
@@ -1317,7 +1569,7 @@ export default function SolarSystemScene({
             const beltSpread = Math.max(asteroidBeltOuter - asteroidBeltInner, 1.5);
             const orbitRadius = asteroidBeltInner + (i / Math.max(asteroids.length - 1, 1)) * beltSpread + ((i % 3) - 1) * 0.22;
             const size = THREE.MathUtils.clamp((asteroid.meanRadius ?? 40) / 900, 0.035, 0.18);
-            const mesh = makeSphere(size, '#a59a8a', '#120f0b');
+            const mesh = makeSphere(size, '#a59a8a', '#120f0b', 18);
             const angle = Math.random() * Math.PI * 2;
             const height = ((i % 5) - 2) * 0.08;
 
@@ -1336,18 +1588,10 @@ export default function SolarSystemScene({
 
         // Textures planètes
         const loader = new THREE.TextureLoader();
-        const PLANET_TEXTURES = {
-            mercure: '/textures/texture_mercure.jpg',
-            venus: '/textures/texture_venus.jpg',
-            terre: '/textures/texture_terre.jpg',
-            mars: '/textures/texture_mars.jpg',
-            jupiter: '/textures/texture_jupiter.jpg',
-            saturne: '/textures/texture_saturne.jpg',
-            uranus: '/textures/texture_uranus.jpg',
-            neptune: '/textures/texture_neptune.jpg',
-        };
-        Object.entries(PLANET_TEXTURES).forEach(([name, path]) => {
-            loader.load(path, (tex) => {
+
+        // Planètes — /textures/planets/{id}.jpg
+        Object.keys(planetsRef.current).forEach((name) => {
+            loader.load(`/textures/planets/${name}.jpg`, (tex) => {
                 tex.colorSpace = THREE.SRGBColorSpace;
                 const planet = planetsRef.current[name];
                 if (!planet) return;
@@ -1359,8 +1603,8 @@ export default function SolarSystemScene({
             });
         });
 
-        // Texture du Soleil
-        loader.load('/textures/texture_soleil.jpg', (tex) => { // Ajustez l'extension (.jpg, .png) si nécessaire
+        // Soleil — /textures/stars/soleil.jpg
+        loader.load('/textures/stars/soleil.jpg', (tex) => {
             tex.colorSpace = THREE.SRGBColorSpace;
 
             // On applique la texture comme couleur de base
@@ -1384,36 +1628,8 @@ export default function SolarSystemScene({
             }
         });
 
-        const applyTexToMesh = (mesh, tex) => {
-            mesh.material.map = tex;
-            mesh.material.color.set(0xffffff);
-            mesh.material.emissive.set(0x000000);
-            mesh.material.emissiveIntensity = 0;
-            mesh.material.needsUpdate = true;
-        };
-
-        // Texture lune générique (fallback)
-        loader.load('/textures/texture_moon.jpg', (tex) => {
-            tex.colorSpace = THREE.SRGBColorSpace;
-            moonTexRef.current = tex;
-            moonsRef.current.forEach(m => {
-                const id = m.mesh.userData.name;
-                if (!moonTexCacheRef.current[id]) applyTexToMesh(m.mesh, tex);
-            });
-        });
-
-        // Textures spécifiques par lune
-        Object.entries(MOON_TEXTURES).forEach(([id, path]) => {
-            loader.load(path, (tex) => {
-                tex.colorSpace = THREE.SRGBColorSpace;
-                moonTexCacheRef.current[id] = tex;
-                const entry = moonsRef.current.find(m => m.mesh.userData.name === id);
-                if (entry) applyTexToMesh(entry.mesh, tex);
-            });
-        });
-
-        // Texture anneaux Saturne
-        loader.load('/textures/texture_saturne_anneaux.png', (tex) => {
+        // Texture anneaux Saturne — /textures/planets/saturne_anneaux.png
+        loader.load('/textures/planets/saturne_anneaux.png', (tex) => {
             tex.colorSpace = THREE.SRGBColorSpace;
             const saturn = planetsRef.current['saturne'];
             if (!saturn) return;
@@ -1433,8 +1649,16 @@ export default function SolarSystemScene({
             camera.aspect = w / h;
             camera.updateProjectionMatrix();
             renderer.setSize(w, h);
+            markInteractionHot();
         };
         window.addEventListener('resize', onResize);
+
+        const onVisibilityChange = () => {
+            sceneVisibilityRef.current = !document.hidden;
+            markInteractionHot();
+        };
+        sceneVisibilityRef.current = !document.hidden;
+        document.addEventListener('visibilitychange', onVisibilityChange);
 
         // ── Zoom vers le curseur / pinch ──────────────────────────────────
         const MAX_DIST = 180;
@@ -1492,11 +1716,13 @@ export default function SolarSystemScene({
 
         const onWheel = (e) => {
             e.preventDefault();
+            markInteractionHot();
             applyZoom(e.clientX, e.clientY, e.deltaY > 0 ? 1 : -1);
         };
 
         let pinchDist = 0;
         const onTouchStart = (e) => {
+            markInteractionHot();
             if (e.touches.length === 2) {
                 pinchDist = Math.hypot(
                     e.touches[0].clientX - e.touches[1].clientX,
@@ -1506,6 +1732,7 @@ export default function SolarSystemScene({
         };
         const onTouchMove = (e) => {
             if (e.touches.length !== 2 || !pinchDist) return;
+            markInteractionHot();
             const d = Math.hypot(
                 e.touches[0].clientX - e.touches[1].clientX,
                 e.touches[0].clientY - e.touches[1].clientY,
@@ -1516,7 +1743,10 @@ export default function SolarSystemScene({
             applyZoom(midX, midY, (pinchDist - d) * 0.04);
             pinchDist = d;
         };
-        const onTouchEnd = () => { pinchDist = 0; };
+        const onTouchEnd = () => {
+            pinchDist = 0;
+            markInteractionHot();
+        };
 
         el.addEventListener('wheel', onWheel, { passive: false });
         el.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -1529,34 +1759,51 @@ export default function SolarSystemScene({
         const focusTargetWorldPos = new THREE.Vector3();
         const transitionCameraPos = new THREE.Vector3();
         const transitionTarget = new THREE.Vector3();
+        let lastRenderTime = performance.now() - FRAME_TIME_60FPS;
 
-        const animate = () => {
+        const animate = (now = performance.now()) => {
             frameRef.current = requestAnimationFrame(animate);
+            if (!sceneVisibilityRef.current) {
+                lastRenderTime = now;
+                return;
+            }
 
+            const transition = galaxyTransitionRef.current;
             const isMilkyWay = isMilkyWayModeRef.current;
+            const isInteractive = pointerRef.current.down || now < interactionBoostUntilRef.current || transition.phase !== 'idle';
+            const targetFps = isInteractive
+                ? 60
+                : (isMilkyWay ? GALAXY_IDLE_FPS : SOLAR_SYSTEM_IDLE_FPS);
+            const targetFrameTime = FRAME_TIME_60FPS * (60 / targetFps);
+            const elapsed = now - lastRenderTime;
+            if (elapsed < targetFrameTime) return;
+
+            const deltaMs = Math.min(elapsed, 100);
+            const deltaFrames = deltaMs / FRAME_TIME_60FPS;
+            const damp = (base) => 1 - Math.pow(1 - base, deltaFrames);
+            lastRenderTime = now;
+
             solarSystemRoot.visible = !isMilkyWay;
             galaxyRoot.visible = isMilkyWay;
 
             if (isMilkyWay) {
-                const time = performance.now();
-                const transition = galaxyTransitionRef.current;
-                galaxyDisk.rotation.y += GALAXY_ROTATION_SPEED;
-                halo.rotation.y += GALAXY_HALO_ROTATION_SPEED;
+                galaxyDisk.rotation.y += GALAXY_ROTATION_SPEED * deltaFrames;
+                halo.rotation.y += GALAXY_HALO_ROTATION_SPEED * deltaFrames;
                 coreGlows.forEach((glow, index) => {
-                    glow.material.opacity = coreGlowSpecs[index].opacity * (0.96 + Math.sin(time * 0.00035 + index) * 0.04);
+                    glow.material.opacity = coreGlowSpecs[index].opacity * (0.96 + Math.sin(now * 0.00035 + index) * 0.04);
                 });
                 armGlowRibbons.forEach(({ broadRibbon, coreRibbon }, index) => {
-                    broadRibbon.material.opacity = (index < 2 ? 0.2 : 0.13) * (0.98 + Math.sin(time * 0.00016 + index) * 0.03);
-                    coreRibbon.material.opacity = (index < 2 ? 0.15 : 0.1) * (0.98 + Math.sin(time * 0.00019 + index * 1.7) * 0.03);
+                    broadRibbon.material.opacity = (index < 2 ? 0.2 : 0.13) * (0.98 + Math.sin(now * 0.00016 + index) * 0.03);
+                    coreRibbon.material.opacity = (index < 2 ? 0.15 : 0.1) * (0.98 + Math.sin(now * 0.00019 + index * 1.7) * 0.03);
                 });
                 gasClouds.forEach((cloud, index) => {
-                    cloud.material.opacity = 0.18 + ((Math.sin(time * 0.00045 + index * 0.51) + 1) * 0.5) * 0.16;
+                    cloud.material.opacity = 0.18 + ((Math.sin(now * 0.00045 + index * 0.51) + 1) * 0.5) * 0.16;
                 });
-                galaxySun.rotation.y += 0.01;
+                galaxySun.rotation.y += 0.01 * deltaFrames;
                 if (transition.phase === 'galaxy-approach') {
                     galaxySun.updateWorldMatrix(true, false);
                     galaxySun.getWorldPosition(transition.sunWorld);
-                    transition.progress = Math.min(transition.progress + GALAXY_TO_SOLAR_APPROACH_STEP, 1);
+                    transition.progress = Math.min(transition.progress + GALAXY_TO_SOLAR_APPROACH_STEP * deltaFrames, 1);
                     const eased = 1 - Math.pow(1 - transition.progress, 3);
                     transitionTarget.lerpVectors(transition.startTarget, transition.sunWorld, eased);
                     controls.target.copy(transitionTarget);
@@ -1579,9 +1826,8 @@ export default function SolarSystemScene({
                 return;
             }
 
-            const transition = galaxyTransitionRef.current;
             if (transition.phase === 'solar-arrival') {
-                transition.progress = Math.min(transition.progress + SOLAR_SYSTEM_INTRO_STEP, 1);
+                transition.progress = Math.min(transition.progress + SOLAR_SYSTEM_INTRO_STEP * deltaFrames, 1);
                 const eased = 1 - Math.pow(1 - transition.progress, 4);
                 camera.position.lerpVectors(transition.introStartCamera, transition.introEndCamera, eased);
                 controls.target.set(0, 0, 0);
@@ -1598,6 +1844,19 @@ export default function SolarSystemScene({
                 return;
             }
 
+            updateBoilingMesh(sunMesh, now);
+            const sunPulse = 1
+                + Math.sin(now * SUN_PULSE_SPEED) * 0.01
+                + Math.sin(now * SUN_PULSE_SPEED * 1.91) * 0.005;
+            sunMesh.scale.setScalar(sunPulse);
+            sunMesh.rotation.y += 0.0016 * deltaFrames;
+            sunMesh.material.emissiveIntensity = 2.45
+                + Math.sin(now * SUN_PULSE_SPEED * 1.3) * 0.14
+                + Math.sin(now * SUN_PULSE_SPEED * 2.6) * 0.06;
+            sunLight.intensity = 420
+                + Math.sin(now * SUN_PULSE_SPEED * 1.2) * 10
+                + Math.sin(now * SUN_PULSE_SPEED * 2.1) * 5;
+
             const sel = selectedPlanetRef.current;
             const selAsteroid = selectedAsteroidRef.current;
 
@@ -1606,9 +1865,9 @@ export default function SolarSystemScene({
                 if (!p) return;
 
                 // Orbite
-                p.angle += THREE.MathUtils.degToRad(p.speed);
+                p.angle += THREE.MathUtils.degToRad(p.speed) * deltaFrames;
                 p.group.position.set(Math.cos(p.angle) * p.r, 0, Math.sin(p.angle) * p.r);
-                p.mesh.rotation.y += 0.004 * cfg.rotDir;
+                p.mesh.rotation.y += 0.004 * cfg.rotDir * deltaFrames;
 
                 // Aligne l'extrémité de la traînée sur le centre courant de la planète.
                 p.arc.rotation.y = Math.PI - p.angle;
@@ -1617,16 +1876,16 @@ export default function SolarSystemScene({
                 const isSel = cfg.name === sel;
                 const targetMeshOp = sel && !isSel ? 0 : 1.0;
                 const targetArcOp  = sel ? (isSel ? 0.4 : 0) : 0.4;
-                p.mesh.material.opacity = THREE.MathUtils.lerp(p.mesh.material.opacity, targetMeshOp, 0.06);
-                p.arc.material.opacity  = THREE.MathUtils.lerp(p.arc.material.opacity,  targetArcOp,  0.06);
+                p.mesh.material.opacity = THREE.MathUtils.lerp(p.mesh.material.opacity, targetMeshOp, damp(0.06));
+                p.arc.material.opacity  = THREE.MathUtils.lerp(p.arc.material.opacity,  targetArcOp,  damp(0.06));
                 if (p.ring?.material) {
                     const targetRingOp = sel ? (isSel ? 0.75 : 0) : 0.75;
-                    p.ring.material.opacity = THREE.MathUtils.lerp(p.ring.material.opacity, targetRingOp, 0.06);
+                    p.ring.material.opacity = THREE.MathUtils.lerp(p.ring.material.opacity, targetRingOp, damp(0.06));
                 }
             });
 
             asteroidsRef.current.forEach((asteroid) => {
-                asteroid.angle += asteroid.speed;
+                asteroid.angle += asteroid.speed * deltaFrames;
                 asteroid.mesh.position.set(
                     Math.cos(asteroid.angle) * asteroid.r,
                     asteroid.y,
@@ -1635,16 +1894,16 @@ export default function SolarSystemScene({
 
                 const isSel = asteroid.mesh.userData.name === selAsteroid;
                 const targetOpacity = sel ? 0 : (selAsteroid ? (isSel ? 1 : 0.25) : 0.85);
-                asteroid.mesh.material.opacity = THREE.MathUtils.lerp(asteroid.mesh.material.opacity, targetOpacity, 0.08);
+                asteroid.mesh.material.opacity = THREE.MathUtils.lerp(asteroid.mesh.material.opacity, targetOpacity, damp(0.08));
             });
 
             // Lunes
             moonsRef.current.forEach(m => {
-                m.angle -= THREE.MathUtils.degToRad(m.speed);
+                m.angle -= THREE.MathUtils.degToRad(m.speed) * deltaFrames;
                 m.mesh.position.set(Math.cos(m.angle) * m.radius, 0, Math.sin(m.angle) * m.radius);
                 // Même logique pour les lunes : l'extrémité lumineuse doit passer par le centre.
                 m.arc.rotation.y = -m.angle;
-                m.mesh.rotation.y -= 0.008;
+                m.mesh.rotation.y -= 0.008 * deltaFrames;
             });
 
             // Suivi cible
@@ -1706,7 +1965,7 @@ export default function SolarSystemScene({
             const desiredDist = Math.max(targetCamDistRef.current, minAllowedDist);
             // Pour les lunes : correction immédiate (rate=1) car elles bougent vite
             // par rapport à focusDist — un lerp lent créerait un lag de plusieurs unités.
-            const camRate = selMoon ? 1.0 : 0.06;
+            const camRate = selMoon ? 1.0 : damp(0.06);
             if (currentDist < minAllowedDist - 0.001) {
                 camera.position.copy(controls.target.clone().add(camDir.normalize().multiplyScalar(minAllowedDist)));
             } else if (Math.abs(currentDist - desiredDist) > 0.001) {
@@ -1727,6 +1986,8 @@ export default function SolarSystemScene({
         return () => {
             cancelAnimationFrame(frameRef.current);
             controls.dispose();
+            controls.removeEventListener('start', handleControlsInteraction);
+            controls.removeEventListener('change', handleControlsInteraction);
             renderer.dispose();
             asteroidsRef.current.forEach(({ mesh }) => {
                 mesh.geometry.dispose();
@@ -1734,6 +1995,7 @@ export default function SolarSystemScene({
             });
             asteroidsRef.current = [];
             window.removeEventListener('resize', onResize);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
             el.removeEventListener('wheel', onWheel);
             el.removeEventListener('touchstart', onTouchStart);
             el.removeEventListener('touchmove', onTouchMove);
@@ -1765,10 +2027,11 @@ export default function SolarSystemScene({
             : getMoonStubsFromPlanet(parentBody);
         if (!availableMoons.length) return;
 
+        const baseMoons = availableMoons.slice(0, nbMoons);
         const visibleMoons = moonsHostPlanet
-            ? (selectedMoon
-            ? availableMoons.filter((moon) => moon.id === selectedMoon)
-            : availableMoons.slice(0, nbMoons))
+            ? (selectedMoon && !baseMoons.some(m => m.id === selectedMoon)
+                ? [...baseMoons, availableMoons.find(m => m.id === selectedMoon)].filter(Boolean)
+                : baseMoons)
             : [];
 
         if (!visibleMoons.length) return;
@@ -1792,7 +2055,8 @@ export default function SolarSystemScene({
             const physicalMoonSize = moonBody?.meanRadius && parentBody?.meanRadius
                 ? pData.size * (moonBody.meanRadius / parentBody.meanRadius)
                 : Math.max(pData.size * 0.05, 0.025);
-            const moonSize = selectedMoon
+            const isSelected = moonData.id === selectedMoon;
+            const moonSize = isSelected
                 ? Math.max(physicalMoonSize, SELECTED_MOON_VISIBLE_MIN)
                 : THREE.MathUtils.clamp(
                     physicalMoonSize * MOON_VISIBLE_SIZE_FACTOR,
@@ -1801,15 +2065,39 @@ export default function SolarSystemScene({
                 );
             const arc = makeTrailArc(moonOrbitR, 0xd0d0d0, 0.3, true);
             orbitGroup.add(arc);
-            const mesh = makeSphere(moonSize, '#c0c0c0', '#0a0a0a');
-            mesh.userData = { type: 'moon', name: moonData.id, parentName: moonsHostPlanet };
-            const tex = moonTexCacheRef.current[moonData.id] ?? moonTexRef.current;
-            if (tex) {
-                mesh.material.map = tex;
+            const { color: moonColor, emissive: moonEmissive } = getMoonColor(moonBody);
+            const mesh = makeMoonMesh(moonData.id, moonBody, moonSize, moonColor, moonEmissive, 24);
+            mesh.userData = {
+                ...mesh.userData,
+                type: 'moon',
+                name: moonData.id,
+                parentName: moonsHostPlanet,
+            };
+
+            // Texture depuis le cache si déjà chargée, sinon tentative de chargement
+            // (échec silencieux → couleur API conservée)
+            const cachedTex = moonTexCacheRef.current[moonData.id];
+            if (cachedTex) {
+                mesh.material.map = cachedTex;
                 mesh.material.color.set(0xffffff);
                 mesh.material.emissive.set(0x000000);
                 mesh.material.emissiveIntensity = 0;
                 mesh.material.needsUpdate = true;
+            } else {
+                new THREE.TextureLoader().load(
+                    `${MOON_TEXTURE_BASE}/${moonData.id}.jpg`,
+                    (tex) => {
+                        tex.colorSpace = THREE.SRGBColorSpace;
+                        moonTexCacheRef.current[moonData.id] = tex;
+                        mesh.material.map = tex;
+                        mesh.material.color.set(0xffffff);
+                        mesh.material.emissive.set(0x000000);
+                        mesh.material.emissiveIntensity = 0;
+                        mesh.material.needsUpdate = true;
+                    },
+                    undefined,
+                    () => { /* pas de texture → couleur dérivée de l'API */ }
+                );
             }
             orbitGroup.add(mesh);
 
