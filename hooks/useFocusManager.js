@@ -3,7 +3,22 @@
 import { useState, useCallback } from 'react';
 import { fetchBody, getMoonStubsFromPlanet } from '../lib/solarApi';
 
+const STAR_SYSTEM_MILKY_WAY_KEY = {
+    solar:  'Solar System',
+    kepler: 'Kepler',
+};
+
 const SPECIAL_OBJECTS = {
+    kepler: {
+        id: 'kepler',
+        englishName: 'Kepler',
+        bodyType: 'Star',
+        meanRadius: 535000,
+        gravity: 244,
+        density: 1.11,
+        avgTemp: 5777,
+        mass: { massValue: 0.97, massExponent: 30 },
+    },
     milkyWay: {
         id: 'milkyWay',
         englishName: 'Milky Way',
@@ -141,7 +156,40 @@ export default function useFocusManager(planets = [], asteroids = []) {
         }
     }, [focusOnAsteroid, selectedAsteroid, asteroids]);
 
-    const focusMoon = useCallback(async (moonName, planetName) => {
+    // focusStarSystem : bascule vers le système donné, ou retour galaxie si déjà actif
+    const focusStarSystem = useCallback((systemId) => {
+        const milkyWayKey = STAR_SYSTEM_MILKY_WAY_KEY[systemId];
+        if (!milkyWayKey) return;
+
+        if (selectedMilkyWay === milkyWayKey) {
+            // Déjà dans ce système → retour à la vue galaxie
+            setSelectedMilkyWay(null);
+            setSelectedPlanet(null);
+            setSelectedAsteroid(null);
+            setSelectedMoon(null);
+            setFocusOnPlanet(false);
+            setFocusOnAsteroid(false);
+            setFocusOneMoon(false);
+            setMoons([]);
+            setNbMoons(4);
+            setInfos(SPECIAL_OBJECTS.milkyWay);
+            return;
+        }
+
+        setSelectedSolarSystem('Planets');
+        setSelectedMilkyWay(milkyWayKey);
+        setSelectedPlanet(null);
+        setSelectedAsteroid(null);
+        setSelectedMoon(null);
+        setFocusOnPlanet(false);
+        setFocusOnAsteroid(false);
+        setFocusOneMoon(false);
+        setMoons([]);
+        setNbMoons(4);
+        setInfos(systemId === 'solar' ? SPECIAL_OBJECTS.soleil : SPECIAL_OBJECTS.kepler);
+    }, [selectedMilkyWay]);
+
+    const focusMoon = useCallback(async (moonName, _planetName) => {
         const isAlreadySelected = selectedMoon === moonName;
 
         if (isAlreadySelected && focusOneMoon) {
@@ -180,6 +228,7 @@ export default function useFocusManager(planets = [], asteroids = []) {
         focusMilkyWay,
         focusSagittarusA,
         focusOnSolarSystem,
+        focusStarSystem,
         focusPlanet,
         focusAsteroid,
         focusMoon,

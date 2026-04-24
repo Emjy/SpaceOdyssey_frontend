@@ -41,6 +41,7 @@ export default function HomePage() {
         focusMilkyWay,
         focusSagittarusA,
         focusOnSolarSystem,
+        focusStarSystem,
         focusPlanet,
         focusAsteroid,
         focusMoon,
@@ -75,6 +76,7 @@ export default function HomePage() {
                     moons={moons}
                     nbMoons={nbMoons}
                     focusOnSolarSystem={focusOnSolarSystem}
+                    focusStarSystem={focusStarSystem}
                     focusPlanet={focusPlanet}
                     focusAsteroid={focusAsteroid}
                     focusMoon={focusMoon}
@@ -93,6 +95,7 @@ export default function HomePage() {
                 focusMilkyWay={focusMilkyWay}
                 focusSagittarusA={focusSagittarusA}
                 focusOnSolarSystem={focusOnSolarSystem}
+                focusStarSystem={focusStarSystem}
                 focusPlanet={focusPlanet}
                 focusAsteroid={focusAsteroid}
                 focusMoon={focusMoon}

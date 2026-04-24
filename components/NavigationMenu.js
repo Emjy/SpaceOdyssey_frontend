@@ -23,6 +23,7 @@ const NavigationMenu = memo(({
     focusMilkyWay,
     focusSagittarusA,
     focusOnSolarSystem,
+    focusStarSystem,
     focusPlanet,
     focusAsteroid,
     focusMoon,
@@ -56,7 +57,9 @@ const NavigationMenu = memo(({
                 setSelectedMilkyWay(item);
                 focusSagittarusA();
             } else if (item === 'Solar System') {
-                focusOnSolarSystem();
+                focusStarSystem('solar');
+            } else if (item === 'Kepler') {
+                focusStarSystem('kepler');
             }
             closeMenu();
         },
@@ -74,7 +77,7 @@ const NavigationMenu = memo(({
         },
         {
             id: 'asteroid-belt-home',
-            label: 'Ceinture d’astéroïdes',
+            label: "Ceinture d'astéroïdes",
             active: selectedSolarSystem === 'Asteroid Belt' && !selectedAsteroid,
             onClick: () => {
                 focusAsteroid('');
@@ -97,7 +100,7 @@ const NavigationMenu = memo(({
         { id: 'asteroids-label', label: 'Astéroïdes', kind: 'label' },
         {
             id: 'asteroid-belt',
-            label: 'Ceinture d’astéroïdes',
+            label: "Ceinture d'astéroïdes",
             active: selectedSolarSystem === 'Asteroid Belt' && !selectedAsteroid,
             onClick: () => {
                 focusAsteroid('');
@@ -161,8 +164,30 @@ const NavigationMenu = memo(({
         });
         breadcrumbs.push({
             id: 'bodies',
-            label: selectedPlanetLabel || selectedAsteroidLabel || (selectedSolarSystem === 'Asteroid Belt' ? 'Ceinture d’astéroïdes' : 'Corps célestes'),
+            label: selectedPlanetLabel || selectedAsteroidLabel || (selectedSolarSystem === 'Asteroid Belt' ? "Ceinture d'astéroïdes" : "Corps célestes"),
             items: bodyItems,
+        });
+    }
+
+    if (selectedMilkyWay === 'Kepler') {
+        breadcrumbs.push({
+            id: 'kepler',
+            label: 'Kepler',
+            items: [
+                {
+                    id: 'kepler-home',
+                    label: 'Kepler',
+                    active: !selectedPlanet,
+                    onClick: () => { focusStarSystem('kepler'); closeMenu(); },
+                },
+                { id: 'kepler-planets-label', label: 'Planètes', kind: 'label' },
+                ...['kepler-b', 'kepler-c', 'kepler-d'].map((id) => ({
+                    id,
+                    label: id.toUpperCase(),
+                    active: selectedPlanet === id,
+                    onClick: () => { focusPlanet(id); closeMenu(); },
+                })),
+            ],
         });
     }
 
@@ -184,7 +209,7 @@ const NavigationMenu = memo(({
 
     return (
         <div className={styles.topNavShell}>
-            <nav className={styles.topNav} aria-label="Fil d’ariane du systeme solaire">
+            <nav className={styles.topNav} aria-label="Fil d'ariane du systeme solaire">
                 {breadcrumbs.map((section, index) => (
                     <React.Fragment key={section.id}>
                         <div className={styles.navGroup}>

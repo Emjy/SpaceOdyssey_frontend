@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { fetchBody, getMoonStubsFromPlanet } from '../lib/solarApi';
+import { EXTRA_STAR_SYSTEMS } from '../data/starSystems';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -616,7 +617,7 @@ export default function SolarSystemScene({
     selectedMoon,
     moons = [],
     nbMoons = 0,
-    focusOnSolarSystem,
+    focusStarSystem,
     focusPlanet,
     focusAsteroid,
     focusMoon,
@@ -633,6 +634,11 @@ export default function SolarSystemScene({
     const moonsRef = useRef([]);   // [{ mesh, arc, angle, speed, radius, parentName }]
     const moonDataCacheRef = useRef({});
     const moonTexCacheRef = useRef({});    // id → THREE.Texture (textures spécifiques par lune)
+    const galaxyStarsRef = useRef({});    // systemId → mesh
+    const extraSystemsRef = useRef({});   // systemId → { root, planets[] }
+    const activeStarSystemRef = useRef(null);
+    const focusStarSystemRef = useRef(null);
+    const tooltipTextRef = useRef(null);
 
     const selectedPlanetRef = useRef(selectedPlanet);
     const selectedAsteroidRef = useRef(selectedAsteroid);
@@ -675,11 +681,22 @@ export default function SolarSystemScene({
         return proximityPlanet;
     }, [focusOnPlanet, proximityPlanet, selectedMoon, selectedPlanet]);
 
-    const isMilkyWayMode = selectedMilkyWay !== 'Solar System';
+    const activeStarSystem = selectedMilkyWay === 'Solar System' ? 'solar'
+        : selectedMilkyWay === 'Kepler' ? 'kepler'
+        : null;
+    const isMilkyWayMode = activeStarSystem === null;
 
     useEffect(() => {
         isMilkyWayModeRef.current = isMilkyWayMode;
     }, [isMilkyWayMode]);
+
+    useEffect(() => {
+        activeStarSystemRef.current = activeStarSystem;
+    }, [activeStarSystem]);
+
+    useEffect(() => {
+        focusStarSystemRef.current = focusStarSystem;
+    }, [focusStarSystem]);
 
     const markInteractionHot = useCallback((duration = INTERACTION_BOOST_MS) => {
         if (typeof performance === 'undefined') return;
@@ -733,19 +750,20 @@ export default function SolarSystemScene({
         return raycasterRef.current.intersectObjects(objects)[0] ?? null;
     }, []);
 
-    const startGalaxySunTransition = useCallback(() => {
+    const startGalaxySunTransition = useCallback((systemId) => {
         const camera = cameraRef.current;
         const controls = ctrlRef.current;
-        const galaxySun = galaxySunRef.current;
-        if (!camera || !controls || !galaxySun) return;
+        const starEntry = galaxyStarsRef.current[systemId] ?? galaxyStarsRef.current['solar'];
+        if (!camera || !controls || !starEntry) return;
 
         const transition = galaxyTransitionRef.current;
         if (transition.phase !== 'idle') return;
 
-        galaxySun.updateWorldMatrix(true, false);
-        galaxySun.getWorldPosition(transition.sunWorld);
+        starEntry.updateWorldMatrix(true, false);
+        starEntry.getWorldPosition(transition.sunWorld);
         transition.phase = 'galaxy-approach';
         transition.progress = 0;
+        transition.pendingSystemId = systemId;
         transition.startCamera.copy(camera.position);
         transition.startTarget.copy(controls.target);
         transition.startDistance = camera.position.distanceTo(controls.target);
@@ -1503,9 +1521,59 @@ export default function SolarSystemScene({
         const galaxySunPoint = getArmCenterPoint(armDefinitions[0], GALAXY_SUN_ORBIT_RADIUS);
         const galaxySun = makeSphere(0.9, '#fff3b0', '#ffcf66', 32);
         galaxySun.position.set(galaxySunPoint.x, 0.16, galaxySunPoint.z);
-        galaxySun.userData = { type: 'galaxy-sun' };
+        galaxySun.userData = { type: 'galaxy-star', systemId: 'solar', label: 'Soleil' };
         galaxyDisk.add(galaxySun);
         galaxySunRef.current = galaxySun;
+        galaxyStarsRef.current['solar'] = galaxySun;
+
+        // Étoiles extra-systèmes (Kepler, etc.)
+        EXTRA_STAR_SYSTEMS.forEach((sys) => {
+            const arm = armDefinitions[sys.galaxyArmIndex] ?? armDefinitions[0];
+            const pt = getArmCenterPoint(arm, sys.galaxyOrbitRadius);
+            const star = makeSphere(0.75, sys.starColor, sys.starEmissive, 24);
+            star.position.set(pt.x, 0.12, pt.z);
+            star.userData = { type: 'galaxy-star', systemId: sys.id, label: sys.name };
+            galaxyDisk.add(star);
+            galaxyStarsRef.current[sys.id] = star;
+
+            // Système planétaire Kepler (groupe séparé)
+            const sysRoot = new THREE.Group();
+            scene.add(sysRoot);
+            sysRoot.visible = false;
+
+            // Étoile centrale
+            const starMesh = makeSphere(sys.starRadius ?? 4.2, sys.starColor, sys.starEmissive);
+            starMesh.userData = { type: 'sun', label: sys.name };
+            sysRoot.add(starMesh);
+
+            const sysPlanets = [];
+            sys.planets.forEach((cfg) => {
+                const orbitGroup = new THREE.Group();
+                sysRoot.add(orbitGroup);
+                const arc = makeTrailArc(cfg.r);
+                orbitGroup.add(arc);
+                const group = new THREE.Group();
+                orbitGroup.add(group);
+                const tiltGroup = new THREE.Group();
+                tiltGroup.rotation.z = THREE.MathUtils.degToRad(cfg.tilt ?? 0);
+                group.add(tiltGroup);
+                const mesh = makeSphere(cfg.size, cfg.color, cfg.emissive, 32);
+                mesh.userData = { type: 'planet', name: cfg.name, label: cfg.name.toUpperCase() };
+                tiltGroup.add(mesh);
+                // Zone de clic invisible (2.5× le rayon visuel)
+                const proxy = new THREE.Mesh(
+                    new THREE.SphereGeometry(cfg.size * 2.5, 8, 8),
+                    new THREE.MeshBasicMaterial({ visible: false })
+                );
+                proxy.userData = mesh.userData;
+                tiltGroup.add(proxy);
+                const initAngle = Math.random() * Math.PI * 2;
+                group.position.set(Math.cos(initAngle) * cfg.r, 0, Math.sin(initAngle) * cfg.r);
+                sysPlanets.push({ orbitGroup, group, mesh, arc, angle: initAngle, r: cfg.r, speed: cfg.speed, rotDir: cfg.rotDir ?? 1 });
+            });
+
+            extraSystemsRef.current[sys.id] = { root: sysRoot, planets: sysPlanets };
+        });
 
         // Éclairage
         // Ambiance faible → côté nuit sombre, côté jour tranché
@@ -1783,8 +1851,12 @@ export default function SolarSystemScene({
             const damp = (base) => 1 - Math.pow(1 - base, deltaFrames);
             lastRenderTime = now;
 
-            solarSystemRoot.visible = !isMilkyWay;
+            const activeSystem = activeStarSystemRef.current;
+            solarSystemRoot.visible = !isMilkyWay && activeSystem === 'solar';
             galaxyRoot.visible = isMilkyWay;
+            Object.entries(extraSystemsRef.current).forEach(([sid, { root }]) => {
+                root.visible = !isMilkyWay && activeSystem === sid;
+            });
 
             if (isMilkyWay) {
                 galaxyDisk.rotation.y += GALAXY_ROTATION_SPEED * deltaFrames;
@@ -1815,7 +1887,7 @@ export default function SolarSystemScene({
                     controls.enabled = false;
                     if (transition.progress >= 1) {
                         transition.phase = 'await-solar-system';
-                        focusOnSolarSystem();
+                        focusStarSystemRef.current?.(transition.pendingSystemId ?? 'solar');
                     }
                 } else {
                     controls.enabled = true;
@@ -1882,6 +1954,16 @@ export default function SolarSystemScene({
                     const targetRingOp = sel ? (isSel ? 0.75 : 0) : 0.75;
                     p.ring.material.opacity = THREE.MathUtils.lerp(p.ring.material.opacity, targetRingOp, damp(0.06));
                 }
+            });
+
+            // Animation systèmes extra (Kepler…)
+            Object.values(extraSystemsRef.current).forEach(({ planets: sysPlanets }) => {
+                sysPlanets.forEach((p) => {
+                    p.angle += THREE.MathUtils.degToRad(p.speed) * deltaFrames;
+                    p.group.position.set(Math.cos(p.angle) * p.r, 0, Math.sin(p.angle) * p.r);
+                    p.mesh.rotation.y += 0.004 * p.rotDir * deltaFrames;
+                    p.arc.rotation.y = Math.PI - p.angle;
+                });
             });
 
             asteroidsRef.current.forEach((asteroid) => {
@@ -2168,22 +2250,40 @@ export default function SolarSystemScene({
             pointerRef.current.moved = true;
             return;
         }
-
-        if (!isMilkyWayMode || galaxyTransitionRef.current.phase !== 'idle' || !galaxySunRef.current) {
-            hideSunTooltip();
-            return;
-        }
-
-        const hit = getPointerHit(e.clientX, e.clientY, [galaxySunRef.current]);
-        if (!hit || hit.object.userData.type !== 'galaxy-sun') {
-            hideSunTooltip();
-            return;
-        }
+        if (galaxyTransitionRef.current.phase !== 'idle') { hideSunTooltip(); return; }
 
         const rect = mountRef.current?.getBoundingClientRect();
         if (!rect) return;
-        showSunTooltip(e.clientX - rect.left, e.clientY - rect.top);
-    }, [getPointerHit, hideSunTooltip, isMilkyWayMode, showSunTooltip]);
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        if (isMilkyWayMode) {
+            // Vue galaxie : tooltip sur toutes les étoiles cliquables
+            const stars = Object.values(galaxyStarsRef.current);
+            const hit = stars.length ? getPointerHit(e.clientX, e.clientY, stars) : null;
+            if (hit?.object.userData.type === 'galaxy-star') {
+                if (tooltipTextRef.current) tooltipTextRef.current.textContent = hit.object.userData.label ?? '';
+                showSunTooltip(x, y);
+            } else {
+                hideSunTooltip();
+            }
+        } else {
+            // Vue système : tooltip sur planètes, lunes, soleil
+            const solarMeshes = Object.values(planetsRef.current).map(p => p.mesh);
+            const moonMeshes = moonsRef.current.map(m => m.mesh);
+            const extraMeshes = Object.values(extraSystemsRef.current).flatMap(s => s.planets.map(p => p.mesh));
+            const hit = getPointerHit(e.clientX, e.clientY, [...solarMeshes, ...moonMeshes, ...extraMeshes]);
+            if (hit) {
+                const label = hit.object.userData.label
+                    ?? planets.find(p => p.id === hit.object.userData.name)?.englishName
+                    ?? hit.object.userData.name ?? '';
+                if (tooltipTextRef.current) tooltipTextRef.current.textContent = label;
+                showSunTooltip(x, y);
+            } else {
+                hideSunTooltip();
+            }
+        }
+    }, [getPointerHit, hideSunTooltip, isMilkyWayMode, planets, showSunTooltip]);
 
     const handlePointerUp = useCallback((e) => {
         const { down, moved } = pointerRef.current;
@@ -2193,17 +2293,20 @@ export default function SolarSystemScene({
 
         if (galaxyTransitionRef.current.phase !== 'idle') return;
 
+        const galaxyStarMeshes = Object.values(galaxyStarsRef.current);
+        const extraPlanetMeshes = Object.values(extraSystemsRef.current).flatMap(s => s.planets.map(p => p.mesh));
         const meshes = [
             ...Object.values(planetsRef.current).map(p => p.mesh),
             ...asteroidsRef.current.map(a => a.mesh),
             ...moonsRef.current.map(m => m.mesh),
-            ...(galaxySunRef.current ? [galaxySunRef.current] : []),
+            ...galaxyStarMeshes,
+            ...extraPlanetMeshes,
         ];
         const hit = getPointerHit(e.clientX, e.clientY, meshes);
         if (!hit) return;
 
-        const { type, name, parentName } = hit.object.userData;
-        if (type === 'galaxy-sun') { startGalaxySunTransition(); }
+        const { type, name, systemId, parentName } = hit.object.userData;
+        if (type === 'galaxy-star') { startGalaxySunTransition(systemId); }
         else if (type === 'planet') { focusPlanet(name); }
         else if (type === 'asteroid') { focusAsteroid(name); }
         else if (type === 'moon') { focusMoon(name, parentName); }
@@ -2256,7 +2359,7 @@ export default function SolarSystemScene({
                     WebkitBackdropFilter: 'blur(6px)',
                 }}
             >
-                Soleil
+                <span ref={tooltipTextRef} />
             </div>
         </div>
     );

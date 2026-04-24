@@ -7,5 +7,6 @@ export const solarSystem = [
 export const milkyWay = [
     'Sagittarius A',
     'Solar System',
+    'Kepler',
 ]
 
