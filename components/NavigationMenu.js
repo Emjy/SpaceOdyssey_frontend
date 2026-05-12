@@ -3,6 +3,7 @@
 import React, { useMemo, useState, memo } from 'react';
 import { MdChevronRight, MdKeyboardArrowDown } from 'react-icons/md';
 import { milkyWay } from '../data/solarSystem';
+import { EXTRA_STAR_SYSTEMS } from '../data/starSystems';
 import styles from '../styles/HomePage.module.css';
 
 const displayLabel = (label) => {
@@ -58,8 +59,9 @@ const NavigationMenu = memo(({
                 focusSagittarusA();
             } else if (item === 'Solar System') {
                 focusStarSystem('solar');
-            } else if (item === 'Kepler') {
-                focusStarSystem('kepler');
+            } else {
+                const extraSystem = EXTRA_STAR_SYSTEMS.find((system) => system.milkyWayKey === item);
+                if (extraSystem) focusStarSystem(extraSystem.id);
             }
             closeMenu();
         },
@@ -93,7 +95,7 @@ const NavigationMenu = memo(({
             label: item.englishName,
             active: selectedPlanet === item.id,
             onClick: () => {
-                focusPlanet(item.id);
+                focusPlanet(item.id, 'solar');
                 closeMenu();
             },
         })),
@@ -169,23 +171,25 @@ const NavigationMenu = memo(({
         });
     }
 
-    if (selectedMilkyWay === 'Kepler') {
+    const selectedExtraSystem = EXTRA_STAR_SYSTEMS.find((system) => system.milkyWayKey === selectedMilkyWay);
+
+    if (selectedExtraSystem) {
         breadcrumbs.push({
-            id: 'kepler',
-            label: 'Kepler',
+            id: selectedExtraSystem.id,
+            label: selectedExtraSystem.name,
             items: [
                 {
-                    id: 'kepler-home',
-                    label: 'Kepler',
+                    id: `${selectedExtraSystem.id}-home`,
+                    label: selectedExtraSystem.name,
                     active: !selectedPlanet,
-                    onClick: () => { focusStarSystem('kepler'); closeMenu(); },
+                    onClick: () => { focusStarSystem(selectedExtraSystem.id); closeMenu(); },
                 },
-                { id: 'kepler-planets-label', label: 'Planètes', kind: 'label' },
-                ...['kepler-b', 'kepler-c', 'kepler-d'].map((id) => ({
-                    id,
-                    label: id.toUpperCase(),
-                    active: selectedPlanet === id,
-                    onClick: () => { focusPlanet(id); closeMenu(); },
+                { id: `${selectedExtraSystem.id}-planets-label`, label: 'Planètes', kind: 'label' },
+                ...selectedExtraSystem.planets.map((planet) => ({
+                    id: planet.name,
+                    label: planet.name.toUpperCase(),
+                    active: selectedPlanet === planet.name,
+                    onClick: () => { focusPlanet(planet.name, selectedExtraSystem.id); closeMenu(); },
                 })),
             ],
         });

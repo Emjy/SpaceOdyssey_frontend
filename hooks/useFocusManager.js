@@ -2,23 +2,25 @@
 
 import { useState, useCallback } from 'react';
 import { fetchBody, getMoonStubsFromPlanet } from '../lib/solarApi';
+import { EXTRA_STAR_SYSTEMS } from '../data/starSystems';
 
 const STAR_SYSTEM_MILKY_WAY_KEY = {
-    solar:  'Solar System',
-    kepler: 'Kepler',
+    solar: 'Solar System',
+    ...Object.fromEntries(EXTRA_STAR_SYSTEMS.map((system) => [system.id, system.milkyWayKey])),
 };
 
+const EXTRA_STAR_OBJECTS = Object.fromEntries(
+    EXTRA_STAR_SYSTEMS.map((system) => [
+        system.id,
+        {
+            id: system.id,
+            englishName: system.name,
+            ...(system.starInfo ?? { bodyType: 'Star' }),
+        },
+    ])
+);
+
 const SPECIAL_OBJECTS = {
-    kepler: {
-        id: 'kepler',
-        englishName: 'Kepler',
-        bodyType: 'Star',
-        meanRadius: 535000,
-        gravity: 244,
-        density: 1.11,
-        avgTemp: 5777,
-        mass: { massValue: 0.97, massExponent: 30 },
-    },
     milkyWay: {
         id: 'milkyWay',
         englishName: 'Milky Way',
@@ -44,9 +46,26 @@ const SPECIAL_OBJECTS = {
         avgTemp: 5778,
         mass: { massValue: 1.989, massExponent: 30 },
     },
+    ...EXTRA_STAR_OBJECTS,
 };
 
 export default function useFocusManager(planets = [], asteroids = []) {
+    const getPlanetSystemId = useCallback((planetName, preferredSystemId = null) => {
+        if (preferredSystemId && STAR_SYSTEM_MILKY_WAY_KEY[preferredSystemId]) {
+            return preferredSystemId;
+        }
+
+        if (planets.some((planet) => planet.id === planetName)) {
+            return 'solar';
+        }
+
+        const extraSystem = EXTRA_STAR_SYSTEMS.find((system) =>
+            system.planets.some((planet) => planet.name === planetName)
+        );
+
+        return extraSystem?.id ?? 'solar';
+    }, [planets]);
+
     const [focusOnPlanet, setFocusOnPlanet] = useState(false);
     const [focusOnMoon, setFocusOnMoon] = useState(true);
     const [focusOnAsteroid, setFocusOnAsteroid] = useState(false);
@@ -100,7 +119,10 @@ export default function useFocusManager(planets = [], asteroids = []) {
         setSelectedMoon(null);
     }, []);
 
-    const focusPlanet = useCallback(async (planetName) => {
+    const focusPlanet = useCallback(async (planetName, preferredSystemId = null) => {
+        const systemId = getPlanetSystemId(planetName, preferredSystemId);
+        const milkyWayKey = STAR_SYSTEM_MILKY_WAY_KEY[systemId] ?? 'Solar System';
+        const isSolarSystem = systemId === 'solar';
         const isAlreadySelected = selectedPlanet === planetName;
         const isZoomedIn = isAlreadySelected && focusOnPlanet;
 
@@ -108,22 +130,26 @@ export default function useFocusManager(planets = [], asteroids = []) {
         setSelectedAsteroid(null);
         setSelectedMoon(null);
         setFocusOneMoon(false);
-        setSelectedMilkyWay('Solar System');
+        setSelectedMilkyWay(milkyWayKey);
         setSelectedSolarSystem('Planets');
         setFocusOnAsteroid(false);
 
-        const planetData = planets.find(p => p.id === planetName);
+        const planetData = isSolarSystem
+            ? planets.find((planet) => planet.id === planetName)
+            : EXTRA_STAR_SYSTEMS
+                .find((system) => system.id === systemId)
+                ?.planets.find((planet) => planet.name === planetName);
         if (planetData) setInfos(planetData);
 
         if (isZoomedIn) {
             setFocusOnPlanet(false);
-            setNbMoons(4);
+            setNbMoons(isSolarSystem ? 4 : 0);
         } else {
             setFocusOnPlanet(true);
-            setNbMoons(8);
-            setMoons(planetData ? getMoonStubsFromPlanet(planetData) : []);
+            setNbMoons(isSolarSystem ? 8 : 0);
+            setMoons(isSolarSystem && planetData ? getMoonStubsFromPlanet(planetData) : []);
         }
-    }, [selectedPlanet, focusOnPlanet, planets]);
+    }, [focusOnPlanet, getPlanetSystemId, planets, selectedPlanet]);
 
     const focusAsteroid = useCallback(async (asteroidName) => {
         setNbMoons(0);
@@ -156,25 +182,10 @@ export default function useFocusManager(planets = [], asteroids = []) {
         }
     }, [focusOnAsteroid, selectedAsteroid, asteroids]);
 
-    // focusStarSystem : bascule vers le système donné, ou retour galaxie si déjà actif
+    // focusStarSystem : entre dans le système demandé et centre l'expérience sur son étoile.
     const focusStarSystem = useCallback((systemId) => {
         const milkyWayKey = STAR_SYSTEM_MILKY_WAY_KEY[systemId];
         if (!milkyWayKey) return;
-
-        if (selectedMilkyWay === milkyWayKey) {
-            // Déjà dans ce système → retour à la vue galaxie
-            setSelectedMilkyWay(null);
-            setSelectedPlanet(null);
-            setSelectedAsteroid(null);
-            setSelectedMoon(null);
-            setFocusOnPlanet(false);
-            setFocusOnAsteroid(false);
-            setFocusOneMoon(false);
-            setMoons([]);
-            setNbMoons(4);
-            setInfos(SPECIAL_OBJECTS.milkyWay);
-            return;
-        }
 
         setSelectedSolarSystem('Planets');
         setSelectedMilkyWay(milkyWayKey);
@@ -186,8 +197,8 @@ export default function useFocusManager(planets = [], asteroids = []) {
         setFocusOneMoon(false);
         setMoons([]);
         setNbMoons(4);
-        setInfos(systemId === 'solar' ? SPECIAL_OBJECTS.soleil : SPECIAL_OBJECTS.kepler);
-    }, [selectedMilkyWay]);
+        setInfos(SPECIAL_OBJECTS[systemId] || SPECIAL_OBJECTS.soleil);
+    }, []);
 
     const focusMoon = useCallback(async (moonName, _planetName) => {
         const isAlreadySelected = selectedMoon === moonName;

@@ -8,6 +8,8 @@ import { EXTRA_STAR_SYSTEMS } from '../data/starSystems';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
+const USE_3D_GALAXY = false; // passer à true pour réactiver le rendu 3D procédural
+
 const PLANET_DATA = [
     //                                                                               tilt(°)  rotDir (+1=prograde, -1=rétrograde)
     { name: 'mercure', r: 10, size: 0.15, color: '#c8c8c8', emissive: '#555555', speed: 0.16,  tilt:   0.03, rotDir:  1 },
@@ -15,9 +17,9 @@ const PLANET_DATA = [
     { name: 'terre',   r: 16, size: 0.38, color: '#4a80c0', emissive: '#0a2a50', speed: 0.07,  tilt:  23.44, rotDir:  1 },
     { name: 'mars',    r: 19, size: 0.22, color: '#d05010', emissive: '#501800', speed: 0.04,  tilt:  25.19, rotDir:  1 },
     { name: 'jupiter', r: 28, size: 1.40, color: '#d8a060', emissive: '#4a2800', speed: 0.016, tilt:   3.13, rotDir:  1 },
-    { name: 'saturne', r: 36, size: 1.20, color: '#ede0a0', emissive: '#504000', speed: 0.010, tilt:  26.73, rotDir:  1 },
-    { name: 'uranus',  r: 45, size: 0.75, color: '#88eef0', emissive: '#104050', speed: 0.006, tilt:  97.77, rotDir: -1 },
-    { name: 'neptune', r: 52, size: 0.72, color: '#3355e8', emissive: '#0c1555', speed: 0.004, tilt:  28.32, rotDir:  1 },
+    { name: 'saturne', r: 36, size: 1.20, color: '#ede0a0', emissive: '#504000', speed: 0.010, tilt:  26.73, rotDir:  1, rings: { innerScale: 1.11, outerScale: 2.32, color: '#d4c088', opacity: 0.75, texturePath: '/textures/planets/saturne_anneaux.png' } },
+    { name: 'uranus',  r: 45, size: 0.75, color: '#88eef0', emissive: '#104050', speed: 0.006, tilt:  97.77, rotDir: -1, rings: { innerScale: 1.58, outerScale: 2.05, color: '#c9efe6', opacity: 0.28 } },
+    { name: 'neptune', r: 52, size: 0.72, color: '#3355e8', emissive: '#0c1555', speed: 0.004, tilt:  28.32, rotDir:  1, rings: { innerScale: 1.82, outerScale: 2.18, color: '#8aa0c8', opacity: 0.24 } },
     { name: 'pluton',  r: 58, size: 0.12, color: '#9a8070', emissive: '#302520', speed: 0.002, tilt: 122.53, rotDir: -1 },
 ];
 
@@ -41,7 +43,7 @@ const MOON_VISIBLE_SIZE_MAX_FACTOR = 0.12;
 const MOON_FOCUS_MIN_RADIUS = 0.035;
 const SELECTED_MOON_VISIBLE_MIN = 0.018;
 const SUN_RADIUS = 5.5;
-const GALAXY_ROTATION_SPEED = 0.00014;
+const GALAXY_ROTATION_SPEED = 0.00028;
 const GALAXY_HALO_ROTATION_SPEED = 0.00004;
 const GALAXY_SUN_ORBIT_RADIUS = 64;
 const GALAXY_SUN_FOCUS_DISTANCE = 6.2;
@@ -362,6 +364,41 @@ function makeStarSpriteTexture() {
     return texture;
 }
 
+function makeSelectionRingTexture() {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const cx = size / 2;
+    const cy = size / 2;
+    const R = size / 2 - 2;
+
+    // Soft disc fill
+    const fill = ctx.createRadialGradient(cx, cy, R * 0.55, cx, cy, R);
+    fill.addColorStop(0, 'rgba(255,255,255,0)');
+    fill.addColorStop(1, 'rgba(255,255,255,0.18)');
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bright ring at the edge
+    const ring = ctx.createRadialGradient(cx, cy, R * 0.76, cx, cy, R);
+    ring.addColorStop(0, 'rgba(255,255,255,0)');
+    ring.addColorStop(0.42, 'rgba(255,255,255,0.88)');
+    ring.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = ring;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fill();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
 function makeSoftDiscTexture({
     innerColor = 'rgba(255,255,255,1)',
     midColor = 'rgba(255,255,255,0.35)',
@@ -449,10 +486,9 @@ function makeGlowBandTexture({
     return texture;
 }
 
-function makeSaturnRings(planetRadius) {
-    // Anneaux principaux visibles de Saturne, en proportion du rayon de la planète.
-    const inner = planetRadius * 1.11;
-    const outer = planetRadius * 2.32;
+function makePlanetRings(planetRadius, rings = {}) {
+    const inner = planetRadius * (rings.innerScale ?? 1.11);
+    const outer = planetRadius * (rings.outerScale ?? 2.32);
     const geo = new THREE.RingGeometry(inner, outer, 128);
 
     // Remapper les UVs pour une texture radiale (U=0 bord interne, U=1 bord externe)
@@ -466,10 +502,13 @@ function makeSaturnRings(planetRadius) {
     uv.needsUpdate = true;
 
     const mat = new THREE.MeshBasicMaterial({
-        color: 0xd4c088, side: THREE.DoubleSide,
-        transparent: true, opacity: 0.75,
+        color: new THREE.Color(rings.color ?? '#d4c088'),
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: rings.opacity ?? 0.75,
     });
     const ring = new THREE.Mesh(geo, mat);
+    ring.userData.baseOpacity = rings.opacity ?? 0.75;
     // Les anneaux sont dans le plan équatorial de la planète.
     ring.rotation.x = Math.PI / 2;
     return ring;
@@ -574,7 +613,17 @@ function followTarget(controls, camera, desiredTarget, smoothing = 1) {
     camera.position.add(delta);
 }
 
-function getActiveTargetMinDistance(camera, selectedMoon, selectedAsteroid, selectedPlanet, moons, asteroids, planetsMap) {
+function findPlanetEntryByName(planetsMap, extraSystemsMap, planetName) {
+    if (!planetName) return null;
+
+    return planetsMap[planetName]
+        ?? Object.values(extraSystemsMap)
+            .flatMap((system) => system.planets)
+            .find((planet) => planet.mesh.userData.name === planetName)
+        ?? null;
+}
+
+function getActiveTargetMinDistance(camera, selectedMoon, selectedAsteroid, selectedPlanet, moons, asteroids, planetsMap, extraSystemsMap = {}) {
     if (!camera) return 0.05;
 
     if (selectedMoon) {
@@ -594,8 +643,9 @@ function getActiveTargetMinDistance(camera, selectedMoon, selectedAsteroid, sele
         }
     }
 
-    if (selectedPlanet && planetsMap[selectedPlanet]) {
-        const planetSize = planetsMap[selectedPlanet].mesh.geometry.parameters.radius;
+    const selectedPlanetEntry = findPlanetEntryByName(planetsMap, extraSystemsMap, selectedPlanet);
+    if (selectedPlanetEntry) {
+        const planetSize = getObjectRenderRadius(selectedPlanetEntry.mesh);
         if (Number.isFinite(planetSize) && planetSize > 0) {
             return getDistanceForScreenFraction(planetSize, camera, 0.5);
         }
@@ -634,11 +684,13 @@ export default function SolarSystemScene({
     const moonsRef = useRef([]);   // [{ mesh, arc, angle, speed, radius, parentName }]
     const moonDataCacheRef = useRef({});
     const moonTexCacheRef = useRef({});    // id → THREE.Texture (textures spécifiques par lune)
+    const galaxySpinRef   = useRef({ momentum: 0, lastX: null }); // drag-to-spin galaxy
     const galaxyStarsRef = useRef({});    // systemId → mesh
     const extraSystemsRef = useRef({});   // systemId → { root, planets[] }
     const activeStarSystemRef = useRef(null);
     const focusStarSystemRef = useRef(null);
     const tooltipTextRef = useRef(null);
+    const hoveredRingRef = useRef(null);
 
     const selectedPlanetRef = useRef(selectedPlanet);
     const selectedAsteroidRef = useRef(selectedAsteroid);
@@ -649,9 +701,13 @@ export default function SolarSystemScene({
     const focusMoonCamDirRef = useRef(new THREE.Vector3());
     const proximityPlanetRef = useRef(null);
     const solarSystemRootRef = useRef(null);
+    const solarStarRef = useRef(null);
     const galaxyRootRef = useRef(null);
     const galaxySunRef = useRef(null);
-    const isMilkyWayModeRef = useRef(selectedMilkyWay !== 'Solar System');
+    const isMilkyWayModeRef = useRef(
+        selectedMilkyWay !== 'Solar System'
+        && !EXTRA_STAR_SYSTEMS.some((system) => system.milkyWayKey === selectedMilkyWay)
+    );
     const overlayRef = useRef(null);
     const sunTooltipRef = useRef(null);
     const raycasterRef = useRef(new THREE.Raycaster());
@@ -681,9 +737,9 @@ export default function SolarSystemScene({
         return proximityPlanet;
     }, [focusOnPlanet, proximityPlanet, selectedMoon, selectedPlanet]);
 
-    const activeStarSystem = selectedMilkyWay === 'Solar System' ? 'solar'
-        : selectedMilkyWay === 'Kepler' ? 'kepler'
-        : null;
+    const activeStarSystem = selectedMilkyWay === 'Solar System'
+        ? 'solar'
+        : EXTRA_STAR_SYSTEMS.find((system) => system.milkyWayKey === selectedMilkyWay)?.id ?? null;
     const isMilkyWayMode = activeStarSystem === null;
 
     useEffect(() => {
@@ -709,9 +765,15 @@ export default function SolarSystemScene({
         if (!camera || !controls) return;
 
         controls.target.set(0, 0, 0);
-        camera.position.set(-24, 38, 88);
+        if (!USE_3D_GALAXY) {
+            camera.up.set(0, 0, -1);
+            camera.position.set(0, 220, 0);
+            controls.enabled = false; // géré manuellement (zoom + drag-to-spin)
+        } else {
+            camera.position.set(-24, 38, 88);
+            controls.enabled = true;
+        }
         camera.lookAt(0, 0, 0);
-        controls.enabled = true;
         minCamDistRef.current = 12;
         targetCamDistRef.current = camera.position.distanceTo(controls.target);
         controls.update();
@@ -733,6 +795,61 @@ export default function SolarSystemScene({
         sunTooltipRef.current.style.top = `${y}px`;
         sunTooltipRef.current.style.opacity = '1';
         if (mountRef.current) mountRef.current.style.cursor = 'pointer';
+    }, []);
+
+    const hideHoverRing = useCallback(() => {
+        if (!hoveredRingRef.current) return;
+        hoveredRingRef.current.material.opacity = 0;
+        hoveredRingRef.current = null;
+    }, []);
+
+    const showHoverRing = useCallback((ringSprite) => {
+        if (hoveredRingRef.current && hoveredRingRef.current !== ringSprite) {
+            hoveredRingRef.current.material.opacity = 0;
+        }
+        if (ringSprite) ringSprite.material.opacity = 0.72;
+        hoveredRingRef.current = ringSprite ?? null;
+    }, []);
+
+    const findPlanetHoverRing = useCallback((planetName) => (
+        planetsRef.current[planetName]?.hoverSprite
+        ?? Object.values(extraSystemsRef.current)
+            .flatMap((system) => system.planets)
+            .find((planet) => planet.mesh.userData.name === planetName)
+            ?.hoverSprite
+        ?? null
+    ), []);
+
+    const findCurrentPlanetEntry = useCallback((planetName) => (
+        findPlanetEntryByName(planetsRef.current, extraSystemsRef.current, planetName)
+    ), []);
+
+    const getActiveSystemStar = useCallback(() => {
+        const activeSystemId = activeStarSystemRef.current;
+        if (activeSystemId === 'solar') return solarStarRef.current;
+        return extraSystemsRef.current[activeSystemId]?.starMesh ?? null;
+    }, []);
+
+    const getActiveSystemInteractiveObjects = useCallback(() => {
+        const activeSystemId = activeStarSystemRef.current;
+        if (activeSystemId === 'solar') {
+            return [
+                solarStarRef.current,
+                ...Object.values(planetsRef.current).map((planet) => planet.mesh),
+                ...Object.values(planetsRef.current).map((planet) => planet.proxy).filter(Boolean),
+                ...asteroidsRef.current.map((asteroid) => asteroid.mesh),
+                ...moonsRef.current.map((moon) => moon.mesh),
+            ].filter(Boolean);
+        }
+
+        const activeSystem = extraSystemsRef.current[activeSystemId];
+        if (!activeSystem) return [];
+
+        return [
+            activeSystem.starMesh,
+            ...activeSystem.planets.map((planet) => planet.mesh),
+            ...activeSystem.planets.map((planet) => planet.proxy).filter(Boolean),
+        ].filter(Boolean);
     }, []);
 
     const getPointerHit = useCallback((clientX, clientY, objects) => {
@@ -761,6 +878,7 @@ export default function SolarSystemScene({
 
         starEntry.updateWorldMatrix(true, false);
         starEntry.getWorldPosition(transition.sunWorld);
+        transition.targetStarMesh = starEntry;
         transition.phase = 'galaxy-approach';
         transition.progress = 0;
         transition.pendingSystemId = systemId;
@@ -804,11 +922,12 @@ export default function SolarSystemScene({
         selectedPlanetRef.current = selectedPlanet;
         if (selectedMoonRef.current || selectedAsteroidRef.current) return; // cible prioritaire
         if (selectedPlanet) {
-            const p = PLANET_DATA.find(c => c.name === selectedPlanet);
             const camera = cameraRef.current;
-            if (p && camera) {
-                minCamDistRef.current = getDistanceForScreenFraction(p.size, camera, 0.5);
-                targetCamDistRef.current = getDistanceForScreenFraction(p.size, camera, 0.3);
+            const planetEntry = findCurrentPlanetEntry(selectedPlanet);
+            const planetSize = getObjectRenderRadius(planetEntry?.mesh);
+            if (Number.isFinite(planetSize) && camera) {
+                minCamDistRef.current = getDistanceForScreenFraction(planetSize, camera, 0.5);
+                targetCamDistRef.current = getDistanceForScreenFraction(planetSize, camera, 0.3);
             } else {
                 targetCamDistRef.current = DEFAULT_CAM_DIST;
             }
@@ -819,22 +938,23 @@ export default function SolarSystemScene({
                 : 0.05;
             targetCamDistRef.current = DEFAULT_CAM_DIST;
         }
-    }, [selectedPlanet]);
+    }, [findCurrentPlanetEntry, selectedPlanet]);
 
     useEffect(() => {
         selectedMoonRef.current = selectedMoon;
         if (!selectedMoon && !selectedAsteroidRef.current) {
             // Retour au zoom planète si encore sélectionnée
-            const p = PLANET_DATA.find(c => c.name === selectedPlanetRef.current);
             const camera = cameraRef.current;
-            if (p && camera) {
-                minCamDistRef.current = getDistanceForScreenFraction(p.size, camera, 0.5);
-                targetCamDistRef.current = getDistanceForScreenFraction(p.size, camera, 0.3);
+            const planetEntry = findCurrentPlanetEntry(selectedPlanetRef.current);
+            const planetSize = getObjectRenderRadius(planetEntry?.mesh);
+            if (Number.isFinite(planetSize) && camera) {
+                minCamDistRef.current = getDistanceForScreenFraction(planetSize, camera, 0.5);
+                targetCamDistRef.current = getDistanceForScreenFraction(planetSize, camera, 0.3);
             } else {
                 targetCamDistRef.current = DEFAULT_CAM_DIST;
             }
         }
-    }, [selectedMoon]);
+    }, [findCurrentPlanetEntry, selectedMoon]);
 
     useEffect(() => {
         selectedAsteroidRef.current = selectedAsteroid;
@@ -945,7 +1065,12 @@ export default function SolarSystemScene({
         const transitionPhase = galaxyTransitionRef.current.phase;
         const camera = new THREE.PerspectiveCamera(50, el.clientWidth / el.clientHeight, 0.005, 2000);
         if (isMilkyWayModeRef.current) {
-            camera.position.set(-24, 38, 88);
+            if (!USE_3D_GALAXY) {
+                camera.up.set(0, 0, -1);
+                camera.position.set(0, 220, 0);
+            } else {
+                camera.position.set(-24, 38, 88);
+            }
         } else if (transitionPhase === 'await-solar-system' || transitionPhase === 'solar-arrival') {
             camera.position.set(
                 SOLAR_SYSTEM_INTRO_POSITION.x,
@@ -974,6 +1099,10 @@ export default function SolarSystemScene({
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
         controls.rotateSpeed = 0.65;
+        // En mode galaxie image, on gère tout manuellement
+        if (isMilkyWayModeRef.current && !USE_3D_GALAXY) {
+            controls.enabled = false;
+        }
         if (!isMilkyWayModeRef.current && (transitionPhase === 'await-solar-system' || transitionPhase === 'solar-arrival')) {
             controls.enabled = false;
             galaxyTransitionRef.current.phase = 'solar-arrival';
@@ -994,6 +1123,8 @@ export default function SolarSystemScene({
         controls.addEventListener('change', handleControlsInteraction);
 
         const starSpriteTexture = makeStarSpriteTexture();
+        const selectionRingTex = makeSelectionRingTexture();
+        const HOVER_RING_SIZE = 3.5; // taille fixe en world units — indépendante de la planète
 
         // Étoiles de fond
         const STAR_COUNT = 10000;
@@ -1029,32 +1160,35 @@ export default function SolarSystemScene({
         const galaxyDisk = new THREE.Group();
         galaxyRoot.add(galaxyDisk);
 
-        const coreGlowTexture = makeSoftDiscTexture({
-            innerColor: 'rgba(255,244,224,0.98)',
-            midColor: 'rgba(255,215,166,0.38)',
-            outerColor: 'rgba(255,255,255,0)',
-            size: 256,
-        });
-        const armRibbonTexture = makeGlowBandTexture({
-            centerColor: 'rgba(223,236,255,0.96)',
-            edgeColor: 'rgba(255,255,255,0)',
-        });
-        const armRibbonCoreTexture = makeGlowBandTexture({
-            centerColor: 'rgba(245,248,255,0.98)',
-            edgeColor: 'rgba(255,255,255,0)',
-        });
-        const hiiTexture = makeSoftDiscTexture({
-            innerColor: 'rgba(255,194,206,0.92)',
-            midColor: 'rgba(255,108,138,0.26)',
-            outerColor: 'rgba(0,0,0,0)',
-            size: 256,
-        });
-        const dustTexture = makeSoftDiscTexture({
-            innerColor: 'rgba(18,14,12,0.9)',
-            midColor: 'rgba(6,5,5,0.34)',
-            outerColor: 'rgba(0,0,0,0)',
-            size: 256,
-        });
+        let coreGlowTexture, armRibbonTexture, armRibbonCoreTexture, hiiTexture, dustTexture;
+        if (USE_3D_GALAXY) {
+            coreGlowTexture = makeSoftDiscTexture({
+                innerColor: 'rgba(255,244,224,0.98)',
+                midColor: 'rgba(255,215,166,0.38)',
+                outerColor: 'rgba(255,255,255,0)',
+                size: 256,
+            });
+            armRibbonTexture = makeGlowBandTexture({
+                centerColor: 'rgba(223,236,255,0.96)',
+                edgeColor: 'rgba(255,255,255,0)',
+            });
+            armRibbonCoreTexture = makeGlowBandTexture({
+                centerColor: 'rgba(245,248,255,0.98)',
+                edgeColor: 'rgba(255,255,255,0)',
+            });
+            hiiTexture = makeSoftDiscTexture({
+                innerColor: 'rgba(255,194,206,0.92)',
+                midColor: 'rgba(255,108,138,0.26)',
+                outerColor: 'rgba(0,0,0,0)',
+                size: 256,
+            });
+            dustTexture = makeSoftDiscTexture({
+                innerColor: 'rgba(18,14,12,0.9)',
+                midColor: 'rgba(6,5,5,0.34)',
+                outerColor: 'rgba(0,0,0,0)',
+                size: 256,
+            });
+        }
         const armDefinitions = [
             { phase: 0.28, twist: 0.168, width: 0.125, start: 5, end: 92, weight: 1.3, primary: true, sway: 0.045 },
             { phase: Math.PI + 0.28, twist: 0.168, width: 0.125, start: 5, end: 92, weight: 1.3, primary: true, sway: 0.045 },
@@ -1093,6 +1227,13 @@ export default function SolarSystemScene({
                 z: Math.sin(angle) * (radius + radialNoise),
             };
         };
+        // Variables accessibles dans la boucle d'animation quelle que soit la branche
+        let armGlowRibbons = [], coreGlowSpecs = [], coreGlows = [], halo = null, gasClouds = [];
+        let escStars = null, escPos = null, escVel = null, ESC_COUNT = 0;
+        let labelsContainer = null; // div container pour les étiquettes de bras (image mode)
+
+        // ── Fonctions et données uniquement utilisées en mode 3D ─────────────────
+        if (USE_3D_GALAXY) { // eslint-disable-line no-constant-condition
         const buildArmRibbon = (arm, {
             texture,
             widthStart,
@@ -1389,7 +1530,7 @@ export default function SolarSystemScene({
         galaxyDisk.add(galaxyBulge);
         galaxyDisk.add(galaxyBulgeCore);
         galaxyDisk.add(galaxyBulgeHalo);
-        const armGlowRibbons = armDefinitions.map((arm) => {
+        armGlowRibbons = armDefinitions.map((arm) => {
             const broadRibbon = buildArmRibbon(arm, {
                 texture: armRibbonTexture,
                 widthStart: arm.primary ? 27 : 20,
@@ -1417,12 +1558,12 @@ export default function SolarSystemScene({
             return { broadRibbon, coreRibbon };
         });
 
-        const coreGlowSpecs = [
+        coreGlowSpecs = [
             { size: 24, opacity: 0.96, x: 0, z: 0, y: 0.03 },
             { size: 42, opacity: 0.34, x: 0.6, z: -0.3, y: 0.02 },
             { size: 70, opacity: 0.12, x: -0.4, z: 0.5, y: 0.0 },
         ];
-        const coreGlows = coreGlowSpecs.map((spec) => {
+        coreGlows = coreGlowSpecs.map((spec) => {
             const glow = new THREE.Mesh(
                 new THREE.PlaneGeometry(spec.size, spec.size),
                 new THREE.MeshBasicMaterial({
@@ -1454,7 +1595,7 @@ export default function SolarSystemScene({
         }
         haloGeo.setAttribute('position', new THREE.Float32BufferAttribute(haloPoints, 3));
         haloGeo.setAttribute('color', new THREE.Float32BufferAttribute(haloColors, 3));
-        const halo = new THREE.Points(haloGeo, new THREE.PointsMaterial({
+        halo = new THREE.Points(haloGeo, new THREE.PointsMaterial({
             map: starSpriteTexture,
             size: 0.36,
             vertexColors: true,
@@ -1495,7 +1636,7 @@ export default function SolarSystemScene({
             galaxyDisk.add(lane);
         }
 
-        const gasClouds = [];
+        gasClouds = [];
         for (let i = 0; i < 54; i++) {
             const arm = pickArm();
             const radius = Math.max(22, arm.start + Math.pow(Math.random(), 0.75) * (arm.end - arm.start));
@@ -1516,6 +1657,324 @@ export default function SolarSystemScene({
             cloud.rotation.z = Math.random() * Math.PI;
             gasClouds.push(cloud);
             galaxyDisk.add(cloud);
+        }
+        } else {
+            // ── Galaxie image (milkyway_background.png + annotation) ─────────
+
+            // Masque circulaire pour fondre les bords
+            const maskCanvas = document.createElement('canvas');
+            maskCanvas.width = 512; maskCanvas.height = 512;
+            const maskCtx = maskCanvas.getContext('2d');
+            const radialGrad = maskCtx.createRadialGradient(256, 256, 155, 256, 256, 256);
+            radialGrad.addColorStop(0,    'rgba(255,255,255,1)');
+            radialGrad.addColorStop(0.90, 'rgba(255,255,255,1)');
+            radialGrad.addColorStop(1,    'rgba(255,255,255,0)');
+            maskCtx.fillStyle = radialGrad;
+            maskCtx.fillRect(0, 0, 512, 512);
+            const maskTex = new THREE.CanvasTexture(maskCanvas);
+
+            // Plan de fond
+            const galaxyImageTex = new THREE.TextureLoader().load('/milkyway_background.png');
+            const galaxyPlane = new THREE.Mesh(
+                new THREE.CircleGeometry(170, 128),
+                new THREE.MeshBasicMaterial({
+                    map: galaxyImageTex,
+                    alphaMap: maskTex,
+                    transparent: true,
+                    depthWrite: false,
+                    side: THREE.DoubleSide,
+                })
+            );
+            galaxyPlane.rotation.x = -Math.PI / 2;
+            galaxyDisk.add(galaxyPlane);
+
+            // ── Canvas d'annotation ───────────────────────────────────────────
+            const ANN = 2048;
+            const PLANE_R = 170;
+            const SCALE = ANN / (PLANE_R * 2);   // pixels par unité Three.js
+            const CX = ANN / 2, CY = ANN / 2;
+            const lyToU = (ly) => ly * PLANE_R / 75000;
+            const fontBase = 'system-ui, sans-serif';
+
+            const annCanvas = document.createElement('canvas');
+            annCanvas.width = ANN; annCanvas.height = ANN;
+            const annCtx = annCanvas.getContext('2d');
+
+            // Texte courbe le long d'un bras spiral
+            // reversed=true : parcourt de rEnd→rStart pour que le texte soit lisible
+            const drawCurvedLabel = (arm, rStart, rEnd, text, fontSize, color) => {
+                const STEPS = 500;
+                const pts = [];
+                for (let i = 0; i <= STEPS; i++) {
+                    const r = rStart + (rEnd - rStart) * (i / STEPS);
+                    const lr = Math.max(r - arm.start, 0);
+                    const wave = Math.sin(lr * 0.085 + arm.phase * 1.3) * arm.sway;
+                    const ang = arm.phase + lr * arm.twist + wave;
+                    pts.push({ x: CX + Math.cos(ang) * r * SCALE, y: CY + Math.sin(ang) * r * SCALE });
+                }
+                const arcL = [0];
+                for (let i = 1; i < pts.length; i++) {
+                    const ddx = pts[i].x - pts[i-1].x, ddy = pts[i].y - pts[i-1].y;
+                    arcL.push(arcL[i-1] + Math.sqrt(ddx*ddx + ddy*ddy));
+                }
+                const total = arcL[arcL.length - 1];
+
+                annCtx.save();
+                annCtx.font = `italic bold ${fontSize}px ${fontBase}`;
+                annCtx.fillStyle = color;
+                annCtx.textBaseline = 'middle';
+
+                const chars = [...text];
+                const cw = chars.map(c => annCtx.measureText(c).width);
+                const tw = cw.reduce((a, b) => a + b, 0);
+                let pos = (total - tw) / 2;
+
+                const findPt = (s) => {
+                    const sc = Math.max(0, Math.min(total, s));
+                    let lo = 0, hi = pts.length - 1;
+                    while (lo < hi - 1) {
+                        const mid = (lo + hi) >> 1;
+                        if (arcL[mid] <= sc) lo = mid; else hi = mid;
+                    }
+                    const t = (sc - arcL[lo]) / Math.max(0.001, arcL[hi] - arcL[lo]);
+                    return {
+                        x:     pts[lo].x + t * (pts[hi].x - pts[lo].x),
+                        y:     pts[lo].y + t * (pts[hi].y - pts[lo].y),
+                        angle: Math.atan2(pts[hi].y - pts[lo].y, pts[hi].x - pts[lo].x),
+                    };
+                };
+
+                chars.forEach((ch, ci) => {
+                    const pt = findPt(pos + cw[ci] / 2);
+                    annCtx.save();
+                    annCtx.translate(pt.x, pt.y);
+                    annCtx.rotate(pt.angle);
+                    annCtx.fillText(ch, -cw[ci] / 2, 0);
+                    annCtx.restore();
+                    pos += cw[ci];
+                });
+                annCtx.restore();
+            };
+
+            // Cercles concentriques (distances)
+            const lyRings = [15000, 30000, 45000, 60000, 75000];
+            annCtx.setLineDash([5, 12]);
+            lyRings.forEach((ly, i) => {
+                const r = lyToU(ly) * SCALE;
+                annCtx.strokeStyle = `rgba(140, 190, 255, ${i < 4 ? 0.20 : 0.12})`;
+                annCtx.lineWidth = 1.2;
+                annCtx.beginPath();
+                annCtx.arc(CX, CY, r, 0, Math.PI * 2);
+                annCtx.stroke();
+            });
+
+            // Lignes radiales tous les 30°
+            annCtx.lineWidth = 0.8;
+            annCtx.strokeStyle = 'rgba(140, 190, 255, 0.09)';
+            for (let L = 0; L < 360; L += 30) {
+                const Lr = L * Math.PI / 180;
+                const r1 = lyToU(8000) * SCALE, r2 = lyToU(72000) * SCALE;
+                annCtx.beginPath();
+                annCtx.moveTo(CX - r1 * Math.sin(Lr), CY - r1 * Math.cos(Lr));
+                annCtx.lineTo(CX - r2 * Math.sin(Lr), CY - r2 * Math.cos(Lr));
+                annCtx.stroke();
+            }
+            annCtx.setLineDash([]);
+
+            // Labels de degrés
+            annCtx.textAlign = 'center';
+            annCtx.textBaseline = 'middle';
+            for (let L = 0; L < 360; L += 30) {
+                const Lr = L * Math.PI / 180;
+                const rd = lyToU(79000) * SCALE;
+                annCtx.font = `bold 30px ${fontBase}`;
+                annCtx.fillStyle = 'rgba(180, 215, 255, 0.72)';
+                annCtx.fillText(`${L}°`, CX - rd * Math.sin(Lr), CY - rd * Math.cos(Lr));
+            }
+
+            // "Galactic Longitude" au 0°
+            annCtx.font = `22px ${fontBase}`;
+            annCtx.fillStyle = 'rgba(180, 215, 255, 0.50)';
+            const rTop = lyToU(84000) * SCALE;
+            annCtx.fillText('Galactic Longitude', CX, CY - rTop);
+
+            // Labels de distance (axe légèrement décalé du 0°)
+            annCtx.textAlign = 'left';
+            annCtx.font = `20px ${fontBase}`;
+            annCtx.fillStyle = 'rgba(140, 190, 255, 0.45)';
+            lyRings.forEach(ly => {
+                const Lr2 = 3 * Math.PI / 180;
+                const r2 = lyToU(ly) * SCALE;
+                annCtx.fillText(`${ly / 1000}k ly`, CX - r2 * Math.sin(Lr2) + 6, CY - r2 * Math.cos(Lr2));
+            });
+
+            // ── Noms des bras spiraux (SVG textPath — texte courbe, taille fixe) ──
+            const svgNS = 'http://www.w3.org/2000/svg';
+            labelsContainer = document.createElementNS(svgNS, 'svg');
+            labelsContainer.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;';
+            el.appendChild(labelsContainer);
+
+            // Filtre lueur bleue
+            const svgDefs = document.createElementNS(svgNS, 'defs');
+            svgDefs.innerHTML = `<filter id="arm-glow" x="-20%" y="-20%" width="140%" height="140%">
+  <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="blur"/>
+  <feFlood flood-color="rgb(100,150,255)" flood-opacity="0.45" result="col"/>
+  <feComposite in="col" in2="blur" operator="in" result="glow"/>
+  <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>`;
+            labelsContainer.appendChild(svgDefs);
+
+            const ARM_SVG_DEFS = [
+                { arm: armDefinitions[0], rStart: 56,  rEnd: 83,  text: 'Perseus Arm',          fill: 'rgba(220,235,255,0.90)' },
+                { arm: armDefinitions[1], rStart: 36,  rEnd: 63,  text: 'Scutum-Centaurus Arm', fill: 'rgba(220,235,255,0.90)' },
+                { arm: armDefinitions[2], rStart: 52,  rEnd: 30,  text: 'Sagittarius Arm',      fill: 'rgba(220,235,255,0.90)' },
+                { arm: armDefinitions[3], rStart: 42,  rEnd: 22,  text: 'Norma Arm',            fill: 'rgba(220,235,255,0.85)' },
+                { arm: armDefinitions[0], rStart: 94,  rEnd: 122, text: 'Outer Arm',            fill: 'rgba(200,220,255,0.80)' },
+                { arm: armDefinitions[0], rStart: 61,  rEnd: 68,  text: 'Orion Spur',           fill: 'rgba(210,230,255,0.75)' },
+            ];
+            const LABEL_SAMPLES = 28;
+            const _projTmp = new THREE.Vector3();
+            const armSvgLabels = ARM_SVG_DEFS.map(({ arm, rStart, rEnd, text, fill }, idx) => {
+                // Points locaux pré-calculés dans l'espace de galaxyDisk
+                const localPts = [];
+                for (let j = 0; j <= LABEL_SAMPLES; j++) {
+                    const r = rStart + (rEnd - rStart) * (j / LABEL_SAMPLES);
+                    const pt = getArmCenterPoint(arm, r);
+                    localPts.push(new THREE.Vector3(pt.x, 0, pt.z));
+                }
+                const pathId = `arm-lbl-${idx}`;
+                const pathEl = document.createElementNS(svgNS, 'path');
+                pathEl.setAttribute('id', pathId);
+                pathEl.setAttribute('fill', 'none');
+                pathEl.setAttribute('stroke', 'none');
+                labelsContainer.appendChild(pathEl);
+
+                const textEl = document.createElementNS(svgNS, 'text');
+                textEl.setAttribute('font-family', "'Segoe UI',system-ui,sans-serif");
+                textEl.setAttribute('font-size', '13');
+                textEl.setAttribute('font-style', 'italic');
+                textEl.setAttribute('font-weight', 'bold');
+                textEl.setAttribute('letter-spacing', '0.7');
+                textEl.setAttribute('fill', fill);
+                textEl.setAttribute('filter', 'url(#arm-glow)');
+                const tpEl = document.createElementNS(svgNS, 'textPath');
+                tpEl.setAttribute('href', `#${pathId}`);
+                tpEl.setAttribute('startOffset', '50%');
+                tpEl.setAttribute('text-anchor', 'middle');
+                tpEl.textContent = text;
+                textEl.appendChild(tpEl);
+                labelsContainer.appendChild(textEl);
+                return { pathEl, localPts };
+            });
+            galaxyRootRef.current._armSvgLabels = armSvgLabels;
+
+            // Galactic Bar (court, centré)
+            annCtx.textAlign = 'center';
+            annCtx.textBaseline = 'middle';
+            annCtx.font = `italic bold 18px ${fontBase}`;
+            annCtx.fillStyle = 'rgba(255,240,200,0.65)';
+            annCtx.fillText('Galactic Bar', CX, CY + 9 * SCALE);
+
+            // Marqueur du Soleil
+            const sunPt3d = getArmCenterPoint(armDefinitions[0], GALAXY_SUN_ORBIT_RADIUS);
+            const sCx = CX + sunPt3d.x * SCALE;
+            const sCy = CY + sunPt3d.z * SCALE;
+            annCtx.beginPath();
+            annCtx.arc(sCx, sCy, 7, 0, Math.PI * 2);
+            annCtx.fillStyle = 'rgba(255,245,160,0.92)';
+            annCtx.fill();
+            annCtx.strokeStyle = 'rgba(255,245,160,0.45)';
+            annCtx.lineWidth = 1.5;
+            annCtx.stroke();
+            annCtx.font = `bold 22px ${fontBase}`;
+            annCtx.fillStyle = 'rgba(255,250,190,0.88)';
+            annCtx.textAlign = 'center';
+            annCtx.textBaseline = 'top';
+            annCtx.fillText('Sun', sCx, sCy + 13);
+
+            const annTex = new THREE.CanvasTexture(annCanvas);
+            const annPlane = new THREE.Mesh(
+                new THREE.PlaneGeometry(PLANE_R * 2, PLANE_R * 2),
+                new THREE.MeshBasicMaterial({
+                    map: annTex, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+                })
+            );
+            annPlane.rotation.x = -Math.PI / 2;
+            annPlane.position.y = 0.05;
+            galaxyDisk.add(annPlane);
+
+            // Halo dummy
+            halo = new THREE.Group();
+            galaxyRoot.add(halo);
+
+            // ── Étoiles jaillissant du centre vers la caméra (effet de profondeur) ──
+            ESC_COUNT = 500;
+            escPos = new Float32Array(ESC_COUNT * 3);
+            escVel = new Float32Array(ESC_COUNT * 3);
+            const escCol = new Float32Array(ESC_COUNT * 3);
+            for (let i = 0; i < ESC_COUNT; i++) {
+                // Position initiale aléatoire entre Y=0 et Y=200 pour une répartition fluide
+                const r0    = Math.random() * 18;
+                const angle = Math.random() * Math.PI * 2;
+                const yInit = Math.random() * 200;
+                escPos[i*3]   = Math.cos(angle) * r0;
+                escPos[i*3+1] = yInit;
+                escPos[i*3+2] = Math.sin(angle) * r0;
+                // Vitesse : majoritairement vers le haut (vers la caméra à Y=220)
+                const spd = 0.06 + Math.pow(Math.random(), 1.5) * 0.14;
+                escVel[i*3]   = (Math.random() - 0.5) * 0.008;
+                escVel[i*3+1] = spd;
+                escVel[i*3+2] = (Math.random() - 0.5) * 0.008;
+                const t = Math.random();
+                if (t < 0.5)       { escCol[i*3]=1;    escCol[i*3+1]=1;    escCol[i*3+2]=1; }
+                else if (t < 0.75) { escCol[i*3]=0.72; escCol[i*3+1]=0.86; escCol[i*3+2]=1; }
+                else               { escCol[i*3]=1;    escCol[i*3+1]=0.94; escCol[i*3+2]=0.70; }
+            }
+            const escGeo = new THREE.BufferGeometry();
+            escGeo.setAttribute('position', new THREE.BufferAttribute(escPos, 3));
+            escGeo.setAttribute('color',    new THREE.BufferAttribute(escCol, 3));
+            escStars = new THREE.Points(escGeo, new THREE.PointsMaterial({
+                map: starSpriteTexture, vertexColors: true, size: 0.55,
+                sizeAttenuation: true, transparent: true, opacity: 0.90,
+                depthWrite: false, alphaTest: 0.02,
+            }));
+            galaxyRoot.add(escStars);
+
+            // ── Étoiles flottantes (effet de profondeur / parallaxe) ─────────
+            const FLOAT_COUNT = 160;
+            const floatPos   = new Float32Array(FLOAT_COUNT * 3);
+            const floatPhase = new Float32Array(FLOAT_COUNT); // phase sinusoïdale individuelle
+            const floatAmp   = new Float32Array(FLOAT_COUNT); // amplitude verticale
+            const floatCol   = new Float32Array(FLOAT_COUNT * 3);
+            for (let i = 0; i < FLOAT_COUNT; i++) {
+                const r = 15 + Math.random() * 170;
+                const a = Math.random() * Math.PI * 2;
+                floatPos[i*3]   = Math.cos(a) * r;
+                floatPos[i*3+1] = (Math.random() - 0.5) * 55; // répartis en hauteur
+                floatPos[i*3+2] = Math.sin(a) * r;
+                floatPhase[i] = Math.random() * Math.PI * 2;
+                floatAmp[i]   = 3 + Math.random() * 12;
+                const t2 = Math.random();
+                if (t2 < 0.5)       { floatCol[i*3]=1;    floatCol[i*3+1]=1;    floatCol[i*3+2]=1; }
+                else if (t2 < 0.75) { floatCol[i*3]=0.75; floatCol[i*3+1]=0.88; floatCol[i*3+2]=1; }
+                else               { floatCol[i*3]=1;    floatCol[i*3+1]=0.92; floatCol[i*3+2]=0.65; }
+            }
+            const floatGeo = new THREE.BufferGeometry();
+            floatGeo.setAttribute('position', new THREE.BufferAttribute(floatPos, 3));
+            floatGeo.setAttribute('color',    new THREE.BufferAttribute(floatCol, 3));
+            const floatStars = new THREE.Points(floatGeo, new THREE.PointsMaterial({
+                map: starSpriteTexture, vertexColors: true, size: 0.38,
+                sizeAttenuation: true, transparent: true, opacity: 0.70,
+                depthWrite: false, alphaTest: 0.02,
+            }));
+            galaxyRoot.add(floatStars);
+
+            // Stocker pour la boucle d'animation
+            galaxyRootRef.current._floatPos   = floatPos;
+            galaxyRootRef.current._floatPhase = floatPhase;
+            galaxyRootRef.current._floatAmp   = floatAmp;
+            galaxyRootRef.current._floatStars = floatStars;
+            galaxyRootRef.current._floatCount = FLOAT_COUNT;
         }
 
         const galaxySunPoint = getArmCenterPoint(armDefinitions[0], GALAXY_SUN_ORBIT_RADIUS);
@@ -1543,12 +2002,15 @@ export default function SolarSystemScene({
 
             // Étoile centrale
             const starMesh = makeSphere(sys.starRadius ?? 4.2, sys.starColor, sys.starEmissive);
-            starMesh.userData = { type: 'sun', label: sys.name };
+            starMesh.material.emissiveIntensity = 2.2;
+            starMesh.userData = { type: 'star', systemId: sys.id, label: sys.name };
+            primeBoilingMesh(starMesh, 0.12);
             sysRoot.add(starMesh);
 
             const sysPlanets = [];
             sys.planets.forEach((cfg) => {
                 const orbitGroup = new THREE.Group();
+                orbitGroup.rotation.x = getOrbitalInclination(cfg, 0);
                 sysRoot.add(orbitGroup);
                 const arc = makeTrailArc(cfg.r);
                 orbitGroup.add(arc);
@@ -1558,21 +2020,30 @@ export default function SolarSystemScene({
                 tiltGroup.rotation.z = THREE.MathUtils.degToRad(cfg.tilt ?? 0);
                 group.add(tiltGroup);
                 const mesh = makeSphere(cfg.size, cfg.color, cfg.emissive, 32);
-                mesh.userData = { type: 'planet', name: cfg.name, label: cfg.name.toUpperCase() };
+                mesh.userData = { type: 'planet', name: cfg.name, label: cfg.name.toUpperCase(), systemId: sys.id };
                 tiltGroup.add(mesh);
-                // Zone de clic invisible (2.5× le rayon visuel)
                 const proxy = new THREE.Mesh(
                     new THREE.SphereGeometry(cfg.size * 2.5, 8, 8),
-                    new THREE.MeshBasicMaterial({ visible: false })
+                    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
                 );
                 proxy.userData = mesh.userData;
                 tiltGroup.add(proxy);
+                const hoverSprite = new THREE.Sprite(
+                    new THREE.SpriteMaterial({ map: selectionRingTex, transparent: true, opacity: 0, depthTest: false, depthWrite: false })
+                );
+                hoverSprite.scale.setScalar(HOVER_RING_SIZE);
+                tiltGroup.add(hoverSprite);
+                let ring = null;
+                if (cfg.rings) {
+                    ring = makePlanetRings(cfg.size, cfg.rings);
+                    tiltGroup.add(ring);
+                }
                 const initAngle = Math.random() * Math.PI * 2;
                 group.position.set(Math.cos(initAngle) * cfg.r, 0, Math.sin(initAngle) * cfg.r);
-                sysPlanets.push({ orbitGroup, group, mesh, arc, angle: initAngle, r: cfg.r, speed: cfg.speed, rotDir: cfg.rotDir ?? 1 });
+                sysPlanets.push({ orbitGroup, group, mesh, arc, ring, proxy, hoverSprite, angle: initAngle, r: cfg.r, speed: cfg.speed, rotDir: cfg.rotDir ?? 1 });
             });
 
-            extraSystemsRef.current[sys.id] = { root: sysRoot, planets: sysPlanets };
+            extraSystemsRef.current[sys.id] = { root: sysRoot, starMesh, planets: sysPlanets };
         });
 
         // Éclairage
@@ -1586,8 +2057,9 @@ export default function SolarSystemScene({
         const sunMesh = makeSphere(5.5, '#ffe880', '#000000');
         sunMesh.material.emissive.set(0xffaa22);
         sunMesh.material.emissiveIntensity = 2.5;
-        sunMesh.userData = { type: 'sun' };
+        sunMesh.userData = { type: 'star', systemId: 'solar', label: 'Soleil' };
         primeBoilingMesh(sunMesh);
+        solarStarRef.current = sunMesh;
         solarSystemRoot.add(sunMesh);
 
         // Planètes
@@ -1614,18 +2086,32 @@ export default function SolarSystemScene({
             group.add(tiltGroup);
 
             const mesh = makeSphere(cfg.size, cfg.color, cfg.emissive, 48);
-            mesh.userData = { type: 'planet', name: cfg.name };
+            mesh.userData = { type: 'planet', name: cfg.name, systemId: 'solar' };
             tiltGroup.add(mesh);
+
+            const proxy = new THREE.Mesh(
+                new THREE.SphereGeometry(cfg.size * 2.5, 8, 8),
+                new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+            );
+            proxy.userData = { type: 'planet', name: cfg.name, systemId: 'solar' };
+            tiltGroup.add(proxy);
+
+            const hoverSprite = new THREE.Sprite(
+                new THREE.SpriteMaterial({ map: selectionRingTex, transparent: true, opacity: 0, depthTest: false, depthWrite: false })
+            );
+            hoverSprite.scale.setScalar(HOVER_RING_SIZE);
+            tiltGroup.add(hoverSprite);
+
             let ring = null;
-            if (cfg.name === 'saturne') {
-                ring = makeSaturnRings(cfg.size);
+            if (cfg.rings) {
+                ring = makePlanetRings(cfg.size, cfg.rings);
                 tiltGroup.add(ring);
             }
 
             const initAngle = Math.random() * Math.PI * 2;
             group.position.set(Math.cos(initAngle) * orbitRadius, 0, Math.sin(initAngle) * orbitRadius);
 
-            planetsRef.current[cfg.name] = { orbitGroup, group, mesh, arc, ring, angle: initAngle, r: orbitRadius, speed: orbitSpeed };
+            planetsRef.current[cfg.name] = { orbitGroup, group, mesh, arc, ring, proxy, hoverSprite, angle: initAngle, r: orbitRadius, speed: orbitSpeed };
         });
 
         const marsRadius = getCompressedPlanetRadius('mars', planets);
@@ -1696,19 +2182,16 @@ export default function SolarSystemScene({
             }
         });
 
-        // Texture anneaux Saturne — /textures/planets/saturne_anneaux.png
-        loader.load('/textures/planets/saturne_anneaux.png', (tex) => {
-            tex.colorSpace = THREE.SRGBColorSpace;
-            const saturn = planetsRef.current['saturne'];
-            if (!saturn) return;
-            let ring = null;
-            saturn.group.traverse(obj => {
-                if (obj.geometry?.type === 'RingGeometry') ring = obj;
+        PLANET_DATA.forEach((cfg) => {
+            if (!cfg.rings?.texturePath) return;
+            loader.load(cfg.rings.texturePath, (tex) => {
+                tex.colorSpace = THREE.SRGBColorSpace;
+                const ring = planetsRef.current[cfg.name]?.ring;
+                if (!ring) return;
+                ring.material.map = tex;
+                ring.material.color.set(0xffffff);
+                ring.material.needsUpdate = true;
             });
-            if (!ring) return;
-            ring.material.map = tex;
-            ring.material.color.set(0xffffff);
-            ring.material.needsUpdate = true;
         });
 
         // Resize
@@ -1729,7 +2212,9 @@ export default function SolarSystemScene({
         document.addEventListener('visibilitychange', onVisibilityChange);
 
         // ── Zoom vers le curseur / pinch ──────────────────────────────────
-        const MAX_DIST = 180;
+        const MAX_DIST_SOLAR  = 180;
+        const MAX_DIST_GALAXY = 360;
+        const MIN_DIST_GALAXY = 75;
         const zoomRc = new THREE.Raycaster();
         const zoomAnchor = new THREE.Vector3();
         const zoomOffset = new THREE.Vector3();
@@ -1756,8 +2241,11 @@ export default function SolarSystemScene({
                 asteroidsRef.current,
                 planetsRef.current,
             );
-            minCamDistRef.current = minDist;
-            if (newDist < minDist || newDist > MAX_DIST) return;
+            const isGalaxy = isMilkyWayModeRef.current && !USE_3D_GALAXY;
+            const effectiveMin = isGalaxy ? MIN_DIST_GALAXY : minDist;
+            const effectiveMax = isGalaxy ? MAX_DIST_GALAXY : MAX_DIST_SOLAR;
+            minCamDistRef.current = effectiveMin;
+            if (newDist < effectiveMin || newDist > effectiveMax) return;
 
             const isSolarSystemMode = !selectedPlanetRef.current && !selectedMoonRef.current && !selectedAsteroidRef.current;
             if (isSolarSystemMode) {
@@ -1821,8 +2309,33 @@ export default function SolarSystemScene({
         el.addEventListener('touchmove', onTouchMove, { passive: true });
         el.addEventListener('touchend', onTouchEnd);
 
+        // ── Rotation galaxie par drag (plein écran, toute direction) ─────────
+        let galaxyDragActive = false;
+        let galaxyDragLastX  = 0;
+        const onGalaxyPointerDown = (e) => {
+            if (!isMilkyWayModeRef.current || USE_3D_GALAXY) return;
+            galaxyDragActive = true;
+            galaxyDragLastX  = e.clientX;
+        };
+        const onGalaxyPointerMove = (e) => {
+            if (!galaxyDragActive) return;
+            const dx = e.clientX - galaxyDragLastX;
+            galaxyDragLastX = e.clientX;
+            if (dx !== 0) {
+                galaxyDisk.rotation.y += dx * 0.005;
+                markInteractionHot();
+            }
+        };
+        const onGalaxyPointerUp = () => { galaxyDragActive = false; };
+        window.addEventListener('pointerdown',  onGalaxyPointerDown);
+        window.addEventListener('pointermove',  onGalaxyPointerMove);
+        window.addEventListener('pointerup',    onGalaxyPointerUp);
+        window.addEventListener('pointercancel', onGalaxyPointerUp);
+
         // ── Boucle de rendu ────────────────────────────────────────────────
         const camDir = new THREE.Vector3();
+        // Vecteur pré-alloué pour la projection des étiquettes de bras
+        const _lblTmpMid = new THREE.Vector3();
         const moonWorldPos = new THREE.Vector3();
         const focusTargetWorldPos = new THREE.Vector3();
         const transitionCameraPos = new THREE.Vector3();
@@ -1859,8 +2372,70 @@ export default function SolarSystemScene({
             });
 
             if (isMilkyWay) {
-                galaxyDisk.rotation.y += GALAXY_ROTATION_SPEED * deltaFrames;
-                halo.rotation.y += GALAXY_HALO_ROTATION_SPEED * deltaFrames;
+                // Rotation horaire (vue du dessus)
+                galaxyDisk.rotation.y -= GALAXY_ROTATION_SPEED * deltaFrames;
+                if (halo) halo.rotation.y -= GALAXY_HALO_ROTATION_SPEED * deltaFrames;
+
+                // Mode image : float stars + labels
+                if (!USE_3D_GALAXY) {
+                    // Float stars
+                    const fr = galaxyRootRef.current;
+                    if (fr && fr._floatStars) {
+                        const fp = fr._floatPos, fph = fr._floatPhase, fa = fr._floatAmp;
+                        const posA = fr._floatStars.geometry.attributes.position;
+                        for (let i = 0; i < fr._floatCount; i++) {
+                            posA.setY(i, fp[i*3+1] + Math.sin(now * 0.00045 + fph[i]) * fa[i]);
+                        }
+                        posA.needsUpdate = true;
+                    }
+
+                    // Mise à jour des chemins SVG pour les étiquettes de bras
+                    if (fr && fr._armSvgLabels) {
+                        const w = el.clientWidth;
+                        const h = el.clientHeight;
+                        galaxyDisk.updateWorldMatrix(true, false);
+                        fr._armSvgLabels.forEach(({ pathEl, localPts }) => {
+                            // Projeter chaque point local → écran
+                            const screenPts = localPts.map(lp => {
+                                _lblTmpMid.copy(lp);
+                                galaxyDisk.localToWorld(_lblTmpMid);
+                                _lblTmpMid.project(camera);
+                                return [
+                                    (_lblTmpMid.x *  0.5 + 0.5) * w,
+                                    (_lblTmpMid.y * -0.5 + 0.5) * h,
+                                ];
+                            });
+                            // Auto-orienter pour que le texte soit lisible (gauche → droite)
+                            if (screenPts[screenPts.length - 1][0] < screenPts[0][0]) screenPts.reverse();
+                            // Construire la commande SVG path
+                            let d = `M${screenPts[0][0].toFixed(1)},${screenPts[0][1].toFixed(1)}`;
+                            for (let i = 1; i < screenPts.length; i++) {
+                                d += ` L${screenPts[i][0].toFixed(1)},${screenPts[i][1].toFixed(1)}`;
+                            }
+                            pathEl.setAttribute('d', d);
+                        });
+                    }
+                }
+
+                // Mise à jour des étoiles du centre vers la caméra
+                if (escStars && escPos && escVel) {
+                    const posAttr = escStars.geometry.attributes.position;
+                    for (let i = 0; i < ESC_COUNT; i++) {
+                        escPos[i*3]   += escVel[i*3]   * deltaFrames;
+                        escPos[i*3+1] += escVel[i*3+1] * deltaFrames;
+                        escPos[i*3+2] += escVel[i*3+2] * deltaFrames;
+                        // Réinitialiser quand l'étoile a dépassé la caméra
+                        if (escPos[i*3+1] > 215) {
+                            const r0    = Math.random() * 18;
+                            const a     = Math.random() * Math.PI * 2;
+                            escPos[i*3]   = Math.cos(a) * r0;
+                            escPos[i*3+1] = 0;
+                            escPos[i*3+2] = Math.sin(a) * r0;
+                        }
+                    }
+                    posAttr.needsUpdate = true;
+                }
+
                 coreGlows.forEach((glow, index) => {
                     glow.material.opacity = coreGlowSpecs[index].opacity * (0.96 + Math.sin(now * 0.00035 + index) * 0.04);
                 });
@@ -1871,10 +2446,11 @@ export default function SolarSystemScene({
                 gasClouds.forEach((cloud, index) => {
                     cloud.material.opacity = 0.18 + ((Math.sin(now * 0.00045 + index * 0.51) + 1) * 0.5) * 0.16;
                 });
-                galaxySun.rotation.y += 0.01 * deltaFrames;
+                Object.values(galaxyStarsRef.current).forEach(s => { s.rotation.y += 0.01 * deltaFrames; });
                 if (transition.phase === 'galaxy-approach') {
-                    galaxySun.updateWorldMatrix(true, false);
-                    galaxySun.getWorldPosition(transition.sunWorld);
+                    const approachStar = transition.targetStarMesh ?? galaxySun;
+                    approachStar.updateWorldMatrix(true, false);
+                    approachStar.getWorldPosition(transition.sunWorld);
                     transition.progress = Math.min(transition.progress + GALAXY_TO_SOLAR_APPROACH_STEP * deltaFrames, 1);
                     const eased = 1 - Math.pow(1 - transition.progress, 3);
                     transitionTarget.lerpVectors(transition.startTarget, transition.sunWorld, eased);
@@ -1890,7 +2466,8 @@ export default function SolarSystemScene({
                         focusStarSystemRef.current?.(transition.pendingSystemId ?? 'solar');
                     }
                 } else {
-                    controls.enabled = true;
+                    // En mode image, on gère zoom+spin nous-mêmes ; OrbitControls doit rester désactivé
+                    controls.enabled = USE_3D_GALAXY; // eslint-disable-line no-constant-condition
                     setOverlayOpacity(0);
                 }
                 controls.update();
@@ -1899,6 +2476,9 @@ export default function SolarSystemScene({
             }
 
             if (transition.phase === 'solar-arrival') {
+                controls.enableRotate = true;
+                controls.enablePan    = false;
+                camera.up.set(0, 1, 0);
                 transition.progress = Math.min(transition.progress + SOLAR_SYSTEM_INTRO_STEP * deltaFrames, 1);
                 const eased = 1 - Math.pow(1 - transition.progress, 4);
                 camera.position.lerpVectors(transition.introStartCamera, transition.introEndCamera, eased);
@@ -1916,13 +2496,18 @@ export default function SolarSystemScene({
                 return;
             }
 
-            updateBoilingMesh(sunMesh, now);
+            // Réactiver la rotation caméra dans le mode solaire
+            controls.enableRotate = true;
+            controls.enablePan    = false;
+
+            const activeStarMesh = getActiveSystemStar() ?? sunMesh;
+            updateBoilingMesh(activeStarMesh, now);
             const sunPulse = 1
                 + Math.sin(now * SUN_PULSE_SPEED) * 0.01
                 + Math.sin(now * SUN_PULSE_SPEED * 1.91) * 0.005;
-            sunMesh.scale.setScalar(sunPulse);
-            sunMesh.rotation.y += 0.0016 * deltaFrames;
-            sunMesh.material.emissiveIntensity = 2.45
+            activeStarMesh.scale.setScalar(sunPulse);
+            activeStarMesh.rotation.y += 0.0016 * deltaFrames;
+            activeStarMesh.material.emissiveIntensity = 2.45
                 + Math.sin(now * SUN_PULSE_SPEED * 1.3) * 0.14
                 + Math.sin(now * SUN_PULSE_SPEED * 2.6) * 0.06;
             sunLight.intensity = 420
@@ -1957,12 +2542,24 @@ export default function SolarSystemScene({
             });
 
             // Animation systèmes extra (Kepler…)
-            Object.values(extraSystemsRef.current).forEach(({ planets: sysPlanets }) => {
+            Object.values(extraSystemsRef.current).forEach(({ starMesh, planets: sysPlanets }) => {
+                if (starMesh) {
+                    starMesh.rotation.y += 0.0016 * deltaFrames;
+                }
                 sysPlanets.forEach((p) => {
                     p.angle += THREE.MathUtils.degToRad(p.speed) * deltaFrames;
                     p.group.position.set(Math.cos(p.angle) * p.r, 0, Math.sin(p.angle) * p.r);
                     p.mesh.rotation.y += 0.004 * p.rotDir * deltaFrames;
                     p.arc.rotation.y = Math.PI - p.angle;
+                    const isSel = p.mesh.userData.name === sel;
+                    const targetMeshOp = sel ? (isSel ? 1 : 0) : 1.0;
+                    const targetArcOp = sel ? (isSel ? 0.4 : 0) : 0.4;
+                    p.mesh.material.opacity = THREE.MathUtils.lerp(p.mesh.material.opacity, targetMeshOp, damp(0.06));
+                    p.arc.material.opacity = THREE.MathUtils.lerp(p.arc.material.opacity, targetArcOp, damp(0.06));
+                    if (p.ring?.material) {
+                        const targetRingOp = sel ? (isSel ? (p.ring.userData.baseOpacity ?? p.ring.material.opacity) : 0) : (p.ring.userData.baseOpacity ?? p.ring.material.opacity);
+                        p.ring.material.opacity = THREE.MathUtils.lerp(p.ring.material.opacity, targetRingOp, damp(0.06));
+                    }
                 });
             });
 
@@ -2002,9 +2599,12 @@ export default function SolarSystemScene({
                     focusTargetWorldPos.copy(asteroidEntry.mesh.position);
                     followTarget(controls, camera, focusTargetWorldPos);
                 }
-            } else if (sel && planetsRef.current[sel]) {
-                planetsRef.current[sel].group.getWorldPosition(focusTargetWorldPos);
-                followTarget(controls, camera, focusTargetWorldPos);
+            } else if (sel) {
+                const selectedPlanetEntry = findPlanetEntryByName(planetsRef.current, extraSystemsRef.current, sel);
+                if (selectedPlanetEntry) {
+                    selectedPlanetEntry.group.getWorldPosition(focusTargetWorldPos);
+                    followTarget(controls, camera, focusTargetWorldPos);
+                }
             }
 
             if (!selectedPlanetRef.current && !selectedMoonRef.current && !selectedAsteroidRef.current) {
@@ -2042,6 +2642,7 @@ export default function SolarSystemScene({
                 moonsRef.current,
                 asteroidsRef.current,
                 planetsRef.current,
+                extraSystemsRef.current,
             );
             minCamDistRef.current = minAllowedDist;
             const desiredDist = Math.max(targetCamDistRef.current, minAllowedDist);
@@ -2082,6 +2683,11 @@ export default function SolarSystemScene({
             el.removeEventListener('touchstart', onTouchStart);
             el.removeEventListener('touchmove', onTouchMove);
             el.removeEventListener('touchend', onTouchEnd);
+            window.removeEventListener('pointerdown',  onGalaxyPointerDown);
+            window.removeEventListener('pointermove',  onGalaxyPointerMove);
+            window.removeEventListener('pointerup',    onGalaxyPointerUp);
+            window.removeEventListener('pointercancel', onGalaxyPointerUp);
+            if (labelsContainer && el.contains(labelsContainer)) el.removeChild(labelsContainer);
             if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2239,18 +2845,36 @@ export default function SolarSystemScene({
     }, [moonsHostPlanet, moons]);
 
     // ── Raycasting ────────────────────────────────────────────────────────
-    const handlePointerDown = useCallback(() => {
+    const handlePointerDown = useCallback((e) => {
         pointerRef.current = { down: true, moved: false };
+        if (isMilkyWayMode && !USE_3D_GALAXY) galaxySpinRef.current.lastX = e.clientX;
         hideSunTooltip();
+        hideHoverRing();
         if (mountRef.current) mountRef.current.style.cursor = 'grabbing';
-    }, [hideSunTooltip]);
+    }, [hideHoverRing, hideSunTooltip, isMilkyWayMode]);
 
     const handlePointerMove = useCallback((e) => {
         if (pointerRef.current.down) {
             pointerRef.current.moved = true;
+            // Drag-to-spin en mode galaxie image : sens horaire uniquement
+            if (isMilkyWayMode && !USE_3D_GALAXY) {
+                const spin = galaxySpinRef.current;
+                if (spin.lastX !== null) {
+                    const dx = e.clientX - spin.lastX;
+                    // drag gauche (dx < 0) = sens horaire → on ajoute du momentum positif
+                    // drag droit (dx > 0) = sens anti-horaire → on ignore (momentum ≥ 0)
+                    const delta = -dx * 0.00018;
+                    spin.momentum = Math.max(0, spin.momentum + delta);
+                }
+                spin.lastX = e.clientX;
+            }
             return;
         }
-        if (galaxyTransitionRef.current.phase !== 'idle') { hideSunTooltip(); return; }
+        if (galaxyTransitionRef.current.phase !== 'idle') {
+            hideSunTooltip();
+            hideHoverRing();
+            return;
+        }
 
         const rect = mountRef.current?.getBoundingClientRect();
         if (!rect) return;
@@ -2259,6 +2883,7 @@ export default function SolarSystemScene({
 
         if (isMilkyWayMode) {
             // Vue galaxie : tooltip sur toutes les étoiles cliquables
+            hideHoverRing();
             const stars = Object.values(galaxyStarsRef.current);
             const hit = stars.length ? getPointerHit(e.clientX, e.clientY, stars) : null;
             if (hit?.object.userData.type === 'galaxy-star') {
@@ -2268,55 +2893,57 @@ export default function SolarSystemScene({
                 hideSunTooltip();
             }
         } else {
-            // Vue système : tooltip sur planètes, lunes, soleil
-            const solarMeshes = Object.values(planetsRef.current).map(p => p.mesh);
-            const moonMeshes = moonsRef.current.map(m => m.mesh);
-            const extraMeshes = Object.values(extraSystemsRef.current).flatMap(s => s.planets.map(p => p.mesh));
-            const hit = getPointerHit(e.clientX, e.clientY, [...solarMeshes, ...moonMeshes, ...extraMeshes]);
+            const hit = getPointerHit(e.clientX, e.clientY, getActiveSystemInteractiveObjects());
             if (hit) {
                 const label = hit.object.userData.label
                     ?? planets.find(p => p.id === hit.object.userData.name)?.englishName
                     ?? hit.object.userData.name ?? '';
                 if (tooltipTextRef.current) tooltipTextRef.current.textContent = label;
                 showSunTooltip(x, y);
+                const hitName = hit.object.userData.name;
+                let newRing = null;
+                if (hit.object.userData.type === 'planet') {
+                    newRing = findPlanetHoverRing(hitName);
+                }
+                showHoverRing(newRing);
             } else {
                 hideSunTooltip();
+                hideHoverRing();
             }
         }
-    }, [getPointerHit, hideSunTooltip, isMilkyWayMode, planets, showSunTooltip]);
+    }, [findPlanetHoverRing, galaxySpinRef, getActiveSystemInteractiveObjects, getPointerHit, hideHoverRing, hideSunTooltip, isMilkyWayMode, planets, showHoverRing, showSunTooltip]);
 
     const handlePointerUp = useCallback((e) => {
         const { down, moved } = pointerRef.current;
         pointerRef.current = { down: false, moved: false };
+        galaxySpinRef.current.lastX = null;
         if (mountRef.current) mountRef.current.style.cursor = 'grab';
         if (!down || moved) return;
 
         if (galaxyTransitionRef.current.phase !== 'idle') return;
 
-        const galaxyStarMeshes = Object.values(galaxyStarsRef.current);
-        const extraPlanetMeshes = Object.values(extraSystemsRef.current).flatMap(s => s.planets.map(p => p.mesh));
         const meshes = [
-            ...Object.values(planetsRef.current).map(p => p.mesh),
-            ...asteroidsRef.current.map(a => a.mesh),
-            ...moonsRef.current.map(m => m.mesh),
-            ...galaxyStarMeshes,
-            ...extraPlanetMeshes,
+            ...Object.values(galaxyStarsRef.current),
+            ...getActiveSystemInteractiveObjects(),
         ];
         const hit = getPointerHit(e.clientX, e.clientY, meshes);
         if (!hit) return;
 
         const { type, name, systemId, parentName } = hit.object.userData;
         if (type === 'galaxy-star') { startGalaxySunTransition(systemId); }
-        else if (type === 'planet') { focusPlanet(name); }
+        else if (type === 'star') { focusStarSystem(systemId); }
+        else if (type === 'planet') { focusPlanet(name, systemId); }
         else if (type === 'asteroid') { focusAsteroid(name); }
         else if (type === 'moon') { focusMoon(name, parentName); }
-    }, [focusAsteroid, focusMoon, focusPlanet, getPointerHit, startGalaxySunTransition]);
+    }, [focusAsteroid, focusMoon, focusPlanet, focusStarSystem, getActiveSystemInteractiveObjects, getPointerHit, startGalaxySunTransition]);
 
     const handlePointerLeave = useCallback(() => {
         pointerRef.current = { down: false, moved: false };
+        galaxySpinRef.current.lastX = null;
         hideSunTooltip();
+        hideHoverRing();
         if (mountRef.current) mountRef.current.style.cursor = 'grab';
-    }, [hideSunTooltip]);
+    }, [hideHoverRing, hideSunTooltip]);
 
     return (
         <div style={{ position: 'absolute', inset: 0 }}>

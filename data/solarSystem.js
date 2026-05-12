@@ -8,5 +8,6 @@ export const milkyWay = [
     'Sagittarius A',
     'Solar System',
     'Kepler',
+    'Sirius',
+    'Vega',
 ]
-
