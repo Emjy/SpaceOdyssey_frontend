@@ -112,22 +112,80 @@
     pointer-events: auto;
 }
 
-.resetViewButton {
-    position: absolute;
-    right: 18px;
-    bottom: 18px;
-    z-index: 70;
-    padding: 10px 14px;
-    border: 1px solid rgba(162, 194, 255, 0.16);
-    color: var(--text-main);
-    background: rgba(7, 14, 26, 0.78);
-    cursor: pointer;
-    transition: border-color 0.2s ease, background 0.2s ease;
+.settingsShell {
+    position: relative;
+    display: flex;
+    justify-content: flex-end;
+    flex-shrink: 0;
 }
 
-.resetViewButton:hover {
+.settingsBtn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 1px solid rgba(162, 194, 255, 0.16);
+    background: rgba(7, 14, 26, 0.78);
+    color: rgba(162, 194, 255, 0.6);
+    cursor: pointer;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.settingsBtn:hover,
+.settingsBtnOpen {
     border-color: rgba(126, 231, 255, 0.32);
+    color: var(--accent);
     background: rgba(12, 22, 40, 0.92);
+}
+
+.settingsDropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    border-radius: 14px;
+    border: 1px solid rgba(162, 194, 255, 0.1);
+    background: rgba(6, 12, 20, 0.92);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    animation: dropdownIn 0.15s ease;
+    min-width: 160px;
+    z-index: 10;
+}
+
+.settingsItem {
+    width: 100%;
+    padding: 9px 14px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text-soft);
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.settingsItem:hover {
+    background: rgba(126, 231, 255, 0.07);
+    color: var(--text-main);
+}
+
+.settingsItemActive {
+    color: #44ff88;
+}
+
+.settingsItemActive:hover {
+    background: rgba(68, 255, 136, 0.07);
 }
 
 .navMeta {

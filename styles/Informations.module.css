@@ -8,109 +8,59 @@
     overflow: hidden;
 }
 
-.title {
-    width: 100%;
+.header {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-    padding: 14px 16px;
-    border: 0;
-    background: linear-gradient(180deg, rgba(126, 231, 255, 0.07), transparent);
-    color: var(--text-main);
-    text-align: left;
-    cursor: pointer;
+    gap: 2px;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid rgba(162, 194, 255, 0.08);
+    background: linear-gradient(180deg, rgba(126, 231, 255, 0.06), transparent);
 }
 
-.titleMeta {
+.type {
     color: var(--accent);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
     font-family: var(--font-mono-ui);
 }
 
-.titleName {
+.name {
     font-size: 1.1rem;
     font-weight: 600;
     letter-spacing: -0.04em;
+    color: var(--text-main);
 }
 
-.content {
+.rows {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 0 16px 16px;
+    padding: 8px 0 12px;
 }
 
-.summary {
-    padding: 10px 12px;
-    border-radius: var(--radius-md);
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.summaryLabel {
-    margin-bottom: 6px;
-    color: var(--text-dim);
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-family: var(--font-mono-ui);
-}
-
-.summaryValue {
-    font-size: 1rem;
-    color: var(--text-soft);
-}
-
-.grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 8px;
-}
-
-.card {
-    padding: 10px 12px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.035);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.cardHeader {
+.row {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 6px;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 16px;
 }
 
-.icon {
-    width: 28px;
-    height: 28px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    background: rgba(126, 231, 255, 0.08);
-    color: var(--accent);
+.row:hover {
+    background: rgba(126, 231, 255, 0.04);
 }
 
-.cardLabel {
+.rowLabel {
     color: var(--text-dim);
-    font-size: 0.8rem;
-}
-
-.cardValue {
-    color: var(--text-main);
-    font-size: 0.9rem;
-    line-height: 1.4;
-    word-break: break-word;
-}
-
-.cardComparison {
-    margin-top: 4px;
-    color: var(--accent);
-    font-size: 0.75rem;
+    font-size: 0.78rem;
+    flex-shrink: 0;
     font-family: var(--font-mono-ui);
-    opacity: 0.8;
+    letter-spacing: 0.04em;
+}
+
+.rowValue {
+    color: var(--text-soft);
+    font-size: 0.85rem;
+    text-align: right;
+    word-break: break-word;
 }

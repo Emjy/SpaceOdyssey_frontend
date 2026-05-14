@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { MdInfo, MdInfoOutline } from 'react-icons/md';
+import { MdInfo, MdInfoOutline, MdSettings } from 'react-icons/md';
 
 import styles from '../styles/HomePage.module.css';
 
@@ -19,6 +19,9 @@ export default function HomePage() {
     const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
     const [resetViewNonce, setResetViewNonce] = useState(0);
     const [viewMode, setViewMode] = useState('orbital'); // 'orbital' | 'catalog'
+    const [showHZ, setShowHZ] = useState(true);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const settingsRef = useRef(null);
 
     const { planets, asteroids, exoplanetSystems, loading } = useSpaceData();
 
@@ -51,6 +54,17 @@ export default function HomePage() {
         focusStarNonce,
     } = useFocusManager(planets, asteroids, exoplanetSystems);
 
+    useEffect(() => {
+        if (!settingsOpen) return;
+        function onClickOutside(e) {
+            if (settingsRef.current && !settingsRef.current.contains(e.target)) {
+                setSettingsOpen(false);
+            }
+        }
+        document.addEventListener('mousedown', onClickOutside);
+        return () => document.removeEventListener('mousedown', onClickOutside);
+    }, [settingsOpen]);
+
     if (loading) {
         return (
             <div className={styles.pageBackground}>
@@ -60,8 +74,8 @@ export default function HomePage() {
     }
 
     const handleResetView = () => {
-        focusOnSolarSystem();
         setResetViewNonce((value) => value + 1);
+        setSettingsOpen(false);
     };
 
     const isCatalog = viewMode === 'catalog';
@@ -107,6 +121,7 @@ export default function HomePage() {
                     focusAsteroid={focusAsteroid}
                     focusMoon={focusMoon}
                     focusStarNonce={focusStarNonce}
+                    showHZ={showHZ}
                 />
             </div>
 
@@ -116,62 +131,79 @@ export default function HomePage() {
                     allExtraSystems={allExtraSystems}
                     solarPlanets={planets}
                     moons={moons}
-                    selectedPlanet={selectedPlanet}
-                    focusMilkyWay={focusMilkyWay}
-                    focusStarSystem={focusStarSystem}
-                    focusOnSolarSystem={focusOnSolarSystem}
-                    focusPlanet={focusPlanet}
-                    focusMoon={focusMoon}
-                />
-            )}
-
-            {!isCatalog && (
-                <NavigationMenu
-                    planets={planets}
-                    asteroids={asteroids}
-                    moons={moons}
-                    exoplanetSystems={exoplanetSystems}
                     selectedMilkyWay={selectedMilkyWay}
-                    selectedSolarSystem={selectedSolarSystem}
                     selectedPlanet={selectedPlanet}
-                    selectedAsteroid={selectedAsteroid}
                     selectedMoon={selectedMoon}
                     focusMilkyWay={focusMilkyWay}
-                    focusSagittarusA={focusSagittarusA}
-                    focusOnSolarSystem={focusOnSolarSystem}
                     focusStarSystem={focusStarSystem}
+                    focusOnSolarSystem={focusOnSolarSystem}
                     focusPlanet={focusPlanet}
-                    focusAsteroid={focusAsteroid}
                     focusMoon={focusMoon}
-                    setFocusSA={setFocusSA}
-                    setFocusSolarSystem={setFocusSolarSystem}
-                    setFocusOnPlanet={setFocusOnPlanet}
-                    setFocusOnAsteroid={setFocusOnAsteroid}
-                    setFocusOnMoon={setFocusOnMoon}
-                    setSelectedMilkyWay={setSelectedMilkyWay}
-                    setSelectedSolarSystem={setSelectedSolarSystem}
-                    setSelectedAsteroid={setSelectedAsteroid}
-                    setMoons={setMoons}
-                    bodyCount={planets.length + asteroids.length}
-                    currentView={selectedSolarSystem || 'Soleil'}
-                    currentTarget={selectedPlanet || selectedAsteroid || selectedMoon || '—'}
                 />
             )}
 
-            {/* Bouton reset — mode orbital uniquement */}
-            {!isCatalog && (
-                <button
-                    className={`${styles.panel} ${styles.resetViewButton}`}
-                    onClick={handleResetView}
-                    type="button"
-                >
-                    Reset View
-                </button>
-            )}
+            <NavigationMenu
+                planets={planets}
+                asteroids={asteroids}
+                moons={moons}
+                exoplanetSystems={exoplanetSystems}
+                selectedMilkyWay={selectedMilkyWay}
+                selectedSolarSystem={selectedSolarSystem}
+                selectedPlanet={selectedPlanet}
+                selectedAsteroid={selectedAsteroid}
+                selectedMoon={selectedMoon}
+                focusMilkyWay={focusMilkyWay}
+                focusSagittarusA={focusSagittarusA}
+                focusOnSolarSystem={focusOnSolarSystem}
+                focusStarSystem={focusStarSystem}
+                focusPlanet={focusPlanet}
+                focusAsteroid={focusAsteroid}
+                focusMoon={focusMoon}
+                setFocusSA={setFocusSA}
+                setFocusSolarSystem={setFocusSolarSystem}
+                setFocusOnPlanet={setFocusOnPlanet}
+                setFocusOnAsteroid={setFocusOnAsteroid}
+                setFocusOnMoon={setFocusOnMoon}
+                setSelectedMilkyWay={setSelectedMilkyWay}
+                setSelectedSolarSystem={setSelectedSolarSystem}
+                setSelectedAsteroid={setSelectedAsteroid}
+                setMoons={setMoons}
+                bodyCount={planets.length + asteroids.length}
+                currentView={selectedSolarSystem || 'Soleil'}
+                currentTarget={selectedPlanet || selectedAsteroid || selectedMoon || '—'}
+            />
 
-            {/* Panneau infos — masqué en mode catalogue */}
+            {/* Panneau infos + settings — masqué en mode catalogue */}
             {!isCatalog && (
                 <aside className={styles.rightDock}>
+                    <div className={styles.settingsShell} ref={settingsRef}>
+                        <button
+                            className={`${styles.settingsBtn} ${settingsOpen ? styles.settingsBtnOpen : ''}`}
+                            onClick={() => setSettingsOpen(v => !v)}
+                            type="button"
+                            aria-label="Options"
+                        >
+                            <MdSettings />
+                        </button>
+                        {settingsOpen && (
+                            <div className={styles.settingsDropdown}>
+                                <button
+                                    className={styles.settingsItem}
+                                    onClick={handleResetView}
+                                    type="button"
+                                >
+                                    Vue du dessus
+                                </button>
+                                <button
+                                    className={`${styles.settingsItem} ${showHZ ? styles.settingsItemActive : ''}`}
+                                    onClick={() => setShowHZ(v => !v)}
+                                    type="button"
+                                >
+                                    Zone habitable
+                                </button>
+                            </div>
+                        )}
+                    </div>
                     <div className={styles.rightContainer}>
                         {infos ? (
                             <Informations infos={infos} />

@@ -1123,6 +1123,7 @@ export default function SolarSystemScene({
     viewMode = 'orbital',
     catalogSort = 'distance',
     focusStarNonce = 0,
+    showHZ = true,
 }) {
     // Combine systèmes statiques (Kepler, Sirius, Vega) + exoplanètes NASA dynamiques
     const allStarSystems = useMemo(
@@ -1147,6 +1148,8 @@ export default function SolarSystemScene({
     const galaxySpinRef   = useRef({ momentum: 0, lastX: null }); // drag-to-spin galaxy
     const galaxyStarsRef = useRef({});    // systemId → mesh
     const extraSystemsRef = useRef({});   // systemId → { root, planets[], hzRings[] }
+    const solarHZRingsRef = useRef([]);
+    const showHZRef = useRef(showHZ);
     const activeStarSystemRef = useRef(null);
     const viewModeRef = useRef('orbital');
     const catalogSortRef = useRef('distance');
@@ -1218,6 +1221,7 @@ export default function SolarSystemScene({
 
     useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
     useEffect(() => { catalogSortRef.current = catalogSort; }, [catalogSort]);
+    useEffect(() => { showHZRef.current = showHZ; }, [showHZ]);
 
     const markInteractionHot = useCallback((duration = INTERACTION_BOOST_MS) => {
         if (typeof performance === 'undefined') return;
@@ -1479,13 +1483,26 @@ export default function SolarSystemScene({
         const controls = ctrlRef.current;
         if (!camera || !controls) return;
 
-        controls.target.set(0, 0, 0);
-        camera.position.set(
-            SOLAR_SYSTEM_DEFAULT_POSITION.x,
-            SOLAR_SYSTEM_DEFAULT_POSITION.y,
-            SOLAR_SYSTEM_DEFAULT_POSITION.z
-        );
-        camera.lookAt(0, 0, 0);
+        if (resetViewNonce === 0) {
+            controls.target.set(0, 0, 0);
+            camera.position.set(
+                SOLAR_SYSTEM_DEFAULT_POSITION.x,
+                SOLAR_SYSTEM_DEFAULT_POSITION.y,
+                SOLAR_SYSTEM_DEFAULT_POSITION.z
+            );
+            camera.lookAt(0, 0, 0);
+        } else {
+            // Vue orbitale du dessus centrée sur l'objet actuellement focusé
+            const target = controls.target.clone();
+            const dist = Math.max(camera.position.distanceTo(controls.target), 15);
+            camera.position.set(
+                target.x,
+                target.y + dist * 0.555,
+                target.z + dist * 0.832
+            );
+            camera.lookAt(target);
+        }
+
         controls.enabled = true;
         galaxyTransitionRef.current.phase = 'idle';
         setOverlayOpacity(0);
@@ -2593,6 +2610,30 @@ export default function SolarSystemScene({
         solarStarRef.current = sunMesh;
         solarSystemRoot.add(sunMesh);
 
+        // Zone habitable du système solaire (Sun L=1 → inner≈0.953 AU, outer≈1.374 AU, 1 AU = r=16)
+        {
+            const hzInner = 0.953 * 16;
+            const hzOuter = 1.374 * 16;
+            const makeDashedCircle = (radius, color, opacity) => {
+                const pts = Array.from({ length: 129 }, (_, i) => {
+                    const a = (i / 128) * Math.PI * 2;
+                    return new THREE.Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius);
+                });
+                const geo = new THREE.BufferGeometry().setFromPoints(pts);
+                const mat = new THREE.LineDashedMaterial({ color, dashSize: 1.2, gapSize: 0.8, transparent: true, opacity, depthWrite: false });
+                const line = new THREE.Line(geo, mat);
+                line.computeLineDistances();
+                return line;
+            };
+            const fillGeo = new THREE.RingGeometry(hzInner, hzOuter, 128);
+            fillGeo.rotateX(-Math.PI / 2);
+            const fill = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: '#22ff66', transparent: true, opacity: 0.025, side: THREE.DoubleSide, depthWrite: false }));
+            const inner = makeDashedCircle(hzInner, '#44ff88', 0.55);
+            const outer = makeDashedCircle(hzOuter, '#22cc55', 0.30);
+            solarSystemRoot.add(fill, inner, outer);
+            solarHZRingsRef.current = [fill, inner, outer];
+        }
+
         // Planètes
         PLANET_DATA.forEach((cfg, i) => {
             const orbitRadius = getCompressedPlanetRadius(cfg.name, planets);
@@ -2896,6 +2937,7 @@ export default function SolarSystemScene({
 
             const activeSystem = activeStarSystemRef.current;
             solarSystemRoot.visible = !isMilkyWay && activeSystem === 'solar';
+            solarHZRingsRef.current.forEach(r => { r.visible = showHZRef.current; });
             galaxyRoot.visible = isMilkyWay;
             Object.entries(extraSystemsRef.current).forEach(([sid, { root }]) => {
                 root.visible = !isMilkyWay && activeSystem === sid;
@@ -3084,8 +3126,8 @@ export default function SolarSystemScene({
                     if (sm.material?.uniforms?.uTime) sm.material.uniforms.uTime.value = now;
                 }
 
-                // HZ rings: hidden in catalog mode
-                if (hzRings) hzRings.forEach(r => { r.visible = !isCatalog; });
+                // HZ rings: hidden in catalog mode or when toggled off
+                if (hzRings) hzRings.forEach(r => { r.visible = !isCatalog && showHZRef.current; });
 
                 // Catalog sort
                 let catalogOrder = null;

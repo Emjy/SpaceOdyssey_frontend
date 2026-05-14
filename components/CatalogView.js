@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MdChevronRight } from 'react-icons/md';
+import dynamic from 'next/dynamic';
 import styles from '../styles/CatalogView.module.css';
 import { getMoonStubsFromPlanet } from '../lib/solarApi';
+
+const StarCanvas = dynamic(() => import('./StarCanvas'), { ssr: false });
 
 // ── Couleurs des planètes solaires (hors API) ─────────────────────────────
 
@@ -39,7 +41,8 @@ const SOLAR_RING_MAP = {
 };
 
 const CAROUSEL_STEP_GAP = 92;
-const CAROUSEL_VISIBLE_RADIUS = 2;
+const CAROUSEL_VISIBLE_RADIUS_DEFAULT = 2;
+const CAROUSEL_VISIBLE_RADIUS_STARS   = 1;
 
 const EXO_TYPE_BACKGROUNDS = {
     'gas-giant': [
@@ -94,9 +97,9 @@ function getBodyVisual(body, kind) {
             variant: 'star',
             glowColor: color,
             starBackground: [
-                'repeating-radial-gradient(circle at 50% 50%, rgba(255,255,255,0.09) 0 3px, rgba(255,190,120,0.05) 3px 7px, rgba(0,0,0,0) 7px 11px)',
-                'radial-gradient(circle at 48% 46%, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 28%)',
-                `radial-gradient(circle at 50% 50%, ${color} 0%, rgba(0,0,0,0.82) 118%)`,
+                'repeating-radial-gradient(circle at 50% 50%, rgba(255,255,255,0.10) 0 3px, rgba(255,255,255,0) 3px 11px)',
+                'radial-gradient(circle at 42% 38%, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 32%)',
+                `radial-gradient(circle at 50% 50%, ${color} 0%, rgba(0,0,0,0.88) 120%)`,
             ].join(', '),
             background: `radial-gradient(circle at 45% 45%, ${color} 0%, rgba(0,0,0,0.84) 120%)`,
         };
@@ -237,6 +240,12 @@ function formatScaleExponent(value) {
     return `${String(roundedMantissa).replace('.', ',')} × 10^${exponent}`;
 }
 
+function getStarRelativeScale(sys, centeredKey, sortedSystems) {
+    const getRadius = (s) => s?.starInfo?.meanRadius ?? (s?.isSolar ? 695700 : 695700);
+    const focusedSys = sortedSystems.find(s => String(s.id) === String(centeredKey)) ?? sys;
+    return getComparativeScale(getRadius(sys), getRadius(focusedSys), 0.1, 5, 0.4);
+}
+
 function getPlanetRelativeScale(planet, centeredKey, sortedPlanets) {
     const sizeRatio = planet.size ?? (planet.meanRadius ? planet.meanRadius / 6371 : 0);
     const focusedPlanet = sortedPlanets.find((candidate) => (
@@ -269,6 +278,7 @@ function CarouselRow({
     getRenderedSize,
     getPhysicalDiameterKm,
     focusDiameter = 280,
+    visibleRadius = CAROUSEL_VISIBLE_RADIUS_DEFAULT,
     edgeGap = CAROUSEL_STEP_GAP,
 }) {
     const shellRef = useRef(null);
@@ -311,10 +321,31 @@ function CarouselRow({
         };
     }, [centeredIndex, items]);
 
+    const onFocusItemRef = useRef(onFocusItem);
+    onFocusItemRef.current = onFocusItem;
+
+    // Sync initiale : rapporte l'élément centré au montage (sauf si activeKey déjà connu)
+    useEffect(() => {
+        if (activeKey) return;
+        const item = items[centeredIndex];
+        if (item) onFocusItemRef.current?.(item);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const skipFocusRef = useRef(false);
     useEffect(() => {
         if (!activeKey) return;
+        skipFocusRef.current = true;
         setCenteredKey(activeKey);
     }, [activeKey]);
+
+    useEffect(() => {
+        if (skipFocusRef.current) {
+            skipFocusRef.current = false;
+            return;
+        }
+        const centeredItem = items[centeredIndex];
+        if (centeredItem) onFocusItemRef.current?.(centeredItem);
+    }, [centeredKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
     function goToIndex(nextIndex) {
         const boundedIndex = Math.max(0, Math.min(items.length - 1, nextIndex));
@@ -350,14 +381,14 @@ function CarouselRow({
     const visibleIndices = useMemo(() => {
         if (centeredIndex < 0) return [];
         const list = [];
-        for (let offset = -CAROUSEL_VISIBLE_RADIUS; offset <= CAROUSEL_VISIBLE_RADIUS; offset += 1) {
+        for (let offset = -visibleRadius; offset <= visibleRadius; offset += 1) {
             const index = centeredIndex + offset;
             if (index >= 0 && index < items.length) {
                 list.push(index);
             }
         }
         return list;
-    }, [centeredIndex, items.length]);
+    }, [centeredIndex, items.length, visibleRadius]);
 
     const centeredScale = useMemo(() => {
         if (centeredIndex < 0 || !items[centeredIndex]) return null;
@@ -471,29 +502,15 @@ function CarouselRow({
     );
 }
 
-function Breadcrumb({ items }) {
-    return (
-        <nav className={styles.breadcrumb}>
-            {items.map((item, i) => (
-                <React.Fragment key={item.label}>
-                    {i > 0 && <MdChevronRight className={styles.breadcrumbSep} />}
-                    {item.onClick
-                        ? <button className={styles.breadcrumbBtn} onClick={item.onClick} type="button">{item.label}</button>
-                        : <span className={styles.breadcrumbCurrent}>{item.label}</span>
-                    }
-                </React.Fragment>
-            ))}
-        </nav>
-    );
-}
-
 // ── Composant principal ───────────────────────────────────────────────────
 
 export default function CatalogView({
     allExtraSystems,
     solarPlanets,
     moons,
+    selectedMilkyWay,
     selectedPlanet,
+    selectedMoon,
     focusMilkyWay,
     focusStarSystem,
     focusOnSolarSystem,
@@ -505,7 +522,36 @@ export default function CatalogView({
     const [activeSystemId, setActiveSystemId] = useState(null);
     const [activePlanetName, setActivePlanetName] = useState(null);
     const [sort, setSort]                 = useState('distance'); // distance | size | mass
+    const [sortDir, setSortDir]           = useState('asc');
     const [starSort, setStarSort]         = useState('temperature'); // temperature | size | planets | name
+    const [starSortDir, setStarSortDir]   = useState('asc');
+
+    // ── Sync depuis la nav bar ───────────────────────────────────────────
+
+    useEffect(() => {
+        if (!selectedMilkyWay) return;
+        if (selectedMilkyWay === 'Solar System') {
+            setActiveSystemId('solar');
+            setLevel('stars');
+        } else {
+            const sys = allExtraSystems.find(s => s.milkyWayKey === selectedMilkyWay);
+            if (sys) {
+                setActiveSystemId(sys.id);
+                setLevel('stars');
+            }
+        }
+    }, [selectedMilkyWay, allExtraSystems]);
+
+    useEffect(() => {
+        if (!selectedPlanet) return;
+        setActivePlanetName(selectedPlanet);
+        setLevel('planets');
+    }, [selectedPlanet]);
+
+    useEffect(() => {
+        if (!selectedMoon) return;
+        setLevel('moons');
+    }, [selectedMoon]);
 
     // ── Système actif ────────────────────────────────────────────────────
 
@@ -539,9 +585,10 @@ export default function CatalogView({
         const copy = [...list];
         if (sort === 'size') copy.sort((a, b) => (a.size ?? 0) - (b.size ?? 0));
         else if (sort === 'mass') copy.sort((a, b) => (a.massEarth ?? 0) - (b.massEarth ?? 0));
-        else copy.sort((a, b) => (a.r ?? 0) - (b.r ?? 0)); // distance
+        else copy.sort((a, b) => (a.r ?? 0) - (b.r ?? 0));
+        if (sortDir === 'desc') copy.reverse();
         return copy;
-    }, [activeSystem, sort]);
+    }, [activeSystem, sort, sortDir]);
 
     // ── Étoiles filtrées ─────────────────────────────────────────────────
 
@@ -565,9 +612,10 @@ export default function CatalogView({
         } else {
             systems.sort((a, b) => getTemp(a) - getTemp(b));
         }
+        if (starSortDir === 'desc') systems.reverse();
 
         return systems;
-    }, [allSystems, starSort]);
+    }, [allSystems, starSort, starSortDir]);
 
     const solarMoonMap = useMemo(() => Object.fromEntries(
         solarPlanets.map((planet) => [
@@ -590,33 +638,6 @@ export default function CatalogView({
         return match ? (match.name ?? match.englishName ?? match.id) : null;
     }, [sortedPlanets, selectedPlanet]);
 
-    // ── Breadcrumb ───────────────────────────────────────────────────────
-
-    const breadcrumb = useMemo(() => {
-        const items = [
-            {
-                label: 'Galaxies',
-                onClick: level !== 'galaxies' ? () => { setLevel('galaxies'); } : null,
-            },
-        ];
-        if (level === 'stars' || level === 'planets' || level === 'moons') {
-            items.push({
-                label: 'Étoiles',
-                onClick: level !== 'stars' ? () => { setLevel('stars'); } : null,
-            });
-        }
-        if (level === 'planets' || level === 'moons') {
-            items.push({
-                label: activeSystem?.name ?? '—',
-                onClick: level !== 'planets' ? () => setLevel('planets') : null,
-            });
-        }
-        if (level === 'moons') {
-            items.push({ label: activePlanetName ?? '—', onClick: null });
-        }
-        return items;
-    }, [level, activeSystem, activePlanetName]);
-
     // ── Handlers ─────────────────────────────────────────────────────────
 
     function goGalaxy() {
@@ -628,14 +649,11 @@ export default function CatalogView({
     function goStar(sys) {
         if (sys.id === 'solar') focusOnSolarSystem?.();
         else focusStarSystem?.(sys.id);
-        setActiveSystemId(sys.id);
-        setLevel('planets');
     }
 
     function focusStarOnly(sys) {
         if (sys.id === 'solar') focusOnSolarSystem?.();
         else focusStarSystem?.(sys.id);
-        setActiveSystemId(sys.id);
     }
 
     function goPlanet(planet) {
@@ -644,8 +662,13 @@ export default function CatalogView({
             focusPlanet?.(name, activeSystemId);
         }
         setActivePlanetName(name);
-        if (activeSystemId === 'solar' && (solarMoonMap[name]?.length ?? 0) > 0) {
-            setLevel('moons');
+        if (activeSystemId === 'solar') {
+            const planetMoons = solarMoonMap[name] ?? [];
+            if (planetMoons.length > 0) {
+                setLevel('moons');
+                const firstMoon = planetMoons[0];
+                focusMoon?.(firstMoon.id ?? firstMoon.englishName, name);
+            }
         }
     }
 
@@ -661,21 +684,24 @@ export default function CatalogView({
         focusMoon?.(moon.id ?? moon.englishName, activePlanetName);
     }
 
+    // Bloquer tout scroll de page quand le catalogue est ouvert
+    useEffect(() => {
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = prev; };
+    }, []);
+
     useEffect(() => {
         const overlay = overlayRef.current;
         if (!overlay) return undefined;
 
-        const blockHistorySwipe = (event) => {
-            if (!overlay.contains(event.target)) return;
-            const absX = Math.abs(event.deltaX);
-            const absY = Math.abs(event.deltaY);
-            if (absX < 3) return;
+        const blockScroll = (event) => {
             event.preventDefault();
         };
 
-        window.addEventListener('wheel', blockHistorySwipe, { passive: false, capture: true });
+        overlay.addEventListener('wheel', blockScroll, { passive: false });
         return () => {
-            window.removeEventListener('wheel', blockHistorySwipe, { capture: true });
+            overlay.removeEventListener('wheel', blockScroll);
         };
     }, []);
 
@@ -683,7 +709,6 @@ export default function CatalogView({
 
     return (
         <div ref={overlayRef} className={styles.overlay}>
-            <Breadcrumb items={breadcrumb} />
 
             {/* ── Galaxies ── */}
             {level === 'galaxies' && (
@@ -728,10 +753,13 @@ export default function CatalogView({
                                 <button
                                     key={key}
                                     className={`${styles.sortBtn} ${starSort === key ? styles.sortBtnActive : ''}`}
-                                    onClick={() => setStarSort(key)}
+                                    onClick={() => {
+                                        if (starSort === key) setStarSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                                        else { setStarSort(key); setStarSortDir('asc'); }
+                                    }}
                                     type="button"
                                 >
-                                    {label}
+                                    {label}{starSort === key ? (starSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                                 </button>
                             ))}
                         </div>
@@ -746,12 +774,21 @@ export default function CatalogView({
                             const radiusKm = sys?.starInfo?.meanRadius ?? (sys?.isSolar ? 695700 : null);
                             return Number.isFinite(radiusKm) ? radiusKm * 2 : null;
                         }}
-                        focusDiameter={320}
-                        getRenderedSize={() => 320}
-                        renderItem={(sys, { isCentered }) => (
+                        focusDiameter={300}
+                        visibleRadius={CAROUSEL_VISIBLE_RADIUS_STARS}
+                        edgeGap={120}
+                        getRenderedSize={(sys, centeredKey, ctx) => {
+                            const relativeScale = getStarRelativeScale(sys, centeredKey, sortedSystems);
+                            const distance = ctx?.distanceFromCenter ?? 0;
+                            if (distance === 0) return 300;
+                            // Étoiles adjacentes : taille relative au focus, plafonnée
+                            const scaled = 300 * Math.min(Math.max(relativeScale, 0.2), 0.6);
+                            return Math.max(Math.round(scaled), 100);
+                        }}
+                        renderItem={(sys, { isCentered, renderedSize }) => (
                             <>
                                 <div className={styles.carouselVisualStage}>
-                                    <BodyVisual body={sys} kind="star" size={320} />
+                                    <StarCanvas sys={sys} size={Math.round(renderedSize)} />
                                 </div>
                                 <div className={styles.carouselCaption}>
                                     <div className={styles.carouselTitle}>{sys.name}</div>
@@ -781,10 +818,13 @@ export default function CatalogView({
                                 <button
                                     key={key}
                                     className={`${styles.sortBtn} ${sort === key ? styles.sortBtnActive : ''}`}
-                                    onClick={() => setSort(key)}
+                                    onClick={() => {
+                                        if (sort === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                                        else { setSort(key); setSortDir('asc'); }
+                                    }}
                                     type="button"
                                 >
-                                    {label}
+                                    {label}{sort === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                                 </button>
                             ))}
                         </div>
