@@ -44,6 +44,51 @@
     -webkit-backdrop-filter: none;
 }
 
+.modeTabsShell {
+    position: absolute;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 80;
+    pointer-events: auto;
+}
+
+.modeTabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(7, 14, 26, 0.74), rgba(7, 14, 26, 0.34));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.modeTab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 14px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(236, 244, 255, 0.72);
+    cursor: pointer;
+    font-size: 0.84rem;
+    line-height: 1;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.modeTab:hover {
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.modeTabActive {
+    color: var(--accent);
+    background: rgba(126, 231, 255, 0.12);
+    border-color: rgba(126, 231, 255, 0.24);
+}
+
 .leftDock {
     position: absolute;
     top: 18px;
@@ -509,6 +554,19 @@
 }
 
 @media screen and (max-width: 980px) {
+    .modeTabsShell {
+        top: 12px;
+    }
+
+    .modeTabs {
+        padding: 6px 8px;
+    }
+
+    .modeTab {
+        padding: 6px 12px;
+        font-size: 0.78rem;
+    }
+
     .topBar {
         left: 12px;
         right: 12px;

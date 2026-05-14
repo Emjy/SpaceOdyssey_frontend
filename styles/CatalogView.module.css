@@ -4,6 +4,9 @@
     background: #060914;
     z-index: 40;
     overflow-y: auto;
+    overscroll-behavior-x: none;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y pinch-zoom;
     padding: 72px 32px 48px;
 }
 
@@ -86,24 +89,6 @@
     color: var(--accent, #7ee7ff);
 }
 
-/* ── Search ────────────────────────────────────────────────────────────── */
-
-.searchBox {
-    width: 100%;
-    max-width: 300px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
-    padding: 8px 14px;
-    color: var(--text-main, #eef);
-    font-size: 0.88rem;
-    margin-bottom: 18px;
-    outline: none;
-    transition: border-color 0.15s;
-}
-.searchBox:focus { border-color: rgba(126,231,255,0.4); }
-.searchBox::placeholder { color: #445; }
-
 /* ── Grid ──────────────────────────────────────────────────────────────── */
 
 .grid {
@@ -112,7 +97,230 @@
     gap: 12px;
 }
 
-/* Single-item galaxy grid: centered */
+.carouselShell {
+    position: relative;
+    --carousel-focus-diameter: 280px;
+    --carousel-edge-gap: 56px;
+    touch-action: pan-y pinch-zoom;
+    padding: 2vh 0 1.4rem;
+}
+
+.carouselStage {
+    position: relative;
+    height: calc(min(52vh, 420px) + min(18vh, 170px) + 1rem);
+    overflow: visible;
+}
+
+.carouselItem {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    min-width: 0;
+    min-height: calc(min(52vh, 420px) + 7rem);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    cursor: pointer;
+    opacity: 0.64;
+    transform: translate3d(calc(-50% + var(--item-offset-x, 0px)), 0, 0);
+    transition:
+        opacity 0.24s ease,
+        filter 0.24s ease,
+        transform 0.8s ease-out,
+        width 0.8s ease-out;
+    overflow: visible;
+}
+
+.carouselItem:hover {
+    opacity: 0.88;
+}
+
+.carouselItemCentered {
+    opacity: 1;
+    z-index: 3;
+}
+
+.carouselItemActive {
+    opacity: 1;
+}
+
+.carouselVisualStage {
+    width: 100%;
+    height: min(52vh, 420px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+}
+
+.carouselVisualStage .sphere {
+    transition:
+        width 720ms ease-out,
+        height 720ms ease-out,
+        filter 720ms ease-out;
+}
+
+.carouselTitle {
+    font-size: clamp(0.9rem, 1vw, 1.15rem);
+    line-height: 1.25;
+    text-align: center;
+    color: rgba(238, 242, 255, 0.9);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-family: var(--font-mono-ui, monospace);
+}
+
+.carouselCaption {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: min(18vh, 170px);
+    text-align: center;
+}
+
+.carouselMeta {
+    font-size: clamp(0.72rem, 0.8vw, 0.84rem);
+    line-height: 1.2;
+    text-align: center;
+    color: var(--text-dim, #778);
+    font-family: var(--font-mono-ui, monospace);
+}
+
+.carouselAccent {
+    font-size: clamp(0.72rem, 0.8vw, 0.84rem);
+    line-height: 1.2;
+    text-align: center;
+    color: var(--accent, #7ee7ff);
+    font-family: var(--font-mono-ui, monospace);
+}
+
+.carouselInfo {
+    min-height: 3.8rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 0.28s ease, transform 0.28s ease;
+    pointer-events: none;
+}
+
+.carouselInfoVisible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.carouselScale {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    min-width: 140px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: rgba(7, 14, 26, 0.54);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.carouselScaleRule {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.35rem;
+}
+
+.carouselScaleLine {
+    position: relative;
+    height: 12px;
+    border-top: 2px solid rgba(126, 231, 255, 0.9);
+    border-bottom: 0;
+    transition: width 0.8s ease-out;
+}
+
+.carouselScaleTick {
+    position: absolute;
+    top: -4px;
+    width: 2px;
+    height: 10px;
+    background: rgba(126, 231, 255, 0.9);
+    transform: translateX(-50%);
+}
+
+.carouselScaleTickMajor {
+    top: -5px;
+    height: 12px;
+}
+
+.carouselScaleReadout {
+    color: rgba(238, 242, 255, 0.88);
+    font-size: 0.68rem;
+    font-family: var(--font-mono-ui, monospace);
+}
+
+.carouselScalePower {
+    color: rgba(197, 211, 240, 0.52);
+    font-size: 0.64rem;
+    font-family: var(--font-mono-ui, monospace);
+}
+
+@media (max-width: 720px) {
+    .carouselStage {
+        height: calc(min(42vh, 300px) + 7rem);
+    }
+
+    .carouselVisualStage {
+        height: min(42vh, 300px);
+    }
+
+    .carouselItem {
+        min-height: calc(min(42vh, 300px) + 6rem);
+    }
+
+    .carouselScale {
+        right: 4px;
+        bottom: -4px;
+        min-width: 120px;
+        padding: 8px 10px;
+    }
+}
+
+.galaxyHero {
+    position: relative;
+    width: min(100%, 640px);
+    height: min(50vh, 360px);
+    aspect-ratio: 16 / 9;
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 22px 54px rgba(0,0,0,0.34);
+}
+
+.galaxyHeroImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.galaxyHeroOverlay {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 50% 52%, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 24%),
+        linear-gradient(180deg, rgba(6,9,20,0.06) 0%, rgba(6,9,20,0.18) 100%);
+}
+
 .gridCentered {
     display: flex;
     flex-wrap: wrap;
@@ -192,33 +400,39 @@
     flex-shrink: 0;
     border-radius: 50%;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
+    filter: drop-shadow(0 8px 18px rgba(0,0,0,0.38));
 }
 
-/* Horizontal bands that scroll → rotation illusion */
-.sphere::after {
-    content: '';
+.sphereSurface {
     position: absolute;
-    /* wider than sphere to allow translation without clipping */
-    left: -60%;
-    top: 0;
-    width: 220%;
+    inset: 0;
     height: 100%;
-    background: repeating-linear-gradient(
-        90deg,
-        transparent 0px,
-        transparent 13px,
-        rgba(0,0,0,0.07) 13px,
-        rgba(0,0,0,0.07) 14px
-    );
-    animation: sphereScroll 16s linear infinite;
     border-radius: 50%;
-    pointer-events: none;
+    overflow: hidden;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    box-shadow: inset -6px -10px 18px rgba(0,0,0,0.54), inset 6px 6px 14px rgba(255,255,255,0.06);
+}
+
+.sphereSurfaceGradient {
+    animation: sphereScroll 18s linear infinite;
+    background-size: 140% 140%;
+}
+
+.sphereSurfaceImage {
+    animation: sphereRotate 22s linear infinite;
 }
 
 @keyframes sphereScroll {
-    from { transform: translateX(0); }
-    to   { transform: translateX(45%); }
+    from { background-position: 0% 50%; }
+    to   { background-position: 100% 50%; }
+}
+
+@keyframes sphereRotate {
+    from { background-position: 0% 50%; }
+    to   { background-position: 120% 50%; }
 }
 
 /* Highlight gloss always at top-left (light source stays fixed) */
@@ -233,20 +447,114 @@
 }
 
 /* Stars: no rotation bands, pulsing glow */
-.sphereStar::after { display: none; }
 .sphereStar {
-    animation: starPulse 3.5s ease-in-out infinite;
+    filter: drop-shadow(0 8px 18px rgba(0,0,0,0.34));
 }
 
-@keyframes starPulse {
-    0%,100% { box-shadow: 0 0 14px var(--glow), 0 0 28px var(--glow); }
-    50%      { box-shadow: 0 0 24px var(--glow), 0 0 50px var(--glow); }
+.starCore {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    background:
+        repeating-radial-gradient(circle at 50% 50%, rgba(255,255,255,0.12) 0 3px, rgba(255,180,110,0.08) 3px 7px, rgba(0,0,0,0) 7px 11px);
+    opacity: 0.6;
+    mix-blend-mode: soft-light;
+    z-index: 1;
+    animation: starGranulationDrift 18s linear infinite;
+}
+
+.sphereStar .sphereSurface {
+    box-shadow:
+        inset -8px -8px 18px rgba(0,0,0,0.34),
+        inset 10px 10px 16px rgba(255,255,255,0.04);
+    z-index: 0;
+}
+
+@keyframes starGranulationDrift {
+    from { transform: translateX(0) translateY(0) scale(1); }
+    50% { transform: translateX(2%) translateY(-1%) scale(1.02); }
+    to { transform: translateX(-1%) translateY(1%) scale(1); }
 }
 
 /* Galaxies: subtle nebula shimmer */
-.sphereGalaxy::after { display: none; }
 .sphereGalaxy {
     animation: galaxyShimmer 5s ease-in-out infinite;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 48% 52%, rgba(250,252,255,0.85) 0%, rgba(170,200,255,0.25) 16%, rgba(0,0,0,0) 22%),
+        radial-gradient(circle at 50% 50%, rgba(120,170,255,0.18) 0%, rgba(8,12,24,0.05) 56%, rgba(0,0,0,0) 68%),
+        #050813;
+    box-shadow: inset 0 0 18px rgba(255,255,255,0.06), 0 0 24px rgba(120,170,255,0.12);
+}
+
+.galaxyDisc {
+    position: absolute;
+    inset: 14% 10%;
+    border-radius: 50%;
+    background:
+        conic-gradient(from 0deg, rgba(0,0,0,0) 0deg 32deg, rgba(165,205,255,0.42) 32deg 72deg, rgba(0,0,0,0) 72deg 148deg, rgba(165,205,255,0.38) 148deg 196deg, rgba(0,0,0,0) 196deg 272deg, rgba(165,205,255,0.32) 272deg 324deg, rgba(0,0,0,0) 324deg 360deg),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.95) 0%, rgba(225,238,255,0.82) 8%, rgba(140,185,255,0.25) 20%, rgba(0,0,0,0) 54%);
+    transform: rotate(-18deg) scaleY(0.56);
+    filter: blur(0.4px);
+}
+
+.sphereMoon .sphereSurface {
+    box-shadow: inset -5px -8px 14px rgba(0,0,0,0.58), inset 2px 2px 6px rgba(255,255,255,0.05);
+}
+
+.sphereWithRings {
+    overflow: visible;
+}
+
+.ringTexture {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 190%;
+    height: auto;
+    transform: translate(-50%, -50%) rotate(-16deg);
+    opacity: 0.92;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.sphereWithRings .sphereSurface,
+.sphereWithRings::before {
+    z-index: 1;
+}
+@keyframes galaxyShimmer {
+    0%,100% { opacity: 0.85; }
+    50%      { opacity: 1; }
+}
+
+/* Empty / no moons */
+.empty {
+    color: var(--text-dim, #778);
+    font-size: 0.88rem;
+    padding: 48px 0;
+    text-align: center;
+}
+
+.sphereWithRings {
+    overflow: visible;
+}
+
+.ringTexture {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 190%;
+    height: auto;
+    transform: translate(-50%, -50%) rotate(-16deg);
+    opacity: 0.92;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.sphereWithRings .sphereSurface,
+.sphereWithRings::before {
+    z-index: 1;
 }
 @keyframes galaxyShimmer {
     0%,100% { opacity: 0.85; }

@@ -68,6 +68,24 @@ export default function HomePage() {
 
     return (
         <div className={styles.pageBackground}>
+            <div className={styles.modeTabsShell}>
+                <div className={styles.modeTabs}>
+                    <button
+                        type="button"
+                        className={`${styles.modeTab} ${!isCatalog ? styles.modeTabActive : ''}`}
+                        onClick={() => setViewMode('orbital')}
+                    >
+                        Vue orbitale
+                    </button>
+                    <button
+                        type="button"
+                        className={`${styles.modeTab} ${isCatalog ? styles.modeTabActive : ''}`}
+                        onClick={() => setViewMode('catalog')}
+                    >
+                        Catalogue
+                    </button>
+                </div>
+            </div>
 
             {/* Scène 3D — toujours montée, masquée en mode catalogue */}
             <div className={styles.sceneLayer} style={isCatalog ? { visibility: 'hidden' } : undefined}>
@@ -107,37 +125,38 @@ export default function HomePage() {
                 />
             )}
 
-            {/* Navigation breadcrumb — toujours visible */}
-            <NavigationMenu
-                planets={planets}
-                asteroids={asteroids}
-                moons={moons}
-                exoplanetSystems={exoplanetSystems}
-                selectedMilkyWay={selectedMilkyWay}
-                selectedSolarSystem={selectedSolarSystem}
-                selectedPlanet={selectedPlanet}
-                selectedAsteroid={selectedAsteroid}
-                selectedMoon={selectedMoon}
-                focusMilkyWay={focusMilkyWay}
-                focusSagittarusA={focusSagittarusA}
-                focusOnSolarSystem={focusOnSolarSystem}
-                focusStarSystem={focusStarSystem}
-                focusPlanet={focusPlanet}
-                focusAsteroid={focusAsteroid}
-                focusMoon={focusMoon}
-                setFocusSA={setFocusSA}
-                setFocusSolarSystem={setFocusSolarSystem}
-                setFocusOnPlanet={setFocusOnPlanet}
-                setFocusOnAsteroid={setFocusOnAsteroid}
-                setFocusOnMoon={setFocusOnMoon}
-                setSelectedMilkyWay={setSelectedMilkyWay}
-                setSelectedSolarSystem={setSelectedSolarSystem}
-                setSelectedAsteroid={setSelectedAsteroid}
-                setMoons={setMoons}
-                bodyCount={planets.length + asteroids.length}
-                currentView={selectedSolarSystem || 'Soleil'}
-                currentTarget={selectedPlanet || selectedAsteroid || selectedMoon || '—'}
-            />
+            {!isCatalog && (
+                <NavigationMenu
+                    planets={planets}
+                    asteroids={asteroids}
+                    moons={moons}
+                    exoplanetSystems={exoplanetSystems}
+                    selectedMilkyWay={selectedMilkyWay}
+                    selectedSolarSystem={selectedSolarSystem}
+                    selectedPlanet={selectedPlanet}
+                    selectedAsteroid={selectedAsteroid}
+                    selectedMoon={selectedMoon}
+                    focusMilkyWay={focusMilkyWay}
+                    focusSagittarusA={focusSagittarusA}
+                    focusOnSolarSystem={focusOnSolarSystem}
+                    focusStarSystem={focusStarSystem}
+                    focusPlanet={focusPlanet}
+                    focusAsteroid={focusAsteroid}
+                    focusMoon={focusMoon}
+                    setFocusSA={setFocusSA}
+                    setFocusSolarSystem={setFocusSolarSystem}
+                    setFocusOnPlanet={setFocusOnPlanet}
+                    setFocusOnAsteroid={setFocusOnAsteroid}
+                    setFocusOnMoon={setFocusOnMoon}
+                    setSelectedMilkyWay={setSelectedMilkyWay}
+                    setSelectedSolarSystem={setSelectedSolarSystem}
+                    setSelectedAsteroid={setSelectedAsteroid}
+                    setMoons={setMoons}
+                    bodyCount={planets.length + asteroids.length}
+                    currentView={selectedSolarSystem || 'Soleil'}
+                    currentTarget={selectedPlanet || selectedAsteroid || selectedMoon || '—'}
+                />
+            )}
 
             {/* Bouton reset — mode orbital uniquement */}
             {!isCatalog && (
@@ -149,23 +168,6 @@ export default function HomePage() {
                     Reset View
                 </button>
             )}
-
-            {/* Toggle catalogue / orbital */}
-            <button
-                onClick={() => setViewMode(m => m === 'orbital' ? 'catalog' : 'orbital')}
-                style={{
-                    position: 'fixed', bottom: 20, left: 20, zIndex: 60,
-                    background: isCatalog ? 'rgba(126,231,255,0.15)' : 'rgba(255,255,255,0.06)',
-                    border: `1px solid ${isCatalog ? 'rgba(126,231,255,0.4)' : 'rgba(255,255,255,0.12)'}`,
-                    color: isCatalog ? '#7ee7ff' : '#aac',
-                    borderRadius: 10, padding: '7px 16px',
-                    cursor: 'pointer', fontSize: '0.82rem',
-                    backdropFilter: 'blur(10px)',
-                }}
-                type="button"
-            >
-                {isCatalog ? '◎ Vue orbitale' : '⊞ Catalogue'}
-            </button>
 
             {/* Panneau infos — masqué en mode catalogue */}
             {!isCatalog && (
