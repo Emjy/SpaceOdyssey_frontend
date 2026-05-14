@@ -1,21 +1,102 @@
 'use client';
 
-import React, { useMemo, useState, memo } from 'react';
-import { MdChevronRight, MdKeyboardArrowDown } from 'react-icons/md';
-import { milkyWay } from '../data/solarSystem';
-import { EXTRA_STAR_SYSTEMS } from '../data/starSystems';
+import React, { useMemo, useState, memo, useEffect, useRef, useCallback } from 'react';
+import { MdChevronRight, MdKeyboardArrowDown, MdSearch } from 'react-icons/md';
 import styles from '../styles/HomePage.module.css';
 
-const displayLabel = (label) => {
-    if (label === 'Solar System') return 'Soleil';
-    if (label === 'Sagittarius A') return 'Sagittarius A*';
-    return label;
-};
+// ─── Dropdown générique avec recherche ───────────────────────────────────────
+
+function Dropdown({ items, onClose, searchThreshold = 8 }) {
+    const [query, setQuery] = useState('');
+    const inputRef = useRef(null);
+
+    useEffect(() => {
+        if (items.length >= searchThreshold) inputRef.current?.focus();
+    }, [items.length, searchThreshold]);
+
+    const filtered = useMemo(() => {
+        if (!query) return items;
+        const q = query.toLowerCase();
+        return items.filter((item) =>
+            item.kind === 'label' || item.label?.toLowerCase().includes(q)
+        );
+    }, [items, query]);
+
+    // Filtre les labels orphelins (label suivi d'un autre label ou rien)
+    const visible = useMemo(() => {
+        return filtered.filter((item, i) => {
+            if (item.kind !== 'label') return true;
+            const next = filtered[i + 1];
+            return next && next.kind !== 'label';
+        });
+    }, [filtered]);
+
+    return (
+        <div className={styles.navDropdown}>
+            {items.length >= searchThreshold && (
+                <div className={styles.navDropdownSearch}>
+                    <MdSearch className={styles.navDropdownSearchIcon} />
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        className={styles.navDropdownSearchInput}
+                        placeholder="Rechercher…"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>
+            )}
+            {visible.map((item) =>
+                item.kind === 'label' ? (
+                    <div key={item.id} className={styles.navDropdownSection}>
+                        {item.label}
+                    </div>
+                ) : (
+                    <button
+                        key={item.id}
+                        type="button"
+                        className={`${styles.navDropdownItem} ${item.active ? styles.navDropdownItemActive : ''}`}
+                        onClick={() => { item.onClick(); onClose(); }}
+                    >
+                        {item.dot && (
+                            <span className={styles.navDropdownDot} style={{ background: item.dot }} />
+                        )}
+                        <span className={styles.navDropdownLabel}>{item.label}</span>
+                        {item.meta && <span className={styles.navDropdownMeta}>{item.meta}</span>}
+                        {item.active && <span className={styles.navDropdownTick}>•</span>}
+                    </button>
+                )
+            )}
+            {visible.length === 0 && (
+                <div className={styles.navDropdownEmpty}>Aucun résultat</div>
+            )}
+        </div>
+    );
+}
+
+// ─── Bouton de section breadcrumb ────────────────────────────────────────────
+
+function NavSegment({ label, isOpen, onClick }) {
+    return (
+        <button
+            type="button"
+            className={`${styles.navTrigger} ${isOpen ? styles.navTriggerOpen : ''}`}
+            onClick={onClick}
+        >
+            <span className={styles.navTriggerLabel}>{label}</span>
+            <MdKeyboardArrowDown className={`${styles.navTriggerIcon} ${isOpen ? styles.navTriggerIconOpen : ''}`} />
+        </button>
+    );
+}
+
+// ─── Composant principal ──────────────────────────────────────────────────────
 
 const NavigationMenu = memo(({
-    planets,
-    asteroids,
-    moons,
+    planets = [],
+    asteroids = [],
+    moons = [],
+    exoplanetSystems = [],
     selectedMilkyWay,
     selectedSolarSystem,
     selectedPlanet,
@@ -31,223 +112,219 @@ const NavigationMenu = memo(({
     setSelectedMilkyWay,
 }) => {
     const [openMenu, setOpenMenu] = useState(null);
+    const navRef = useRef(null);
 
+    // Lunes filtrées (sans les lunes "S/...")
     const moonItems = useMemo(
         () => moons.filter((item) => !item.name?.startsWith('S/')),
         [moons]
     );
 
-    const selectedPlanetLabel = selectedPlanet
-        ? planets.find((item) => item.id === selectedPlanet)?.englishName || selectedPlanet
-        : null;
-    const selectedAsteroidLabel = selectedAsteroid
-        ? asteroids.find((item) => item.id === selectedAsteroid)?.englishName || selectedAsteroid
-        : null;
-    const selectedMoonLabel = selectedMoon
-        ? moonItems.find((item) => item.id === selectedMoon)?.englishName || selectedMoon
-        : null;
+    // Système actif (solar | exo_xxx | null)
+    const activeSystemId = useMemo(() => {
+        if (selectedMilkyWay === 'Solar System') return 'solar';
+        if (!selectedMilkyWay) return null;
+        return exoplanetSystems.find((s) => s.milkyWayKey === selectedMilkyWay)?.id ?? null;
+    }, [selectedMilkyWay, exoplanetSystems]);
 
-    const closeMenu = () => setOpenMenu(null);
+    const activeExoSystem = useMemo(
+        () => exoplanetSystems.find((s) => s.id === activeSystemId) ?? null,
+        [exoplanetSystems, activeSystemId]
+    );
 
-    const milkyWayItems = milkyWay.map((item) => ({
-        id: item,
-        label: displayLabel(item),
-        active: selectedMilkyWay === item,
-        onClick: () => {
-            if (item === 'Sagittarius A') {
-                setSelectedMilkyWay(item);
-                focusSagittarusA();
-            } else if (item === 'Solar System') {
-                focusStarSystem('solar');
-            } else {
-                const extraSystem = EXTRA_STAR_SYSTEMS.find((system) => system.milkyWayKey === item);
-                if (extraSystem) focusStarSystem(extraSystem.id);
-            }
-            closeMenu();
-        },
-    }));
+    const closeMenu = useCallback(() => setOpenMenu(null), []);
 
-    const sunItems = [
+    const toggleMenu = useCallback((id) => {
+        setOpenMenu((cur) => cur === id ? null : id);
+    }, []);
+
+    // Ferme sur clic extérieur
+    useEffect(() => {
+        if (!openMenu) return;
+        const handler = (e) => {
+            if (navRef.current && !navRef.current.contains(e.target)) closeMenu();
+        };
+        document.addEventListener('pointerdown', handler, { capture: true });
+        return () => document.removeEventListener('pointerdown', handler, { capture: true });
+    }, [openMenu, closeMenu]);
+
+    // Escape ferme le menu
+    useEffect(() => {
+        const handler = (e) => { if (e.key === 'Escape') closeMenu(); };
+        document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
+    }, [closeMenu]);
+
+    // ── Niveau 1 : Voie Lactée ────────────────────────────────────────────────
+
+    const galaxyLabel = selectedMilkyWay === 'Sagittarius A' ? 'Sagittarius A*' : 'Voie Lactée';
+
+    const galaxyItems = [
         {
-            id: 'sun-home',
-            label: 'Soleil',
-            active: selectedMilkyWay === 'Solar System' && !selectedPlanet && !selectedAsteroid && !selectedMoon && selectedSolarSystem !== 'Asteroid Belt',
-            onClick: () => {
-                focusOnSolarSystem();
-                closeMenu();
-            },
+            id: 'galaxy-overview',
+            label: 'Voie Lactée',
+            active: selectedMilkyWay === null,
+            onClick: focusMilkyWay,
         },
         {
-            id: 'asteroid-belt-home',
-            label: "Ceinture d'astéroïdes",
-            active: selectedSolarSystem === 'Asteroid Belt' && !selectedAsteroid,
-            onClick: () => {
-                focusAsteroid('');
-                closeMenu();
-            },
-        },
-    ];
-
-    const bodyItems = [
-        { id: 'planets-label', label: 'Planètes', kind: 'label' },
-        ...planets.map((item) => ({
-            id: item.id,
-            label: item.englishName,
-            active: selectedPlanet === item.id,
-            onClick: () => {
-                focusPlanet(item.id, 'solar');
-                closeMenu();
-            },
-        })),
-        { id: 'asteroids-label', label: 'Astéroïdes', kind: 'label' },
-        {
-            id: 'asteroid-belt',
-            label: "Ceinture d'astéroïdes",
-            active: selectedSolarSystem === 'Asteroid Belt' && !selectedAsteroid,
-            onClick: () => {
-                focusAsteroid('');
-                closeMenu();
-            },
-        },
-        ...asteroids.map((item) => ({
-            id: item.id,
-            label: item.englishName,
-            active: selectedAsteroid === item.id,
-            onClick: () => {
-                focusAsteroid(item.id);
-                closeMenu();
-            },
-        })),
-    ];
-
-    const breadcrumbs = [
-        {
-            id: 'milkyway',
-            label: 'Milky Way',
-            items: [
-                {
-                    id: 'milky-way-overview',
-                    label: 'Milky Way',
-                    active: selectedMilkyWay === null,
-                    onClick: () => {
-                        focusMilkyWay();
-                        closeMenu();
-                    },
-                },
-                ...milkyWayItems,
-            ],
-        },
-    ];
-
-    if (selectedMilkyWay === 'Sagittarius A') {
-        breadcrumbs.push({
             id: 'sagittarius',
             label: 'Sagittarius A*',
-            items: [
-                {
-                    id: 'sagittarius-current',
-                    label: 'Sagittarius A*',
-                    active: true,
-                    onClick: () => {
-                        setSelectedMilkyWay('Sagittarius A');
-                        focusSagittarusA();
-                        closeMenu();
-                    },
-                },
-            ],
-        });
-    }
+            active: selectedMilkyWay === 'Sagittarius A',
+            dot: '#ff6633',
+            meta: 'Trou noir',
+            onClick: () => { setSelectedMilkyWay('Sagittarius A'); focusSagittarusA(); },
+        },
+    ];
 
-    if (selectedMilkyWay === 'Solar System') {
-        breadcrumbs.push({
-            id: 'sun',
+    // ── Niveau 2 : Étoile ────────────────────────────────────────────────────
+
+    const starLabel = useMemo(() => {
+        if (!selectedMilkyWay || selectedMilkyWay === 'Sagittarius A') return 'Étoile';
+        if (selectedMilkyWay === 'Solar System') return 'Soleil';
+        return selectedMilkyWay; // hostname de l'exoétoile
+    }, [selectedMilkyWay]);
+
+    const starItems = useMemo(() => [
+        {
+            id: 'solar',
             label: 'Soleil',
-            items: sunItems,
-        });
-        breadcrumbs.push({
-            id: 'bodies',
-            label: selectedPlanetLabel || selectedAsteroidLabel || (selectedSolarSystem === 'Asteroid Belt' ? "Ceinture d'astéroïdes" : "Corps célestes"),
-            items: bodyItems,
-        });
-    }
+            active: selectedMilkyWay === 'Solar System',
+            dot: '#ffe880',
+            meta: 'G2V',
+            onClick: () => focusStarSystem('solar'),
+        },
+        { id: 'exo-divider', label: `Exoétoiles (${exoplanetSystems.length})`, kind: 'label' },
+        ...exoplanetSystems.map((sys) => ({
+            id: sys.id,
+            label: sys.name,
+            active: selectedMilkyWay === sys.milkyWayKey,
+            dot: sys.starColor,
+            meta: `${sys.planets.length}p`,
+            onClick: () => focusStarSystem(sys.id),
+        })),
+    ], [exoplanetSystems, selectedMilkyWay, focusStarSystem]);
 
-    const selectedExtraSystem = EXTRA_STAR_SYSTEMS.find((system) => system.milkyWayKey === selectedMilkyWay);
+    // ── Niveau 3 : Planète / corps ───────────────────────────────────────────
 
-    if (selectedExtraSystem) {
-        breadcrumbs.push({
-            id: selectedExtraSystem.id,
-            label: selectedExtraSystem.name,
-            items: [
-                {
-                    id: `${selectedExtraSystem.id}-home`,
-                    label: selectedExtraSystem.name,
-                    active: !selectedPlanet,
-                    onClick: () => { focusStarSystem(selectedExtraSystem.id); closeMenu(); },
-                },
-                { id: `${selectedExtraSystem.id}-planets-label`, label: 'Planètes', kind: 'label' },
-                ...selectedExtraSystem.planets.map((planet) => ({
-                    id: planet.name,
-                    label: planet.name.toUpperCase(),
-                    active: selectedPlanet === planet.name,
-                    onClick: () => { focusPlanet(planet.name, selectedExtraSystem.id); closeMenu(); },
+    const planetLabel = useMemo(() => {
+        if (selectedAsteroid) {
+            return asteroids.find((a) => a.id === selectedAsteroid)?.englishName ?? selectedAsteroid;
+        }
+        if (selectedPlanet) {
+            if (activeSystemId === 'solar') {
+                return planets.find((p) => p.id === selectedPlanet)?.englishName ?? selectedPlanet;
+            }
+            return selectedPlanet; // nom de la planète exo
+        }
+        if (selectedSolarSystem === 'Asteroid Belt') return "Ceinture d'astéroïdes";
+        return 'Corps célestes';
+    }, [selectedPlanet, selectedAsteroid, selectedSolarSystem, planets, asteroids, activeSystemId]);
+
+    const planetItems = useMemo(() => {
+        if (activeSystemId === 'solar') {
+            return [
+                { id: 'pl-label', label: 'Planètes', kind: 'label' },
+                ...planets.map((p) => ({
+                    id: p.id,
+                    label: p.englishName,
+                    active: selectedPlanet === p.id,
+                    onClick: () => focusPlanet(p.id, 'solar'),
                 })),
-            ],
-        });
-    }
-
-    if (selectedMilkyWay === 'Solar System' && moonItems.length > 0) {
-        breadcrumbs.push({
-            id: 'moons',
-            label: selectedMoonLabel || 'Lunes',
-            items: moonItems.map((item) => ({
-                id: item.id,
-                label: item.englishName,
-                active: selectedMoon === item.id,
-                onClick: () => {
-                    focusMoon(item.id, selectedPlanet);
-                    closeMenu();
+                { id: 'ast-label', label: 'Astéroïdes', kind: 'label' },
+                {
+                    id: 'asteroid-belt',
+                    label: "Ceinture d'astéroïdes",
+                    active: selectedSolarSystem === 'Asteroid Belt' && !selectedAsteroid,
+                    onClick: () => focusAsteroid(''),
                 },
-            })),
-        });
-    }
+                ...asteroids.map((a) => ({
+                    id: a.id,
+                    label: a.englishName,
+                    active: selectedAsteroid === a.id,
+                    onClick: () => focusAsteroid(a.id),
+                })),
+            ];
+        }
+        if (activeExoSystem) {
+            return [
+                { id: 'exo-pl-label', label: `Planètes de ${activeExoSystem.name}`, kind: 'label' },
+                ...activeExoSystem.planets.map((p) => ({
+                    id: p.name,
+                    label: p.name,
+                    active: selectedPlanet === p.name,
+                    meta: p.meanRadius ? `${Math.round(p.meanRadius / 6371 * 10) / 10}× Terre` : undefined,
+                    onClick: () => focusPlanet(p.name, activeExoSystem.id),
+                })),
+            ];
+        }
+        return [];
+    }, [activeSystemId, activeExoSystem, planets, asteroids, selectedPlanet, selectedAsteroid, selectedSolarSystem, focusPlanet, focusAsteroid]);
+
+    // ── Niveau 4 : Lune ──────────────────────────────────────────────────────
+
+    const moonLabel = useMemo(() => {
+        if (!selectedMoon) return 'Lunes';
+        return moonItems.find((m) => m.id === selectedMoon)?.englishName ?? selectedMoon;
+    }, [selectedMoon, moonItems]);
+
+    const moonDropItems = useMemo(() =>
+        moonItems.map((m) => ({
+            id: m.id,
+            label: m.englishName,
+            active: selectedMoon === m.id,
+            onClick: () => focusMoon(m.id, selectedPlanet),
+        })),
+        [moonItems, selectedMoon, selectedPlanet, focusMoon]
+    );
+
+    // ── Construction des segments breadcrumb ──────────────────────────────────
+
+    const segments = useMemo(() => {
+        const list = [
+            { id: 'galaxy', label: galaxyLabel, items: galaxyItems },
+        ];
+
+        // Niveau étoile : visible si on n'est pas sur Sagittarius A
+        if (selectedMilkyWay !== 'Sagittarius A') {
+            list.push({ id: 'star', label: starLabel, items: starItems });
+        }
+
+        // Niveau planète : visible si un système stellaire est actif
+        if (activeSystemId && planetItems.length > 0) {
+            list.push({ id: 'planet', label: planetLabel, items: planetItems });
+        }
+
+        // Niveau lune : visible si des lunes sont disponibles
+        if (activeSystemId === 'solar' && moonDropItems.length > 0) {
+            list.push({ id: 'moon', label: moonLabel, items: moonDropItems });
+        }
+
+        return list;
+    }, [
+        galaxyLabel, galaxyItems,
+        selectedMilkyWay, starLabel, starItems,
+        activeSystemId, planetLabel, planetItems,
+        moonDropItems, moonLabel,
+    ]);
 
     return (
-        <div className={styles.topNavShell}>
-            <nav className={styles.topNav} aria-label="Fil d'ariane du systeme solaire">
-                {breadcrumbs.map((section, index) => (
-                    <React.Fragment key={section.id}>
+        <div className={styles.topNavShell} ref={navRef}>
+            <nav className={styles.topNav} aria-label="Navigation spatiale">
+                {segments.map((seg, i) => (
+                    <React.Fragment key={seg.id}>
                         <div className={styles.navGroup}>
-                            <button
-                                type="button"
-                                className={`${styles.navTrigger} ${openMenu === section.id ? styles.navTriggerOpen : ''}`}
-                                onClick={() => setOpenMenu((current) => current === section.id ? null : section.id)}
-                            >
-                                <span className={styles.navTriggerLabel}>{section.label}</span>
-                                <MdKeyboardArrowDown className={styles.navTriggerIcon} />
-                            </button>
-                            {openMenu === section.id && (
-                                <div className={styles.navDropdown}>
-                                    {section.items.map((item) => (
-                                        item.kind === 'label' ? (
-                                            <div key={item.id} className={styles.navDropdownSection}>
-                                                {item.label}
-                                            </div>
-                                        ) : (
-                                            <button
-                                                key={item.id}
-                                                type="button"
-                                                className={`${styles.navDropdownItem} ${item.active ? styles.navDropdownItemActive : ''}`}
-                                                onClick={item.onClick}
-                                            >
-                                                <span>{item.label}</span>
-                                                {item.active && <span className={styles.navDropdownTick}>•</span>}
-                                            </button>
-                                        )
-                                    ))}
-                                </div>
+                            <NavSegment
+                                label={seg.label}
+                                isOpen={openMenu === seg.id}
+                                onClick={() => toggleMenu(seg.id)}
+                            />
+                            {openMenu === seg.id && (
+                                <Dropdown items={seg.items} onClose={closeMenu} />
                             )}
                         </div>
-                        {index < breadcrumbs.length - 1 && <MdChevronRight className={styles.navChevron} />}
+                        {i < segments.length - 1 && (
+                            <MdChevronRight className={styles.navChevron} aria-hidden />
+                        )}
                     </React.Fragment>
                 ))}
             </nav>
@@ -256,5 +333,4 @@ const NavigationMenu = memo(({
 });
 
 NavigationMenu.displayName = 'NavigationMenu';
-
 export default NavigationMenu;

@@ -659,6 +659,7 @@ function getActiveTargetMinDistance(camera, selectedMoon, selectedAsteroid, sele
 export default function SolarSystemScene({
     planets = [],
     asteroids = [],
+    exoplanetSystems = [],
     focusOnPlanet = false,
     resetViewNonce = 0,
     selectedMilkyWay,
@@ -672,6 +673,14 @@ export default function SolarSystemScene({
     focusAsteroid,
     focusMoon,
 }) {
+    // Combine systèmes statiques (Kepler, Sirius, Vega) + exoplanètes NASA dynamiques
+    const allStarSystems = useMemo(
+        () => [...EXTRA_STAR_SYSTEMS, ...exoplanetSystems],
+        [exoplanetSystems]
+    );
+    const allStarSystemsRef = useRef(allStarSystems);
+    allStarSystemsRef.current = allStarSystems;
+
     const [moonDataVersion, setMoonDataVersion] = useState(0);
     const [proximityPlanet, setProximityPlanet] = useState(null);
     const mountRef = useRef(null);
@@ -706,7 +715,7 @@ export default function SolarSystemScene({
     const galaxySunRef = useRef(null);
     const isMilkyWayModeRef = useRef(
         selectedMilkyWay !== 'Solar System'
-        && !EXTRA_STAR_SYSTEMS.some((system) => system.milkyWayKey === selectedMilkyWay)
+        && !allStarSystems.some((system) => system.milkyWayKey === selectedMilkyWay)
     );
     const overlayRef = useRef(null);
     const sunTooltipRef = useRef(null);
@@ -739,7 +748,7 @@ export default function SolarSystemScene({
 
     const activeStarSystem = selectedMilkyWay === 'Solar System'
         ? 'solar'
-        : EXTRA_STAR_SYSTEMS.find((system) => system.milkyWayKey === selectedMilkyWay)?.id ?? null;
+        : allStarSystems.find((system) => system.milkyWayKey === selectedMilkyWay)?.id ?? null;
     const isMilkyWayMode = activeStarSystem === null;
 
     useEffect(() => {
@@ -1808,73 +1817,6 @@ export default function SolarSystemScene({
                 annCtx.fillText(`${ly / 1000}k ly`, CX - r2 * Math.sin(Lr2) + 6, CY - r2 * Math.cos(Lr2));
             });
 
-            // ── Noms des bras spiraux (SVG textPath — texte courbe, taille fixe) ──
-            const svgNS = 'http://www.w3.org/2000/svg';
-            labelsContainer = document.createElementNS(svgNS, 'svg');
-            labelsContainer.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;';
-            el.appendChild(labelsContainer);
-
-            // Filtre lueur bleue
-            const svgDefs = document.createElementNS(svgNS, 'defs');
-            svgDefs.innerHTML = `<filter id="arm-glow" x="-20%" y="-20%" width="140%" height="140%">
-  <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="blur"/>
-  <feFlood flood-color="rgb(100,150,255)" flood-opacity="0.45" result="col"/>
-  <feComposite in="col" in2="blur" operator="in" result="glow"/>
-  <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
-</filter>`;
-            labelsContainer.appendChild(svgDefs);
-
-            const ARM_SVG_DEFS = [
-                { arm: armDefinitions[0], rStart: 56,  rEnd: 83,  text: 'Perseus Arm',          fill: 'rgba(220,235,255,0.90)' },
-                { arm: armDefinitions[1], rStart: 36,  rEnd: 63,  text: 'Scutum-Centaurus Arm', fill: 'rgba(220,235,255,0.90)' },
-                { arm: armDefinitions[2], rStart: 52,  rEnd: 30,  text: 'Sagittarius Arm',      fill: 'rgba(220,235,255,0.90)' },
-                { arm: armDefinitions[3], rStart: 42,  rEnd: 22,  text: 'Norma Arm',            fill: 'rgba(220,235,255,0.85)' },
-                { arm: armDefinitions[0], rStart: 94,  rEnd: 122, text: 'Outer Arm',            fill: 'rgba(200,220,255,0.80)' },
-                { arm: armDefinitions[0], rStart: 61,  rEnd: 68,  text: 'Orion Spur',           fill: 'rgba(210,230,255,0.75)' },
-            ];
-            const LABEL_SAMPLES = 28;
-            const _projTmp = new THREE.Vector3();
-            const armSvgLabels = ARM_SVG_DEFS.map(({ arm, rStart, rEnd, text, fill }, idx) => {
-                // Points locaux pré-calculés dans l'espace de galaxyDisk
-                const localPts = [];
-                for (let j = 0; j <= LABEL_SAMPLES; j++) {
-                    const r = rStart + (rEnd - rStart) * (j / LABEL_SAMPLES);
-                    const pt = getArmCenterPoint(arm, r);
-                    localPts.push(new THREE.Vector3(pt.x, 0, pt.z));
-                }
-                const pathId = `arm-lbl-${idx}`;
-                const pathEl = document.createElementNS(svgNS, 'path');
-                pathEl.setAttribute('id', pathId);
-                pathEl.setAttribute('fill', 'none');
-                pathEl.setAttribute('stroke', 'none');
-                labelsContainer.appendChild(pathEl);
-
-                const textEl = document.createElementNS(svgNS, 'text');
-                textEl.setAttribute('font-family', "'Segoe UI',system-ui,sans-serif");
-                textEl.setAttribute('font-size', '13');
-                textEl.setAttribute('font-style', 'italic');
-                textEl.setAttribute('font-weight', 'bold');
-                textEl.setAttribute('letter-spacing', '0.7');
-                textEl.setAttribute('fill', fill);
-                textEl.setAttribute('filter', 'url(#arm-glow)');
-                const tpEl = document.createElementNS(svgNS, 'textPath');
-                tpEl.setAttribute('href', `#${pathId}`);
-                tpEl.setAttribute('startOffset', '50%');
-                tpEl.setAttribute('text-anchor', 'middle');
-                tpEl.textContent = text;
-                textEl.appendChild(tpEl);
-                labelsContainer.appendChild(textEl);
-                return { pathEl, localPts };
-            });
-            galaxyRootRef.current._armSvgLabels = armSvgLabels;
-
-            // Galactic Bar (court, centré)
-            annCtx.textAlign = 'center';
-            annCtx.textBaseline = 'middle';
-            annCtx.font = `italic bold 18px ${fontBase}`;
-            annCtx.fillStyle = 'rgba(255,240,200,0.65)';
-            annCtx.fillText('Galactic Bar', CX, CY + 9 * SCALE);
-
             // Marqueur du Soleil
             const sunPt3d = getArmCenterPoint(armDefinitions[0], GALAXY_SUN_ORBIT_RADIUS);
             const sCx = CX + sunPt3d.x * SCALE;
@@ -1902,6 +1844,32 @@ export default function SolarSystemScene({
             annPlane.rotation.x = -Math.PI / 2;
             annPlane.position.y = 0.05;
             galaxyDisk.add(annPlane);
+
+            // ── Vignette : fondu radial noir sur les bords de la galaxie ─────────
+            const vigSize = 1024;
+            const vigCanvas = document.createElement('canvas');
+            vigCanvas.width = vigSize; vigCanvas.height = vigSize;
+            const vigCtx = vigCanvas.getContext('2d');
+            const vigGrad = vigCtx.createRadialGradient(
+                vigSize / 2, vigSize / 2, vigSize * 0.34,
+                vigSize / 2, vigSize / 2, vigSize * 0.5
+            );
+            vigGrad.addColorStop(0, 'rgba(0,0,0,0)');
+            vigGrad.addColorStop(0.6, 'rgba(0,0,0,0.55)');
+            vigGrad.addColorStop(1.0, 'rgba(0,0,0,1)');
+            vigCtx.fillStyle = vigGrad;
+            vigCtx.fillRect(0, 0, vigSize, vigSize);
+            const vigTex = new THREE.CanvasTexture(vigCanvas);
+            const vigPlane = new THREE.Mesh(
+                new THREE.PlaneGeometry(PLANE_R * 2.6, PLANE_R * 2.6),
+                new THREE.MeshBasicMaterial({
+                    map: vigTex, transparent: true, depthWrite: false,
+                    side: THREE.DoubleSide, blending: THREE.NormalBlending,
+                })
+            );
+            vigPlane.rotation.x = -Math.PI / 2;
+            vigPlane.position.y = 0.06;
+            galaxyDisk.add(vigPlane);
 
             // Halo dummy
             halo = new THREE.Group();
@@ -1985,8 +1953,8 @@ export default function SolarSystemScene({
         galaxySunRef.current = galaxySun;
         galaxyStarsRef.current['solar'] = galaxySun;
 
-        // Étoiles extra-systèmes (Kepler, etc.)
-        EXTRA_STAR_SYSTEMS.forEach((sys) => {
+        // Étoiles extra-systèmes (Kepler, Sirius, Vega + exoplanètes NASA)
+        allStarSystemsRef.current.forEach((sys) => {
             const arm = armDefinitions[sys.galaxyArmIndex] ?? armDefinitions[0];
             const pt = getArmCenterPoint(arm, sys.galaxyOrbitRadius);
             const star = makeSphere(0.75, sys.starColor, sys.starEmissive, 24);
@@ -2004,7 +1972,7 @@ export default function SolarSystemScene({
             const starMesh = makeSphere(sys.starRadius ?? 4.2, sys.starColor, sys.starEmissive);
             starMesh.material.emissiveIntensity = 2.2;
             starMesh.userData = { type: 'star', systemId: sys.id, label: sys.name };
-            primeBoilingMesh(starMesh, 0.12);
+            primeBoilingMesh(starMesh, SUN_BOIL_AMPLITUDE);
             sysRoot.add(starMesh);
 
             const sysPlanets = [];
@@ -2334,8 +2302,6 @@ export default function SolarSystemScene({
 
         // ── Boucle de rendu ────────────────────────────────────────────────
         const camDir = new THREE.Vector3();
-        // Vecteur pré-alloué pour la projection des étiquettes de bras
-        const _lblTmpMid = new THREE.Vector3();
         const moonWorldPos = new THREE.Vector3();
         const focusTargetWorldPos = new THREE.Vector3();
         const transitionCameraPos = new THREE.Vector3();
@@ -2389,32 +2355,6 @@ export default function SolarSystemScene({
                         posA.needsUpdate = true;
                     }
 
-                    // Mise à jour des chemins SVG pour les étiquettes de bras
-                    if (fr && fr._armSvgLabels) {
-                        const w = el.clientWidth;
-                        const h = el.clientHeight;
-                        galaxyDisk.updateWorldMatrix(true, false);
-                        fr._armSvgLabels.forEach(({ pathEl, localPts }) => {
-                            // Projeter chaque point local → écran
-                            const screenPts = localPts.map(lp => {
-                                _lblTmpMid.copy(lp);
-                                galaxyDisk.localToWorld(_lblTmpMid);
-                                _lblTmpMid.project(camera);
-                                return [
-                                    (_lblTmpMid.x *  0.5 + 0.5) * w,
-                                    (_lblTmpMid.y * -0.5 + 0.5) * h,
-                                ];
-                            });
-                            // Auto-orienter pour que le texte soit lisible (gauche → droite)
-                            if (screenPts[screenPts.length - 1][0] < screenPts[0][0]) screenPts.reverse();
-                            // Construire la commande SVG path
-                            let d = `M${screenPts[0][0].toFixed(1)},${screenPts[0][1].toFixed(1)}`;
-                            for (let i = 1; i < screenPts.length; i++) {
-                                d += ` L${screenPts[i][0].toFixed(1)},${screenPts[i][1].toFixed(1)}`;
-                            }
-                            pathEl.setAttribute('d', d);
-                        });
-                    }
                 }
 
                 // Mise à jour des étoiles du centre vers la caméra
@@ -2487,8 +2427,21 @@ export default function SolarSystemScene({
                 if (transition.progress >= 1) {
                     transition.phase = 'idle';
                     controls.enabled = true;
-                    minCamDistRef.current = getDistanceForScreenFraction(SUN_RADIUS, camera, 0.5);
-                    targetCamDistRef.current = camera.position.distanceTo(controls.target);
+                    const pendingPlanet = selectedPlanetRef.current;
+                    if (pendingPlanet) {
+                        const planetEntry = findPlanetEntryByName(planetsRef.current, extraSystemsRef.current, pendingPlanet);
+                        const planetSize = getObjectRenderRadius(planetEntry?.mesh);
+                        if (Number.isFinite(planetSize) && planetSize > 0) {
+                            minCamDistRef.current = getDistanceForScreenFraction(planetSize, camera, 0.5);
+                            targetCamDistRef.current = getDistanceForScreenFraction(planetSize, camera, 0.3);
+                        } else {
+                            minCamDistRef.current = getDistanceForScreenFraction(SUN_RADIUS, camera, 0.5);
+                            targetCamDistRef.current = camera.position.distanceTo(controls.target);
+                        }
+                    } else {
+                        minCamDistRef.current = getDistanceForScreenFraction(SUN_RADIUS, camera, 0.5);
+                        targetCamDistRef.current = camera.position.distanceTo(controls.target);
+                    }
                     setOverlayOpacity(0);
                 }
                 controls.update();
@@ -2502,6 +2455,8 @@ export default function SolarSystemScene({
 
             const activeStarMesh = getActiveSystemStar() ?? sunMesh;
             updateBoilingMesh(activeStarMesh, now);
+            const _ems = activeStarMesh.material.emissive;
+            sunLight.color.setRGB(_ems.r * 0.65 + 0.35, _ems.g * 0.65 + 0.35, _ems.b * 0.65 + 0.35);
             const sunPulse = 1
                 + Math.sin(now * SUN_PULSE_SPEED) * 0.01
                 + Math.sin(now * SUN_PULSE_SPEED * 1.91) * 0.005;

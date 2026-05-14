@@ -18,7 +18,7 @@ export default function HomePage() {
     const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
     const [resetViewNonce, setResetViewNonce] = useState(0);
 
-    const { planets, asteroids, loading } = useSpaceData();
+    const { planets, asteroids, exoplanetSystems, loading } = useSpaceData();
 
     const {
         setFocusOnPlanet,
@@ -45,7 +45,7 @@ export default function HomePage() {
         focusPlanet,
         focusAsteroid,
         focusMoon,
-    } = useFocusManager(planets, asteroids);
+    } = useFocusManager(planets, asteroids, exoplanetSystems);
 
     if (loading) {
         return (
@@ -67,6 +67,7 @@ export default function HomePage() {
                 <SolarSystemScene
                     planets={planets}
                     asteroids={asteroids}
+                    exoplanetSystems={exoplanetSystems}
                     focusOnPlanet={focusOnPlanet}
                     resetViewNonce={resetViewNonce}
                     selectedMilkyWay={selectedMilkyWay}
@@ -87,6 +88,7 @@ export default function HomePage() {
                 planets={planets}
                 asteroids={asteroids}
                 moons={moons}
+                exoplanetSystems={exoplanetSystems}
                 selectedMilkyWay={selectedMilkyWay}
                 selectedSolarSystem={selectedSolarSystem}
                 selectedPlanet={selectedPlanet}

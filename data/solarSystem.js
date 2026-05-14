@@ -1,13 +1,4 @@
-export const solarSystem = [
-    'Planets',
-    'Asteroid Belt',
-    // 'Comets'
-]
+export const solarSystem = ['Planets', 'Asteroid Belt'];
 
-export const milkyWay = [
-    'Sagittarius A',
-    'Solar System',
-    'Kepler',
-    'Sirius',
-    'Vega',
-]
+// Objets spéciaux de la Voie Lactée (hors systèmes stellaires)
+export const milkyWaySpecial = ['Sagittarius A'];
