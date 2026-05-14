@@ -5,7 +5,7 @@ const NASA_TAP = 'https://exoplanetarchive.ipac.caltech.edu/TAP/sync';
 // 5000 lignes triées par hostname → ~300-400 systèmes multi-planètes
 const SQL = `select top 5000
 pl_name,hostname,pl_rade,pl_bmasse,pl_orbper,pl_orbsmax,pl_eqt,
-st_teff,st_rad,st_mass,st_lum,st_spectype,sy_dist
+st_teff,st_rad,st_mass,st_lum,st_spectype,sy_dist,st_age,st_rotp
 from pscomppars
 where pl_rade is not null and st_teff is not null and pl_orbsmax is not null
 order by hostname asc`;

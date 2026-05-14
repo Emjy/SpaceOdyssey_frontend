@@ -64,6 +64,454 @@ const IRREGULAR_MOON_SHAPES = {
     deimos: { seed: 4.21, amplitude: 0.14 },
 };
 
+// ─── Texture procédurale d'étoile ────────────────────────────────────────────
+
+// ─── Shader procédural étoile exo ────────────────────────────────────────────
+// Tout est calculé en espace 3D : pas de couture UV, rendu naturel.
+
+function _mulberry32(a) {
+    let s = a >>> 0;
+    return () => {
+        s = (s + 0x6D2B79F5) >>> 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function makeStarShaderMaterial(hexColor, hexEmissive, activity, radius) {
+    return new THREE.ShaderMaterial({
+        uniforms: {
+            uColor:     { value: new THREE.Color(hexColor) },
+            uEmissive:  { value: new THREE.Color(hexEmissive) },
+            uTime:      { value: 0 },
+            uActivity:  { value: activity },
+            uAmplitude: { value: radius * 0.022 },
+        },
+        vertexShader: /* glsl */`
+            uniform float uTime;
+            uniform float uAmplitude;
+            varying vec3  vNormal;
+            varying vec3  vWorldPos;
+
+            float h(vec3 p) {
+                p  = fract(p * 0.3183099 + 0.1);
+                p *= 17.0;
+                return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+            }
+            float fbm(vec3 p) {
+                float v = 0.0, a = 0.5;
+                for (int i = 0; i < 3; i++) {
+                    v += a * h(p);
+                    p  = p * 2.1 + vec3(5.2, 1.3, 8.7);
+                    a *= 0.5;
+                }
+                return v;
+            }
+
+            void main() {
+                // Normal en world space (même espace que cameraPosition)
+                vNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+                vec3 n  = normalize(position);
+                float t = uTime * 0.00032;
+                float d = (fbm(n * 4.5 + vec3(t, t * 0.71, t * 1.3)) - 0.5) * uAmplitude;
+                vec3 displaced = position + normal * d;
+                vec4 wp = modelMatrix * vec4(displaced, 1.0);
+                vWorldPos   = wp.xyz;
+                gl_Position = projectionMatrix * viewMatrix * wp;
+            }
+        `,
+        fragmentShader: /* glsl */`
+            uniform vec3  uColor;
+            uniform vec3  uEmissive;
+            uniform float uTime;
+            uniform float uActivity;
+            varying vec3  vNormal;
+            varying vec3  vWorldPos;
+
+            float h(vec3 p) {
+                p  = fract(p * 0.3183099 + 0.1);
+                p *= 17.0;
+                return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+            }
+            float n3(vec3 p) {
+                vec3 i = floor(p), f = fract(p);
+                f = f * f * (3.0 - 2.0 * f);
+                return mix(
+                    mix(mix(h(i),             h(i+vec3(1,0,0)), f.x),
+                        mix(h(i+vec3(0,1,0)), h(i+vec3(1,1,0)), f.x), f.y),
+                    mix(mix(h(i+vec3(0,0,1)), h(i+vec3(1,0,1)), f.x),
+                        mix(h(i+vec3(0,1,1)), h(i+vec3(1,1,1)), f.x), f.y),
+                    f.z);
+            }
+            float fbm(vec3 p) {
+                float v = 0.0, a = 0.5;
+                for (int i = 0; i < 4; i++) {
+                    v += a * n3(p);
+                    p  = p * 2.3 + vec3(5.2, 1.3, 8.7);
+                    a *= 0.5;
+                }
+                return v;
+            }
+
+            void main() {
+                vec3  N    = normalize(vNormal);
+                vec3  V    = normalize(cameraPosition - vWorldPos);
+                float NdV  = max(dot(N, V), 0.0);
+
+                // Granulation convective multi-octave, animée lentement
+                float t    = uTime * 0.00028;
+                float gran = fbm(N * 7.0 + vec3(t, t * 0.74, t * 1.29));
+                // Cellules : centre brillant, intergranulaire sombre
+                float cell = smoothstep(0.35, 0.72, gran);
+                float surf = 0.78 + cell * 0.32;
+
+                // Taches stellaires — petites, position lentement dérivante
+                float spots = 1.0;
+                if (uActivity > 0.05) {
+                    float st = uTime * 0.000035;
+                    for (int i = 0; i < 6; i++) {
+                        float fi  = float(i);
+                        vec3 axis = normalize(vec3(
+                            sin(fi * 2.13 + 1.3 + st * (0.8 + fi * 0.15)),
+                            cos(fi * 1.74 + 0.9),
+                            sin(fi * 3.31 + 1.5 + st * 0.6)
+                        ));
+                        float dotNA = dot(N, axis);
+                        float sz    = 0.018 + h(vec3(fi, 1.5, 2.2)) * 0.028;
+                        float edge  = smoothstep(sz * 2.2, sz * 0.5, 1.0 - dotNA);
+                        spots      -= uActivity * 0.38 * edge;
+                    }
+                    spots = max(spots, 0.42);
+                }
+
+                // Limb darkening — basé dot(N,V), zéro couture UV
+                float limb = pow(NdV, 0.55);
+                float dark = mix(0.22, 1.0, limb);
+
+                // Légère surbrillance du centre (corona naissante)
+                float core = pow(NdV, 2.5) * 0.12;
+
+                vec3 col = uColor * surf * spots * dark;
+                col     += uEmissive * (0.14 + core) * limb;
+
+                gl_FragColor = vec4(col, 1.0);
+            }
+        `,
+    });
+}
+
+// ─── Texture procédurale de planète exo ──────────────────────────────────────
+
+const _planetTexCache = new Map();
+
+function makeExoPlanetTexture(visualType, baseColor, seed, size = 256) {
+    const key = `${visualType}|${seed % 8}`;
+    if (_planetTexCache.has(key)) return _planetTexCache.get(key);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const rng = _mulberry32(seed);
+
+    const c = new THREE.Color(baseColor);
+    const toRgba = (col, a) =>
+        `rgba(${Math.round(col.r * 255)},${Math.round(col.g * 255)},${Math.round(col.b * 255)},${a.toFixed(3)})`;
+    const shifted = (factor) => {
+        const nc = c.clone();
+        nc.r = Math.min(1, nc.r * factor);
+        nc.g = Math.min(1, nc.g * factor);
+        nc.b = Math.min(1, nc.b * factor);
+        return nc;
+    };
+
+    // Fond de base
+    ctx.fillStyle = toRgba(c, 1);
+    ctx.fillRect(0, 0, size, size);
+
+    if (visualType === 'gas-giant') {
+        // Bandes horizontales turbulentes (style Jupiter/Saturne)
+        const numBands = 9 + Math.floor(rng() * 7);
+        for (let b = 0; b < numBands; b++) {
+            const yFrac = b / numBands;
+            const bandH = (size / numBands) * (0.65 + rng() * 0.7);
+            const col   = shifted(0.72 + rng() * 0.58);
+            const amp   = 4 + rng() * 10;
+            const freq  = 2 + rng() * 5;
+            const phase = rng() * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(0, yFrac * size);
+            for (let x = 0; x <= size; x += 2) {
+                ctx.lineTo(x, yFrac * size + Math.sin((x / size) * freq * Math.PI * 2 + phase) * amp);
+            }
+            for (let x = size; x >= 0; x -= 2) {
+                ctx.lineTo(x, yFrac * size + bandH + Math.sin((x / size) * freq * Math.PI * 2 + phase + 0.5) * amp);
+            }
+            ctx.closePath();
+            ctx.fillStyle = toRgba(col, 0.45 + rng() * 0.35);
+            ctx.fill();
+        }
+        // Grande tache ovale (si présente)
+        if (rng() > 0.35) {
+            const sx = rng() * size;
+            const sy = (0.25 + rng() * 0.5) * size;
+            const rx = 14 + rng() * 26;
+            const ry = rx * (0.35 + rng() * 0.35);
+            const spotCol = shifted(rng() > 0.5 ? 0.5 : 1.55);
+            const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, rx);
+            grad.addColorStop(0,   toRgba(spotCol, 0.7));
+            grad.addColorStop(0.6, toRgba(spotCol, 0.35));
+            grad.addColorStop(1,   'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    if (visualType === 'lava-world') {
+        // Réseau de fissures lumineuses récursif
+        const drawCrack = (x, y, angle, length, depth) => {
+            if (depth <= 0 || length < 3) return;
+            const ex = x + Math.cos(angle) * length;
+            const ey = y + Math.sin(angle) * length;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(ex, ey);
+            ctx.strokeStyle = `rgba(255,${80 + depth * 20},0,${0.45 + depth * 0.12})`;
+            ctx.lineWidth = Math.max(0.4, depth * 0.7);
+            ctx.stroke();
+            // Lueur externe
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(ex, ey);
+            ctx.strokeStyle = `rgba(255,60,0,${0.08 * depth})`;
+            ctx.lineWidth = depth * 3;
+            ctx.stroke();
+            const branches = 1 + Math.floor(rng() * 2);
+            for (let i = 0; i < branches; i++) {
+                drawCrack(ex, ey, angle + (rng() - 0.5) * 1.3, length * (0.45 + rng() * 0.38), depth - 1);
+            }
+        };
+        const numCracks = 4 + Math.floor(rng() * 6);
+        for (let i = 0; i < numCracks; i++) {
+            drawCrack(rng() * size, rng() * size, rng() * Math.PI * 2, 22 + rng() * 42, 4);
+        }
+        // Lacs de lave
+        const numPools = 2 + Math.floor(rng() * 5);
+        for (let i = 0; i < numPools; i++) {
+            const px = rng() * size;
+            const py = rng() * size;
+            const pr = 2 + rng() * 9;
+            const grad = ctx.createRadialGradient(px, py, 0, px, py, pr);
+            grad.addColorStop(0,   'rgba(255,200,60,0.95)');
+            grad.addColorStop(0.4, 'rgba(255,80,0,0.65)');
+            grad.addColorStop(1,   'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(px, py, pr, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    if (visualType === 'ice-world') {
+        // Fond glacé légèrement voilé
+        ctx.fillStyle = 'rgba(210,235,255,0.25)';
+        ctx.fillRect(0, 0, size, size);
+        // Craquelures de glace (ridges bleutés)
+        const iceBlue = new THREE.Color('#4488bb');
+        const numRidges = 14 + Math.floor(rng() * 16);
+        for (let i = 0; i < numRidges; i++) {
+            const x1 = rng() * size, y1 = rng() * size;
+            const x2 = rng() * size, y2 = rng() * size;
+            const cpx = (x1 + x2) / 2 + (rng() - 0.5) * 50;
+            const cpy = (y1 + y2) / 2 + (rng() - 0.5) * 50;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.quadraticCurveTo(cpx, cpy, x2, y2);
+            ctx.strokeStyle = toRgba(iceBlue, 0.08 + rng() * 0.18);
+            ctx.lineWidth = 0.5 + rng() * 2;
+            ctx.stroke();
+        }
+        // Taches glacées variées
+        for (let i = 0; i < 35; i++) {
+            const x = rng() * size, y = rng() * size;
+            const r = 6 + rng() * 28;
+            const col = shifted(rng() > 0.5 ? 1.18 : 0.88);
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0, toRgba(col, 0.22));
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    if (visualType === 'temperate') {
+        // Continents avec variation de relief
+        const landColor = new THREE.Color('#4a7830');
+        const desertColor = new THREE.Color('#c8a060');
+        const numContinents = 2 + Math.floor(rng() * 4);
+        for (let cont = 0; cont < numContinents; cont++) {
+            const cx = rng() * size;
+            const cy = rng() * size;
+            const nPts = 7 + Math.floor(rng() * 6);
+            const baseR = 18 + rng() * 48;
+            const isDesert = rng() > 0.7;
+            const col = isDesert ? desertColor : landColor;
+            ctx.beginPath();
+            for (let pi = 0; pi <= nPts; pi++) {
+                const angle = (pi / nPts) * Math.PI * 2;
+                const r = baseR * (0.45 + rng() * 0.75);
+                const x = cx + Math.cos(angle) * r;
+                const y = cy + Math.sin(angle) * r;
+                pi === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.fillStyle = toRgba(col, 0.88);
+            ctx.fill();
+            // Relief intérieur
+            for (let h = 0; h < 3; h++) {
+                const hx = cx + (rng() - 0.5) * baseR * 0.55;
+                const hy = cy + (rng() - 0.5) * baseR * 0.55;
+                const hr = baseR * (0.18 + rng() * 0.28);
+                const highlightCol = new THREE.Color(isDesert ? '#e8c080' : '#6a9845');
+                const hGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
+                hGrad.addColorStop(0, toRgba(highlightCol, 0.42));
+                hGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = hGrad;
+                ctx.beginPath();
+                ctx.arc(hx, hy, hr, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        // Calottes polaires (haut/bas de la texture = pôles)
+        const icePole = new THREE.Color('#e8f4ff');
+        [[0, 1], [size, -1]].forEach(([yEdge, dir]) => {
+            const poleH = 14 + rng() * 22;
+            const grad = ctx.createLinearGradient(0, yEdge, 0, yEdge + dir * poleH);
+            grad.addColorStop(0, toRgba(icePole, 0.85));
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, dir > 0 ? 0 : size - poleH, size, poleH);
+        });
+    }
+
+    if (visualType === 'rocky') {
+        // Cratères d'impact
+        const numCraters = 6 + Math.floor(rng() * 14);
+        for (let i = 0; i < numCraters; i++) {
+            const cx = rng() * size;
+            const cy = rng() * size;
+            const cr = 3 + rng() * 22;
+            // Anneau lumineux (bordure)
+            const rimGrad = ctx.createRadialGradient(cx, cy, cr * 0.72, cx, cy, cr * 1.12);
+            rimGrad.addColorStop(0,   toRgba(shifted(1.18), 0.55));
+            rimGrad.addColorStop(1,   'rgba(0,0,0,0)');
+            ctx.fillStyle = rimGrad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, cr * 1.12, 0, Math.PI * 2);
+            ctx.fill();
+            // Creux sombre
+            const depthGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, cr * 0.9);
+            depthGrad.addColorStop(0,   toRgba(shifted(0.55), 0.72));
+            depthGrad.addColorStop(0.7, toRgba(shifted(0.72), 0.45));
+            depthGrad.addColorStop(1,   'rgba(0,0,0,0)');
+            ctx.fillStyle = depthGrad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, cr * 0.9, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        // Variations de surface (régions géologiques)
+        for (let i = 0; i < 18; i++) {
+            const x = rng() * size, y = rng() * size;
+            const r = 6 + rng() * 18;
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0, toRgba(shifted(0.82 + rng() * 0.36), 0.22));
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // Assombrissement au limbe (toutes planètes)
+    const half = size / 2;
+    const lGrad = ctx.createRadialGradient(half, half, half * 0.22, half, half, half * 0.99);
+    lGrad.addColorStop(0,    'rgba(0,0,0,0)');
+    lGrad.addColorStop(0.65, 'rgba(0,0,0,0.05)');
+    lGrad.addColorStop(0.88, 'rgba(0,0,0,0.28)');
+    lGrad.addColorStop(1.0,  'rgba(0,0,0,0.62)');
+    ctx.fillStyle = lGrad;
+    ctx.fillRect(0, 0, size, size);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    _planetTexCache.set(key, tex);
+    return tex;
+}
+
+function makePlanetAtmosphere(planetRadius, hexColor) {
+    const c = new THREE.Color(hexColor);
+    return new THREE.Mesh(
+        new THREE.SphereGeometry(planetRadius * 1.07, 28, 28),
+        new THREE.MeshPhongMaterial({
+            color: c,
+            emissive: c,
+            emissiveIntensity: 0.18,
+            transparent: true,
+            opacity: 0.22,
+            side: THREE.BackSide,
+            depthWrite: false,
+        })
+    );
+}
+
+function makePlanetClouds(planetRadius, seed, size = 256) {
+    const cloudKey = `clouds|${seed % 6}`;
+    let cloudTex;
+    if (_planetTexCache.has(cloudKey)) {
+        cloudTex = _planetTexCache.get(cloudKey);
+    } else {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const rng = _mulberry32(seed + 0xCAFE1234);
+        ctx.clearRect(0, 0, size, size);
+        const numClouds = 28 + Math.floor(rng() * 22);
+        for (let i = 0; i < numClouds; i++) {
+            const x = rng() * size;
+            const y = rng() * size;
+            const r = 8 + rng() * 24;
+            const alpha = 0.18 + rng() * 0.42;
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0,   `rgba(255,255,255,${alpha.toFixed(3)})`);
+            grad.addColorStop(0.5, `rgba(255,255,255,${(alpha * 0.45).toFixed(3)})`);
+            grad.addColorStop(1,   'rgba(255,255,255,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        cloudTex = new THREE.CanvasTexture(canvas);
+        cloudTex.colorSpace = THREE.SRGBColorSpace;
+        _planetTexCache.set(cloudKey, cloudTex);
+    }
+    return new THREE.Mesh(
+        new THREE.SphereGeometry(planetRadius * 1.018, 28, 28),
+        new THREE.MeshPhongMaterial({
+            map: cloudTex,
+            transparent: true,
+            opacity: 0.52,
+            depthWrite: false,
+        })
+    );
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Arc de traîne 180° avec dégradé.
@@ -1946,7 +2394,7 @@ export default function SolarSystemScene({
         }
 
         const galaxySunPoint = getArmCenterPoint(armDefinitions[0], GALAXY_SUN_ORBIT_RADIUS);
-        const galaxySun = makeSphere(0.9, '#fff3b0', '#ffcf66', 32);
+        const galaxySun = makeSphere(0.9, '#fff3b0', '#ffcf66', 20);
         galaxySun.position.set(galaxySunPoint.x, 0.16, galaxySunPoint.z);
         galaxySun.userData = { type: 'galaxy-star', systemId: 'solar', label: 'Soleil' };
         galaxyDisk.add(galaxySun);
@@ -1957,7 +2405,8 @@ export default function SolarSystemScene({
         allStarSystemsRef.current.forEach((sys) => {
             const arm = armDefinitions[sys.galaxyArmIndex] ?? armDefinitions[0];
             const pt = getArmCenterPoint(arm, sys.galaxyOrbitRadius);
-            const star = makeSphere(0.75, sys.starColor, sys.starEmissive, 24);
+            const star = makeSphere(0.75, sys.starColor, sys.starColor, 16);
+            star.material.emissiveIntensity = 1.0;
             star.position.set(pt.x, 0.12, pt.z);
             star.userData = { type: 'galaxy-star', systemId: sys.id, label: sys.name };
             galaxyDisk.add(star);
@@ -1968,15 +2417,19 @@ export default function SolarSystemScene({
             scene.add(sysRoot);
             sysRoot.visible = false;
 
-            // Étoile centrale
-            const starMesh = makeSphere(sys.starRadius ?? 4.2, sys.starColor, sys.starEmissive);
-            starMesh.material.emissiveIntensity = 2.2;
-            starMesh.userData = { type: 'star', systemId: sys.id, label: sys.name };
-            primeBoilingMesh(starMesh, SUN_BOIL_AMPLITUDE);
+            // Étoile exo — shader GLSL procédural (pas de canvas, pas de couture UV)
+            const sysActivity = sys.starActivity ?? 0;
+            const starRadius  = sys.starRadius ?? 4.2;
+            const starMat  = makeStarShaderMaterial(sys.starColor, sys.starEmissive, sysActivity, starRadius);
+            const starMesh = new THREE.Mesh(new THREE.SphereGeometry(starRadius, 64, 64), starMat);
+            starMesh.userData = { type: 'star', systemId: sys.id, label: sys.name, renderRadius: starRadius };
             sysRoot.add(starMesh);
 
+            // Seed déterministe par système pour les textures planètes
+            const sysSeed = sys.id.split('').reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) & 0x7fffffff, 0);
+
             const sysPlanets = [];
-            sys.planets.forEach((cfg) => {
+            sys.planets.forEach((cfg, pi) => {
                 const orbitGroup = new THREE.Group();
                 orbitGroup.rotation.x = getOrbitalInclination(cfg, 0);
                 sysRoot.add(orbitGroup);
@@ -1987,9 +2440,44 @@ export default function SolarSystemScene({
                 const tiltGroup = new THREE.Group();
                 tiltGroup.rotation.z = THREE.MathUtils.degToRad(cfg.tilt ?? 0);
                 group.add(tiltGroup);
+
                 const mesh = makeSphere(cfg.size, cfg.color, cfg.emissive, 32);
                 mesh.userData = { type: 'planet', name: cfg.name, label: cfg.name.toUpperCase(), systemId: sys.id };
+
+                // Texture procédurale selon type de planète
+                if (cfg.visualType) {
+                    const planetSeed = (sysSeed * 37 + pi * 1_234_567) & 0x7fffffff;
+                    const planetTex = makeExoPlanetTexture(cfg.visualType, cfg.color, planetSeed);
+                    mesh.material.map = planetTex;
+                    mesh.material.color.set(0xffffff);
+                    if (cfg.visualType === 'lava-world') {
+                        mesh.material.emissiveMap = planetTex;
+                        mesh.material.emissive.set(cfg.emissive);
+                        mesh.material.emissiveIntensity = 0.85;
+                    } else {
+                        mesh.material.emissive.set(0x000000);
+                        mesh.material.emissiveIntensity = 0;
+                    }
+                    mesh.material.needsUpdate = true;
+                }
+
                 tiltGroup.add(mesh);
+
+                // Atmosphère
+                let atmosphere = null;
+                if (cfg.hasAtmosphere && cfg.atmosphereColor) {
+                    atmosphere = makePlanetAtmosphere(cfg.size, cfg.atmosphereColor);
+                    tiltGroup.add(atmosphere);
+                }
+
+                // Couche de nuages (géantes gazeuses froides, tempérés)
+                let clouds = null;
+                if (cfg.hasClouds) {
+                    const planetSeed2 = (sysSeed * 53 + pi * 999_983) & 0x7fffffff;
+                    clouds = makePlanetClouds(cfg.size, planetSeed2);
+                    tiltGroup.add(clouds);
+                }
+
                 const proxy = new THREE.Mesh(
                     new THREE.SphereGeometry(cfg.size * 2.5, 8, 8),
                     new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
@@ -2008,7 +2496,7 @@ export default function SolarSystemScene({
                 }
                 const initAngle = Math.random() * Math.PI * 2;
                 group.position.set(Math.cos(initAngle) * cfg.r, 0, Math.sin(initAngle) * cfg.r);
-                sysPlanets.push({ orbitGroup, group, mesh, arc, ring, proxy, hoverSprite, angle: initAngle, r: cfg.r, speed: cfg.speed, rotDir: cfg.rotDir ?? 1 });
+                sysPlanets.push({ orbitGroup, group, mesh, arc, ring, proxy, hoverSprite, atmosphere, clouds, angle: initAngle, r: cfg.r, speed: cfg.speed, rotDir: cfg.rotDir ?? 1 });
             });
 
             extraSystemsRef.current[sys.id] = { root: sysRoot, starMesh, planets: sysPlanets };
@@ -2208,6 +2696,7 @@ export default function SolarSystemScene({
                 moonsRef.current,
                 asteroidsRef.current,
                 planetsRef.current,
+                extraSystemsRef.current,
             );
             const isGalaxy = isMilkyWayModeRef.current && !USE_3D_GALAXY;
             const effectiveMin = isGalaxy ? MIN_DIST_GALAXY : minDist;
@@ -2454,17 +2943,27 @@ export default function SolarSystemScene({
             controls.enablePan    = false;
 
             const activeStarMesh = getActiveSystemStar() ?? sunMesh;
-            updateBoilingMesh(activeStarMesh, now);
-            const _ems = activeStarMesh.material.emissive;
-            sunLight.color.setRGB(_ems.r * 0.65 + 0.35, _ems.g * 0.65 + 0.35, _ems.b * 0.65 + 0.35);
+            const isShaderStar = !!activeStarMesh.material?.uniforms?.uTime;
+            if (isShaderStar) {
+                // Étoile exo — mise à jour du temps shader + pulsation légère
+                activeStarMesh.material.uniforms.uTime.value = now;
+                const _eu = activeStarMesh.material.uniforms;
+                const _ec = _eu.uEmissive.value;
+                sunLight.color.setRGB(_ec.r * 0.65 + 0.35, _ec.g * 0.65 + 0.35, _ec.b * 0.65 + 0.35);
+            } else {
+                // Soleil — système existant (boiling CPU + texture)
+                updateBoilingMesh(activeStarMesh, now);
+                const _ems = activeStarMesh.material.emissive;
+                sunLight.color.setRGB(_ems.r * 0.65 + 0.35, _ems.g * 0.65 + 0.35, _ems.b * 0.65 + 0.35);
+                activeStarMesh.material.emissiveIntensity = 2.45
+                    + Math.sin(now * SUN_PULSE_SPEED * 1.3) * 0.14
+                    + Math.sin(now * SUN_PULSE_SPEED * 2.6) * 0.06;
+            }
             const sunPulse = 1
                 + Math.sin(now * SUN_PULSE_SPEED) * 0.01
                 + Math.sin(now * SUN_PULSE_SPEED * 1.91) * 0.005;
             activeStarMesh.scale.setScalar(sunPulse);
             activeStarMesh.rotation.y += 0.0016 * deltaFrames;
-            activeStarMesh.material.emissiveIntensity = 2.45
-                + Math.sin(now * SUN_PULSE_SPEED * 1.3) * 0.14
-                + Math.sin(now * SUN_PULSE_SPEED * 2.6) * 0.06;
             sunLight.intensity = 420
                 + Math.sin(now * SUN_PULSE_SPEED * 1.2) * 10
                 + Math.sin(now * SUN_PULSE_SPEED * 2.1) * 5;
@@ -2506,11 +3005,16 @@ export default function SolarSystemScene({
                     p.group.position.set(Math.cos(p.angle) * p.r, 0, Math.sin(p.angle) * p.r);
                     p.mesh.rotation.y += 0.004 * p.rotDir * deltaFrames;
                     p.arc.rotation.y = Math.PI - p.angle;
+                    // Rotation indépendante des couches nuages et atmosphère
+                    if (p.clouds)     p.clouds.rotation.y     += 0.0028 * deltaFrames;
+                    if (p.atmosphere) p.atmosphere.rotation.y += 0.0010 * deltaFrames;
                     const isSel = p.mesh.userData.name === sel;
                     const targetMeshOp = sel ? (isSel ? 1 : 0) : 1.0;
-                    const targetArcOp = sel ? (isSel ? 0.4 : 0) : 0.4;
+                    const targetArcOp  = sel ? (isSel ? 0.4 : 0) : 0.4;
                     p.mesh.material.opacity = THREE.MathUtils.lerp(p.mesh.material.opacity, targetMeshOp, damp(0.06));
-                    p.arc.material.opacity = THREE.MathUtils.lerp(p.arc.material.opacity, targetArcOp, damp(0.06));
+                    p.arc.material.opacity  = THREE.MathUtils.lerp(p.arc.material.opacity,  targetArcOp,  damp(0.06));
+                    if (p.clouds)     p.clouds.material.opacity     = p.mesh.material.opacity * 0.52;
+                    if (p.atmosphere) p.atmosphere.material.opacity = p.mesh.material.opacity * 0.22;
                     if (p.ring?.material) {
                         const targetRingOp = sel ? (isSel ? (p.ring.userData.baseOpacity ?? p.ring.material.opacity) : 0) : (p.ring.userData.baseOpacity ?? p.ring.material.opacity);
                         p.ring.material.opacity = THREE.MathUtils.lerp(p.ring.material.opacity, targetRingOp, damp(0.06));
