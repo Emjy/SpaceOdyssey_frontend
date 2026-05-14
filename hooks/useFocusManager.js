@@ -64,6 +64,7 @@ export default function useFocusManager(planets = [], asteroids = [], exoplanetS
         return extraSystem?.id ?? 'solar';
     }, [planets, allExtraSystems, starSystemMilkyWayKey]);
 
+    const [focusStarNonce, setFocusStarNonce] = useState(0);
     const [focusOnPlanet, setFocusOnPlanet] = useState(false);
     const [focusOnMoon, setFocusOnMoon] = useState(true);
     const [focusOnAsteroid, setFocusOnAsteroid] = useState(false);
@@ -184,6 +185,7 @@ export default function useFocusManager(planets = [], asteroids = [], exoplanetS
         const milkyWayKey = starSystemMilkyWayKey[systemId];
         if (!milkyWayKey) return;
 
+        setFocusStarNonce(n => n + 1);
         setSelectedSolarSystem('Planets');
         setSelectedMilkyWay(milkyWayKey);
         setSelectedPlanet(null);
@@ -218,6 +220,7 @@ export default function useFocusManager(planets = [], asteroids = [], exoplanetS
     }, [selectedMoon, focusOneMoon]);
 
     return {
+        focusStarNonce,
         focusSA, setFocusSA,
         focusSolarSystem, setFocusSolarSystem,
         focusOnPlanet, setFocusOnPlanet,

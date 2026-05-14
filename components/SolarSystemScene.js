@@ -457,13 +457,13 @@ function makeExoPlanetTexture(visualType, baseColor, seed, size = 256) {
 function makePlanetAtmosphere(planetRadius, hexColor) {
     const c = new THREE.Color(hexColor);
     return new THREE.Mesh(
-        new THREE.SphereGeometry(planetRadius * 1.07, 28, 28),
+        new THREE.SphereGeometry(planetRadius * 1.04, 28, 28),
         new THREE.MeshPhongMaterial({
             color: c,
             emissive: c,
-            emissiveIntensity: 0.18,
+            emissiveIntensity: 0.06,
             transparent: true,
-            opacity: 0.22,
+            opacity: 0.09,
             side: THREE.BackSide,
             depthWrite: false,
         })
@@ -1120,6 +1120,9 @@ export default function SolarSystemScene({
     focusPlanet,
     focusAsteroid,
     focusMoon,
+    viewMode = 'orbital',
+    catalogSort = 'distance',
+    focusStarNonce = 0,
 }) {
     // Combine systèmes statiques (Kepler, Sirius, Vega) + exoplanètes NASA dynamiques
     const allStarSystems = useMemo(
@@ -1143,8 +1146,10 @@ export default function SolarSystemScene({
     const moonTexCacheRef = useRef({});    // id → THREE.Texture (textures spécifiques par lune)
     const galaxySpinRef   = useRef({ momentum: 0, lastX: null }); // drag-to-spin galaxy
     const galaxyStarsRef = useRef({});    // systemId → mesh
-    const extraSystemsRef = useRef({});   // systemId → { root, planets[] }
+    const extraSystemsRef = useRef({});   // systemId → { root, planets[], hzRings[] }
     const activeStarSystemRef = useRef(null);
+    const viewModeRef = useRef('orbital');
+    const catalogSortRef = useRef('distance');
     const focusStarSystemRef = useRef(null);
     const tooltipTextRef = useRef(null);
     const hoveredRingRef = useRef(null);
@@ -1211,6 +1216,9 @@ export default function SolarSystemScene({
         focusStarSystemRef.current = focusStarSystem;
     }, [focusStarSystem]);
 
+    useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
+    useEffect(() => { catalogSortRef.current = catalogSort; }, [catalogSort]);
+
     const markInteractionHot = useCallback((duration = INTERACTION_BOOST_MS) => {
         if (typeof performance === 'undefined') return;
         interactionBoostUntilRef.current = performance.now() + duration;
@@ -1240,6 +1248,38 @@ export default function SolarSystemScene({
         if (!overlayRef.current) return;
         overlayRef.current.style.opacity = `${THREE.MathUtils.clamp(opacity, 0, 1)}`;
     }, []);
+
+    useEffect(() => {
+        if (!focusStarNonce) return;
+        const camera = cameraRef.current;
+        const controls = ctrlRef.current;
+        if (!camera || !controls) return;
+        if (galaxyTransitionRef.current.phase !== 'idle') return;
+        controls.target.set(0, 0, 0);
+        camera.position.set(SOLAR_SYSTEM_DEFAULT_POSITION.x, SOLAR_SYSTEM_DEFAULT_POSITION.y, SOLAR_SYSTEM_DEFAULT_POSITION.z);
+        camera.lookAt(0, 0, 0);
+        controls.enabled = true;
+        const activeId = activeStarSystemRef.current;
+        const extraEntry = extraSystemsRef.current[activeId];
+        const starRadius = extraEntry?.starMesh?.userData?.renderRadius ?? SUN_RADIUS;
+        minCamDistRef.current = getDistanceForScreenFraction(starRadius, camera, 0.5);
+        targetCamDistRef.current = camera.position.distanceTo(controls.target);
+        setOverlayOpacity(0);
+        controls.update();
+    }, [focusStarNonce, setOverlayOpacity]);
+
+    useEffect(() => {
+        if (viewMode !== 'catalog') return;
+        const camera = cameraRef.current;
+        const controls = ctrlRef.current;
+        if (!camera || !controls) return;
+        controls.target.set(0, 0, 0);
+        camera.position.set(0, 10, 70);
+        camera.lookAt(0, 0, 0);
+        minCamDistRef.current = 15;
+        targetCamDistRef.current = 70;
+        controls.update();
+    }, [viewMode]);
 
     const hideSunTooltip = useCallback(() => {
         if (sunTooltipRef.current) sunTooltipRef.current.style.opacity = '0';
@@ -1492,6 +1532,7 @@ export default function SolarSystemScene({
             return;
         }
 
+        controls.target.set(0, 0, 0);
         camera.position.set(
             SOLAR_SYSTEM_DEFAULT_POSITION.x,
             SOLAR_SYSTEM_DEFAULT_POSITION.y,
@@ -1503,7 +1544,7 @@ export default function SolarSystemScene({
         targetCamDistRef.current = camera.position.distanceTo(controls.target);
         setOverlayOpacity(0);
         controls.update();
-    }, [focusCameraOnGalaxy, hideSunTooltip, isMilkyWayMode, setOverlayOpacity]);
+    }, [focusCameraOnGalaxy, hideSunTooltip, isMilkyWayMode, activeStarSystem, setOverlayOpacity]);
 
     // ── Init scène ────────────────────────────────────────────────────────
     useEffect(() => {
@@ -2496,10 +2537,44 @@ export default function SolarSystemScene({
                 }
                 const initAngle = Math.random() * Math.PI * 2;
                 group.position.set(Math.cos(initAngle) * cfg.r, 0, Math.sin(initAngle) * cfg.r);
-                sysPlanets.push({ orbitGroup, group, mesh, arc, ring, proxy, hoverSprite, atmosphere, clouds, angle: initAngle, r: cfg.r, speed: cfg.speed, rotDir: cfg.rotDir ?? 1 });
+                sysPlanets.push({
+                    orbitGroup, group, mesh, arc, ring, proxy, hoverSprite, atmosphere, clouds,
+                    angle: initAngle, r: cfg.r, speed: cfg.speed, rotDir: cfg.rotDir ?? 1,
+                    orbitInclination: orbitGroup.rotation.x,
+                    size: cfg.size,
+                    massEarth: cfg.massEarth ?? 0,
+                });
             });
 
-            extraSystemsRef.current[sys.id] = { root: sysRoot, starMesh, planets: sysPlanets };
+            // Anneaux zone habitable
+            const hzRings = [];
+            if (sys.habitableZone) {
+                const { innerR, outerR } = sys.habitableZone;
+                const makeDashedCircle = (radius, color, opacity) => {
+                    const pts = Array.from({ length: 129 }, (_, i) => {
+                        const a = (i / 128) * Math.PI * 2;
+                        return new THREE.Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius);
+                    });
+                    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+                    const mat = new THREE.LineDashedMaterial({ color, dashSize: 1.2, gapSize: 0.8, transparent: true, opacity, depthWrite: false });
+                    const line = new THREE.Line(geo, mat);
+                    line.computeLineDistances();
+                    return line;
+                };
+                // Zone remplie subtile
+                const fillGeo = new THREE.RingGeometry(innerR, outerR, 128);
+                fillGeo.rotateX(-Math.PI / 2);
+                const fillMesh = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: '#22ff66', transparent: true, opacity: 0.025, side: THREE.DoubleSide, depthWrite: false }));
+                sysRoot.add(fillMesh);
+                hzRings.push(fillMesh);
+                const inner = makeDashedCircle(innerR, '#44ff88', 0.55);
+                const outer = makeDashedCircle(outerR, '#22cc55', 0.30);
+                sysRoot.add(inner);
+                sysRoot.add(outer);
+                hzRings.push(inner, outer);
+            }
+
+            extraSystemsRef.current[sys.id] = { root: sysRoot, starMesh, planets: sysPlanets, hzRings };
         });
 
         // Éclairage
@@ -2996,27 +3071,70 @@ export default function SolarSystemScene({
             });
 
             // Animation systèmes extra (Kepler…)
-            Object.values(extraSystemsRef.current).forEach(({ starMesh, planets: sysPlanets }) => {
-                if (starMesh) {
-                    starMesh.rotation.y += 0.0016 * deltaFrames;
+            const isCatalog = viewModeRef.current === 'catalog';
+            const currentSystemId = activeStarSystemRef.current;
+
+            Object.entries(extraSystemsRef.current).forEach(([sysId, { starMesh: sm, planets: sysPlanets, hzRings }]) => {
+                const isActiveSystem = sysId === currentSystemId;
+
+                if (sm) {
+                    if (!isCatalog || !isActiveSystem) {
+                        sm.rotation.y += 0.0016 * deltaFrames;
+                    }
+                    if (sm.material?.uniforms?.uTime) sm.material.uniforms.uTime.value = now;
                 }
+
+                // HZ rings: hidden in catalog mode
+                if (hzRings) hzRings.forEach(r => { r.visible = !isCatalog; });
+
+                // Catalog sort
+                let catalogOrder = null;
+                if (isCatalog && isActiveSystem && sysPlanets.length > 0) {
+                    const sortKey = catalogSortRef.current;
+                    const sorted = [...sysPlanets].sort((a, b) => {
+                        if (sortKey === 'size') return a.size - b.size;
+                        if (sortKey === 'mass') return a.massEarth - b.massEarth;
+                        return a.r - b.r;
+                    });
+                    const n = sorted.length;
+                    const spacing = Math.min(14, Math.max(6, 90 / n));
+                    catalogOrder = new Map(sorted.map((p, i) => [p, (i - (n - 1) / 2) * spacing]));
+                }
+
                 sysPlanets.forEach((p) => {
-                    p.angle += THREE.MathUtils.degToRad(p.speed) * deltaFrames;
-                    p.group.position.set(Math.cos(p.angle) * p.r, 0, Math.sin(p.angle) * p.r);
+                    if (isCatalog && isActiveSystem && catalogOrder) {
+                        const targetX = catalogOrder.get(p) ?? 0;
+                        p.orbitGroup.position.x = THREE.MathUtils.lerp(p.orbitGroup.position.x, targetX, damp(0.04));
+                        p.orbitGroup.position.y = THREE.MathUtils.lerp(p.orbitGroup.position.y, 0, damp(0.04));
+                        p.orbitGroup.position.z = THREE.MathUtils.lerp(p.orbitGroup.position.z, 0, damp(0.04));
+                        p.orbitGroup.rotation.x = THREE.MathUtils.lerp(p.orbitGroup.rotation.x, 0, damp(0.04));
+                        p.group.position.set(0, 0, 0);
+                        p.arc.visible = false;
+                    } else {
+                        p.orbitGroup.position.x = THREE.MathUtils.lerp(p.orbitGroup.position.x, 0, damp(0.04));
+                        p.orbitGroup.position.y = THREE.MathUtils.lerp(p.orbitGroup.position.y, 0, damp(0.04));
+                        p.orbitGroup.position.z = THREE.MathUtils.lerp(p.orbitGroup.position.z, 0, damp(0.04));
+                        p.orbitGroup.rotation.x = THREE.MathUtils.lerp(p.orbitGroup.rotation.x, p.orbitInclination ?? 0, damp(0.04));
+                        p.angle += THREE.MathUtils.degToRad(p.speed) * deltaFrames;
+                        p.group.position.set(Math.cos(p.angle) * p.r, 0, Math.sin(p.angle) * p.r);
+                        p.arc.visible = true;
+                        p.arc.rotation.y = Math.PI - p.angle;
+                    }
+
                     p.mesh.rotation.y += 0.004 * p.rotDir * deltaFrames;
-                    p.arc.rotation.y = Math.PI - p.angle;
-                    // Rotation indépendante des couches nuages et atmosphère
-                    if (p.clouds)     p.clouds.rotation.y     += 0.0028 * deltaFrames;
+                    if (p.clouds) p.clouds.rotation.y += 0.0028 * deltaFrames;
                     if (p.atmosphere) p.atmosphere.rotation.y += 0.0010 * deltaFrames;
+
                     const isSel = p.mesh.userData.name === sel;
                     const targetMeshOp = sel ? (isSel ? 1 : 0) : 1.0;
-                    const targetArcOp  = sel ? (isSel ? 0.4 : 0) : 0.4;
+                    const targetArcOp  = (!isCatalog && sel) ? (isSel ? 0.4 : 0) : (isCatalog ? 0 : 0.4);
                     p.mesh.material.opacity = THREE.MathUtils.lerp(p.mesh.material.opacity, targetMeshOp, damp(0.06));
                     p.arc.material.opacity  = THREE.MathUtils.lerp(p.arc.material.opacity,  targetArcOp,  damp(0.06));
-                    if (p.clouds)     p.clouds.material.opacity     = p.mesh.material.opacity * 0.52;
-                    if (p.atmosphere) p.atmosphere.material.opacity = p.mesh.material.opacity * 0.22;
+                    if (p.clouds) p.clouds.material.opacity = p.mesh.material.opacity * 0.52;
+                    if (p.atmosphere) p.atmosphere.material.opacity = p.mesh.material.opacity * 0.09;
                     if (p.ring?.material) {
-                        const targetRingOp = sel ? (isSel ? (p.ring.userData.baseOpacity ?? p.ring.material.opacity) : 0) : (p.ring.userData.baseOpacity ?? p.ring.material.opacity);
+                        const baseOp = p.ring.userData.baseOpacity ?? p.ring.material.opacity;
+                        const targetRingOp = sel ? (isSel ? baseOp : 0) : baseOp;
                         p.ring.material.opacity = THREE.MathUtils.lerp(p.ring.material.opacity, targetRingOp, damp(0.06));
                     }
                 });

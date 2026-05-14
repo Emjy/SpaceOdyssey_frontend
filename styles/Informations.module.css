@@ -106,3 +106,11 @@
     line-height: 1.4;
     word-break: break-word;
 }
+
+.cardComparison {
+    margin-top: 4px;
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-family: var(--font-mono-ui);
+    opacity: 0.8;
+}
