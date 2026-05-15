@@ -1,0 +1,13 @@
+.loader {
+    display: block;
+}
+
+.trail {
+    animation: inf-travel 1.8s linear infinite;
+    filter: drop-shadow(0 0 5px currentColor);
+}
+
+@keyframes inf-travel {
+    from { stroke-dashoffset: 0; }
+    to   { stroke-dashoffset: -1; }
+}

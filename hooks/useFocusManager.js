@@ -105,6 +105,14 @@ export default function useFocusManager(planets = [], asteroids = [], exoplanetS
         setNbMoons(0);
     }, []);
 
+    const patchGalaxyInfos = useCallback((galaxy) => {
+        setInfos((current) => (
+            current?.bodyType === 'Galaxy' && current?.id === galaxy?.id
+                ? { ...current, ...galaxy }
+                : current
+        ));
+    }, []);
+
     const focusSagittarusA = useCallback(() => {
         setSelectedPlanet(null);
         setSelectedAsteroid(null);
@@ -250,6 +258,7 @@ export default function useFocusManager(planets = [], asteroids = [], exoplanetS
 
         focusMilkyWay,
         focusCatalogGalaxy,
+        patchGalaxyInfos,
         focusSagittarusA,
         focusOnSolarSystem,
         focusStarSystem,

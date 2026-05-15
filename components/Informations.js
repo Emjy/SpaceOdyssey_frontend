@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import styles from '../styles/Informations.module.css';
 import useWikipedia from '../hooks/useWikipedia';
 import useNasaMedia from '../hooks/useNasaMedia';
+import InfinityLoader from './InfinityLoader';
 
 const EARTH = { massKg: 5.972e24, radiusKm: 6371 };
 const SUN   = { massKg: 1.989e30, radiusKm: 696340 };
@@ -36,6 +37,25 @@ function fmtOrbit(v) {
     if (v >= 365 * 2) return `${fmt(v / 365.24219, 2)} ans`;
     if (v >= 1)       return `${fmt(v, 1)} j`;
     return `${fmt(v * 24, 1)} h`;
+}
+
+function fmtGalaxyMass(m) {
+    if (m >= 1e12) return `${fmt(m / 1e12, 2)} billion M☉`;
+    if (m >= 1e9)  return `${fmt(m / 1e9, 0)} milliard${m >= 2e9 ? 's' : ''} M☉`;
+    if (m >= 1e6)  return `${fmt(m / 1e6, 0)} million${m >= 2e6 ? 's' : ''} M☉`;
+    return `${m.toLocaleString('fr-FR')} M☉`;
+}
+
+function fmtStarCount(n) {
+    if (n >= 1e12) return `${fmt(n / 1e12, 2)} billion d'étoiles`;
+    if (n >= 1e9)  return `${fmt(n / 1e9, 0)} milliard${n >= 2e9 ? 's' : ''} d'étoiles`;
+    if (n >= 1e6)  return `${fmt(n / 1e6, 0)} million${n >= 2e6 ? 's' : ''} d'étoiles`;
+    return `${n.toLocaleString('fr-FR')} étoiles`;
+}
+
+function fmtDistance(mly) {
+    if (mly >= 1000) return `${fmt(mly / 1000, 2)} Gly`;
+    return `${fmt(mly, 1)} Mly`;
 }
 
 function fmtAngularSize(majorDeg, minorDeg) {
@@ -78,8 +98,12 @@ function buildRows(infos) {
     }
     if (infos.numberOfStars)   add('Étoiles', infos.numberOfStars.toLocaleString('fr-FR'));
     if (infos.numberOfPlanets) add('Planètes', infos.numberOfPlanets.toLocaleString('fr-FR'));
-    if (infos.bodyType === 'Galaxy' && infos.majorAxisDeg) {
-        add('Taille apparente', fmtAngularSize(infos.majorAxisDeg, infos.minorAxisDeg));
+    if (infos.bodyType === 'Galaxy') {
+        if (infos.starCount != null) add('Étoiles', fmtStarCount(infos.starCount));
+        if (infos.massSolarMasses != null) add('Masse', fmtGalaxyMass(infos.massSolarMasses));
+        if (infos.distanceMly != null) add('Distance', fmtDistance(infos.distanceMly));
+        if (infos.sizeKly != null) add('Taille physique', `${fmt(infos.sizeKly, 0)} kly`);
+        if (infos.majorAxisDeg) add('Taille apparente', fmtAngularSize(infos.majorAxisDeg, infos.minorAxisDeg));
     }
     if (infos.discoveredBy)    add('Découvert par', infos.discoveredBy);
     if (infos.discoveryDate)   add('Découverte', infos.discoveryDate);
@@ -161,7 +185,7 @@ export default function Informations({ infos }) {
     const { result: nasaMedia, loading: nasaLoading } = useNasaMedia(infos);
     const nasaUrl = useMemo(() => getNasaUrl(infos), [infos]);
     const mediaThumb = infos.bodyType === 'Galaxy'
-        ? (nasaMedia?.thumbnail ?? wiki?.thumbnail ?? infos.image ?? null)
+        ? null
         : wiki?.thumbnail;
 
     return (
@@ -214,7 +238,9 @@ export default function Informations({ infos }) {
                         />
                     )}
                     {(wikiLoading || nasaLoading) && !mediaThumb && !wiki && (
-                        <div className={styles.wikiSkeleton} />
+                        <div className={styles.wikiSkeleton}>
+                            <InfinityLoader size={36} />
+                        </div>
                     )}
                     {wiki?.extract && (
                         <p className={styles.wikiExtract}>{wiki.extract}</p>

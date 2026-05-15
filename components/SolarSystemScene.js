@@ -206,8 +206,14 @@ function makeStarShaderMaterial(hexColor, hexEmissive, activity, radius) {
 
 const _planetTexCache = new Map();
 
+function _hashStr(str) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffffffff;
+    return Math.abs(h);
+}
+
 function makeExoPlanetTexture(visualType, baseColor, seed, size = 256) {
-    const key = `${visualType}|${seed % 8}`;
+    const key = `${visualType}|${seed}`;
     if (_planetTexCache.has(key)) return _planetTexCache.get(key);
 
     const canvas = document.createElement('canvas');
@@ -823,6 +829,42 @@ function makeStarSpriteTexture() {
     return texture;
 }
 
+function makeExternalGalaxyVignette(aspect = 1) {
+    const SIZE = 512;
+    const cx = SIZE / 2, cy = SIZE / 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = SIZE; canvas.height = SIZE;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    // Ellipse dans le canvas qui apparaît comme un cercle sur le plan aspect:1.
+    // scale(1/aspect, 1) compresse l'axe X : un cercle pré-transform devient
+    // une ellipse (R/aspect × R) dans le canvas → cercle parfait en world space.
+    const R = SIZE * 0.47;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(1 / aspect, 1);
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+    grad.addColorStop(0,    'rgba(255,255,255,1)');
+    grad.addColorStop(0.32, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.64, 'rgba(255,255,255,0.30)');
+    grad.addColorStop(0.80, 'rgba(255,255,255,0.04)');
+    grad.addColorStop(1,    'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(-cx * aspect, -cy, SIZE * aspect, SIZE);
+    ctx.restore();
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    return new THREE.CanvasTexture(canvas);
+}
+
+function computeGalaxyPlaneSize(camera) {
+    const GALAXY_CAM_Y = 220;
+    const vFovRad = THREE.MathUtils.degToRad(camera.fov);
+    const h = 2 * GALAXY_CAM_Y * Math.tan(vFovRad / 2);
+    return { w: h * camera.aspect, h };
+}
+
 function makeSelectionRingTexture() {
     const size = 256;
     const canvas = document.createElement('canvas');
@@ -1240,6 +1282,18 @@ export default function SolarSystemScene({
 
     useEffect(() => {
         selectedExternalGalaxyRef.current = selectedExternalGalaxy;
+        if (selectedExternalGalaxy) {
+            const camera = cameraRef.current;
+            const controls = ctrlRef.current;
+            if (camera && controls) {
+                camera.up.set(0, 1, 0);
+                camera.position.set(0, 220, 0);
+                camera.lookAt(0, 0, 0);
+                controls.target.set(0, 0, 0);
+                controls.enabled = false;
+                controls.update();
+            }
+        }
     }, [selectedExternalGalaxy]);
 
     useEffect(() => {
@@ -1249,18 +1303,27 @@ export default function SolarSystemScene({
 
         const dynamicGalaxy = selectedExternalGalaxy ?? getGalaxyBySelection(selectedMilkyWay, galaxies);
         const isExternalGalaxy = !!dynamicGalaxy && dynamicGalaxy.id !== 'milkyway';
-        const milkyWayTexture = new THREE.TextureLoader().load('/milkyway_background.png');
-        const externalTexture = isExternalGalaxy
-            ? new THREE.TextureLoader().load(dynamicGalaxy.orbitalImage ?? dynamicGalaxy.image ?? '/milkyway.jpeg')
-            : null;
 
+        const milkyWayTexture = new THREE.TextureLoader().load('/milkyway_background.png');
         galaxyPlane.material.map = milkyWayTexture;
         galaxyPlane.material.needsUpdate = true;
         galaxyPlane.visible = !isExternalGalaxy;
 
-        if (externalTexture) {
-            galaxyExternalPlane.material.map = externalTexture;
-            galaxyExternalPlane.material.needsUpdate = true;
+        if (isExternalGalaxy && dynamicGalaxy.image) {
+            new THREE.TextureLoader().load(dynamicGalaxy.image, (tex) => {
+                if (!galaxyExternalPlane) return;
+                const aspect = tex.image.naturalWidth / tex.image.naturalHeight || 1;
+                const gpH = computeGalaxyPlaneSize(cameraRef.current).h * 0.8;
+                galaxyExternalPlane.geometry.dispose();
+                galaxyExternalPlane.geometry = new THREE.PlaneGeometry(gpH * aspect, gpH);
+                galaxyExternalPlane.userData.imageAspect = aspect;
+                const oldVig = galaxyExternalPlane.material.alphaMap;
+                galaxyExternalPlane.material.alphaMap = makeExternalGalaxyVignette(aspect);
+                if (oldVig) oldVig.dispose();
+                tex.center.set(0.5, 0.5);
+                galaxyExternalPlane.material.map = tex;
+                galaxyExternalPlane.material.needsUpdate = true;
+            });
         }
         galaxyExternalPlane.visible = isExternalGalaxy;
         if (galaxyAnnotationPlaneRef.current) galaxyAnnotationPlaneRef.current.visible = !isExternalGalaxy;
@@ -1712,7 +1775,7 @@ export default function SolarSystemScene({
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setSize(el.clientWidth, el.clientHeight);
-        renderer.setClearColor(0x020508);
+        renderer.setClearColor(0x000000);
         el.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
@@ -2311,12 +2374,14 @@ export default function SolarSystemScene({
             galaxyDisk.add(galaxyPlane);
             galaxyPlaneRef.current = galaxyPlane;
 
+            const externalGalaxyVignette = makeExternalGalaxyVignette();
             const externalGalaxyPlane = new THREE.Mesh(
-                new THREE.PlaneGeometry(300, 196),
+                new THREE.PlaneGeometry(1, 1),
                 new THREE.MeshBasicMaterial({
                     transparent: true,
                     depthWrite: false,
                     side: THREE.DoubleSide,
+                    alphaMap: externalGalaxyVignette,
                 })
             );
             externalGalaxyPlane.rotation.x = -Math.PI / 2;
@@ -2324,17 +2389,6 @@ export default function SolarSystemScene({
             externalGalaxyPlane.visible = false;
             galaxyDisk.add(externalGalaxyPlane);
             galaxyExternalPlaneRef.current = externalGalaxyPlane;
-
-            const initialExternalGalaxy = selectedExternalGalaxyRef.current ?? getGalaxyBySelection(selectedMilkyWay, galaxies);
-            if (initialExternalGalaxy?.id && initialExternalGalaxy.id !== 'milkyway') {
-                const initialImage = initialExternalGalaxy.orbitalImage ?? initialExternalGalaxy.image ?? null;
-                if (initialImage) {
-                    externalGalaxyPlane.material.map = new THREE.TextureLoader().load(initialImage);
-                    externalGalaxyPlane.material.needsUpdate = true;
-                    externalGalaxyPlane.visible = true;
-                    galaxyPlane.visible = false;
-                }
-            }
 
             // ── Canvas d'annotation ───────────────────────────────────────────
             const ANN = 2048;
@@ -2644,9 +2698,9 @@ export default function SolarSystemScene({
                 const mesh = makeSphere(cfg.size, cfg.color, cfg.emissive, 32);
                 mesh.userData = { type: 'planet', name: cfg.name, label: cfg.name.toUpperCase(), systemId: sys.id };
 
-                // Texture procédurale selon type de planète
+                // Texture procédurale selon type de planète (seed basé sur le nom pour cohérence avec le catalogue)
                 if (cfg.visualType) {
-                    const planetSeed = (sysSeed * 37 + pi * 1_234_567) & 0x7fffffff;
+                    const planetSeed = _hashStr(cfg.name ?? String(pi));
                     const planetTex = makeExoPlanetTexture(cfg.visualType, cfg.color, planetSeed);
                     mesh.material.map = planetTex;
                     mesh.material.color.set(0xffffff);
@@ -2935,6 +2989,7 @@ export default function SolarSystemScene({
             camera.updateProjectionMatrix();
             renderer.setSize(w, h);
             markInteractionHot();
+            // Le plan orbital des galaxies externes garde ses dimensions définies au chargement de la texture (ratio image constant)
         };
         window.addEventListener('resize', onResize);
 
@@ -2957,6 +3012,8 @@ export default function SolarSystemScene({
 
         const applyZoom = (clientX, clientY, sign) => {
             // sign > 0 = zoom out, sign < 0 = zoom in
+            if (selectedExternalGalaxyRef.current) return;
+            if (isMilkyWayModeRef.current && !USE_3D_GALAXY) return;
             const rect = el.getBoundingClientRect();
             const ndx = ((clientX - rect.left) / rect.width) * 2 - 1;
             const ndy = -((clientY - rect.top) / rect.height) * 2 + 1;
@@ -3733,7 +3790,7 @@ export default function SolarSystemScene({
     }, [hideHoverRing, hideSunTooltip]);
 
     return (
-        <div style={{ position: 'absolute', inset: 0 }}>
+        <div style={{ position: 'absolute', inset: 0, background: '#000' }}>
             <div
                 ref={mountRef}
                 style={{ position: 'absolute', inset: 0, cursor: 'grab' }}

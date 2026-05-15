@@ -9,9 +9,10 @@ import styles from '../styles/HomePage.module.css';
 import useSpaceData    from '../hooks/useSpaceData';
 import useFocusManager from '../hooks/useFocusManager';
 
-import NavigationMenu from './NavigationMenu';
-import Informations   from './Informations';
-import CatalogView    from './CatalogView';
+import NavigationMenu   from './NavigationMenu';
+import Informations     from './Informations';
+import CatalogView      from './CatalogView';
+import InfinityLoader   from './InfinityLoader';
 
 const SolarSystemScene = dynamic(() => import('./SolarSystemScene'), { ssr: false });
 
@@ -49,6 +50,7 @@ export default function HomePage() {
         focusMilkyWay,
         focusAndromeda,
         focusCatalogGalaxy,
+        patchGalaxyInfos,
         focusSagittarusA,
         focusOnSolarSystem,
         focusStarSystem,
@@ -69,6 +71,11 @@ export default function HomePage() {
         return () => document.removeEventListener('mousedown', onClickOutside);
     }, [settingsOpen]);
 
+    const selectedExternalGalaxy = infos?.bodyType === 'Galaxy' && infos?.id !== 'milkyway' ? infos : null;
+    const orbitalGalaxyImage = selectedExternalGalaxy?.image ?? selectedExternalGalaxy?.orbitalImage ?? null;
+    const isCatalog = viewMode === 'catalog';
+    const shouldUseExternalGalaxyHero = !isCatalog && !!selectedExternalGalaxy && !!orbitalGalaxyImage;
+
     // Raccourcis clavier globaux
     useEffect(() => {
         function onKeyDown(e) {
@@ -87,7 +94,9 @@ export default function HomePage() {
     if (loading) {
         return (
             <div className={styles.pageBackground}>
-                <div className={styles.loadingState}>Chargement du système orbital…</div>
+                <div className={styles.loadingState}>
+                    <InfinityLoader size={64} />
+                </div>
             </div>
         );
     }
@@ -97,10 +106,8 @@ export default function HomePage() {
         setSettingsOpen(false);
     };
 
-    const isCatalog = viewMode === 'catalog';
-
     return (
-        <div className={styles.pageBackground}>
+        <div className={`${styles.pageBackground} ${isCatalog ? styles.pageBackgroundCatalog : styles.pageBackgroundOrbital}`}>
             <div className={styles.modeTabsShell}>
                 <div className={styles.modeTabs}>
                     <button
@@ -121,7 +128,10 @@ export default function HomePage() {
             </div>
 
             {/* Scène 3D — toujours montée, masquée en mode catalogue */}
-            <div className={styles.sceneLayer} style={isCatalog ? { visibility: 'hidden' } : undefined}>
+            <div
+                className={styles.sceneLayer}
+                style={isCatalog || shouldUseExternalGalaxyHero ? { visibility: 'hidden' } : undefined}
+            >
                 <SolarSystemScene
                     planets={planets}
                     asteroids={asteroids}
@@ -147,6 +157,18 @@ export default function HomePage() {
                     sideViewNonce={sideViewNonce}
                 />
             </div>
+
+            {shouldUseExternalGalaxyHero && (
+                <div className={styles.externalGalaxyShell} aria-hidden="true">
+                    <div className={styles.externalGalaxyVignette}>
+                        <img
+                            className={styles.externalGalaxyImage}
+                            src={orbitalGalaxyImage}
+                            alt=""
+                        />
+                    </div>
+                </div>
+            )}
 
             {/* Vue catalogue — couvre la scène 3D */}
             {isCatalog && (

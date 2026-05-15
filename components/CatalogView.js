@@ -5,8 +5,7 @@ import dynamic from 'next/dynamic';
 import styles from '../styles/CatalogView.module.css';
 import { getMoonStubsFromPlanet, fetchBody } from '../lib/solarApi';
 import { GALAXIES, isGalaxyOverviewSelection } from '../data/galaxies';
-import useNasaMedia from '../hooks/useNasaMedia';
-import useWikipedia from '../hooks/useWikipedia';
+import InfinityLoader from './InfinityLoader';
 
 const StarCanvas = dynamic(() => import('./StarCanvas'), { ssr: false });
 
@@ -796,25 +795,40 @@ function BodyVisual({ body, kind = 'planet', size = 64, className = '' }) {
 }
 
 function GalaxyVisual({ galaxy }) {
-    const imageSrc = galaxy.image ?? galaxy.orbitalImage ?? null;
+    const imageSrc = galaxy.image ?? null;
+    const [loaded, setLoaded] = useState(false);
+    const [errored, setErrored] = useState(false);
+    const showLoader = imageSrc && !loaded && !errored;
+    const showPlaceholder = !imageSrc || errored;
     return (
         <div className={styles.galaxyHero}>
-            {imageSrc ? (
-                <img
-                    className={styles.galaxyHeroImage}
-                    src={imageSrc}
-                    alt={galaxy.name}
-                    loading="lazy"
-                />
-            ) : (
+            {showPlaceholder ? (
                 <div
                     className={styles.galaxyHeroImage}
                     aria-label={galaxy.name}
                     style={{
                         background:
                             'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.28) 0%, rgba(120,170,255,0.12) 18%, rgba(16,26,56,0.94) 52%, rgba(5,8,18,1) 100%)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}
                 />
+            ) : (
+                <>
+                    {showLoader && (
+                        <div className={styles.galaxyHeroLoader}>
+                            <InfinityLoader size={40} />
+                        </div>
+                    )}
+                    <img
+                        className={styles.galaxyHeroImage}
+                        src={imageSrc}
+                        alt={galaxy.name}
+                        loading="lazy"
+                        style={loaded ? {} : { opacity: 0 }}
+                        onLoad={() => setLoaded(true)}
+                        onError={() => setErrored(true)}
+                    />
+                </>
             )}
             <div className={styles.galaxyHeroOverlay} />
         </div>
@@ -872,16 +886,6 @@ function formatGalaxyStarCount(galaxy) {
     return `${galaxy.numberOfStars.toLocaleString('fr-FR')} étoiles`;
 }
 
-function getGalaxyWikiNames(galaxy) {
-    if (!galaxy || galaxy.bodyType !== 'Galaxy') return { frName: null, enName: null };
-    if (galaxy.id === 'milkyway') return { frName: 'Voie Lactée', enName: 'Milky Way' };
-    const sourceId = galaxy.sourceId?.trim() || null;
-    const displayName = galaxy.name?.trim() || null;
-    const englishName = galaxy.englishName?.trim() || displayName || null;
-    const frName = displayName?.toLowerCase().startsWith('galaxie ') ? displayName : displayName;
-    const enName = sourceId || englishName;
-    return { frName, enName };
-}
 
 function formatScaleExponent(value) {
     if (!Number.isFinite(value) || value <= 0) return null;
@@ -1244,6 +1248,7 @@ export default function CatalogView({
     const skipMilkyWaySyncRef = useRef(false);
     const skipPlanetSyncRef   = useRef(null);
     const skipGalaxyFallbackRef = useRef(false);
+    const skipMoonsLevelRevertRef = useRef(false);
     const [level, setLevel]               = useState('galaxies');
     const [activeSystemId, setActiveSystemId] = useState(null);
     const [activePlanetName, setActivePlanetName] = useState(null);
@@ -1262,36 +1267,13 @@ export default function CatalogView({
         try { return JSON.parse(localStorage.getItem('spaceodyssey_favorites') ?? '[]'); }
         catch { return []; }
     });
-    const [runtimeGalaxyImages, setRuntimeGalaxyImages] = useState({});
-    const { result: activeGalaxyMedia } = useNasaMedia(infos?.bodyType === 'Galaxy' ? infos : null);
-    const { frName: activeGalaxyFrName, enName: activeGalaxyEnName } = useMemo(
-        () => getGalaxyWikiNames(infos),
-        [infos]
-    );
-    const { result: activeGalaxyWiki } = useWikipedia(activeGalaxyFrName, activeGalaxyEnName);
-
     const catalogGalaxies = useMemo(() => {
         const knownIds = new Set(GALAXIES.map((galaxy) => galaxy.id));
-        const merged = [
+        return [
             ...GALAXIES,
             ...galaxies.filter((galaxy) => !knownIds.has(galaxy.id)),
         ];
-        return merged.map((galaxy) => {
-            const runtimeImage = runtimeGalaxyImages[galaxy.id];
-            return runtimeImage ? { ...galaxy, image: galaxy.image ?? runtimeImage, orbitalImage: galaxy.orbitalImage ?? runtimeImage } : galaxy;
-        });
-    }, [galaxies, runtimeGalaxyImages]);
-
-    useEffect(() => {
-        if (infos?.bodyType !== 'Galaxy' || !infos?.id) return;
-        const preferredImage = activeGalaxyMedia?.thumbnail ?? activeGalaxyWiki?.thumbnail ?? null;
-        if (!preferredImage) return;
-        setRuntimeGalaxyImages((current) => (
-            current[infos.id] === preferredImage
-                ? current
-                : { ...current, [infos.id]: preferredImage }
-        ));
-    }, [infos, activeGalaxyMedia, activeGalaxyWiki]);
+    }, [galaxies]);
     const toggleFavorite = (id) => {
         setFavorites(prev => {
             const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
@@ -1380,6 +1362,10 @@ export default function CatalogView({
         if (selectedMoon) return;
 
         if (selectedPlanet) {
+            if (skipMoonsLevelRevertRef.current) {
+                skipMoonsLevelRevertRef.current = false;
+                return;
+            }
             setLevel('planets');
             return;
         }
@@ -1578,6 +1564,7 @@ export default function CatalogView({
             const planetMoons = solarMoonMap[name] ?? [];
             if (planetMoons.length > 0) {
                 skipPlanetSyncRef.current = selectionValue;
+                skipMoonsLevelRevertRef.current = true;
                 setLevel('moons');
                 if (activePlanetCarouselKey !== name) focusPlanet?.(selectionValue, activeSystemId);
                 const firstMoon = planetMoons[0];

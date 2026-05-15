@@ -6,7 +6,8 @@ export const revalidate = 60 * 15;
 const OPENNGC_TAP_URL = 'https://dc.g-vo.org/tap/sync';
 const NASA_IMAGES_URL = 'https://images-api.nasa.gov/search';
 const WIKIPEDIA_SUMMARY_URL = 'https://en.wikipedia.org/api/rest_v1/page/summary';
-const MAX_GALAXIES = 50;
+const NED_URL = 'https://ned.ipac.caltech.edu/api/get_summary';
+const MAX_GALAXIES = 500;
 
 function parseTsv(text) {
     const lines = text.trim().split('\n').filter(Boolean);
@@ -30,12 +31,22 @@ function pickCommonName(row) {
     return raw.split(/[,;/|]/).map((part) => part.trim()).find(Boolean) ?? raw;
 }
 
+function computePhysicalSizeKly(majorAxisDeg, distMly) {
+    if (!Number.isFinite(majorAxisDeg) || !Number.isFinite(distMly) || distMly <= 0) return null;
+    // Loi des petits angles : taille = 2 * sin(θ/2) * d ≈ θ_rad * d
+    return majorAxisDeg * (Math.PI / 180) * distMly * 1000;
+}
+
 function toGalaxyObject(row) {
     const commonName = pickCommonName(row);
     const messier = row.messier_nr ? `M${row.messier_nr}` : null;
     const ngcName = row.name?.trim() || null;
     const displayName = commonName || messier || ngcName;
     if (!displayName || !ngcName) return null;
+
+    const majorAxisDeg = parseNumber(row.maj_ax_deg);
+    const distMly = parseNumber(row.dist);
+    const sizeKly = computePhysicalSizeKly(majorAxisDeg, distMly);
 
     return {
         id: `openngc-${ngcName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
@@ -49,13 +60,15 @@ function toGalaxyObject(row) {
         accent: messier || ngcName,
         meta: row.constellation ? `Constellation ${row.constellation}` : null,
         magnitudeV: parseNumber(row.mag_v),
-        majorAxisDeg: parseNumber(row.maj_ax_deg),
+        majorAxisDeg,
         minorAxisDeg: parseNumber(row.min_ax_deg),
+        distanceMly: distMly,
+        sizeKly,
         hubbleType: row.hubble_type?.trim() || null,
         messierNr: row.messier_nr ? Number.parseInt(row.messier_nr, 10) : null,
         comname: row.comname?.trim() || null,
+        starCount: null,
         image: null,
-        orbitalImage: null,
     };
 }
 
@@ -156,20 +169,64 @@ function buildWikipediaTitles(galaxy) {
     return [...new Set(titles.filter(Boolean))];
 }
 
-async function fetchWikipediaImage(galaxy) {
+function extractStarCount(summary) {
+    if (!summary) return null;
+    const m = summary.match(/(\d[\d,.]*)[\s ]*(trillion|billion|million)\s*stars?/i);
+    if (!m) return null;
+    const n = parseFloat(m[1].replace(/,/g, ''));
+    const mult = /trillion/i.test(m[2]) ? 1e12 : /billion/i.test(m[2]) ? 1e9 : 1e6;
+    return Math.round(n * mult);
+}
+
+async function fetchWikipediaData(galaxy) {
     for (const title of buildWikipediaTitles(galaxy)) {
         try {
             const url = `${WIKIPEDIA_SUMMARY_URL}/${encodeURIComponent(title)}`;
             const res = await fetch(url, { next: { revalidate: 60 * 60 * 12 } });
             if (!res.ok) continue;
             const data = await res.json();
-            const source = data?.thumbnail?.source ?? data?.originalimage?.source ?? null;
-            if (source) return source;
+            const originalImage = data?.originalimage?.source ?? null;
+            const thumbnail = data?.thumbnail?.source ?? null;
+            const starCount = extractStarCount(data?.extract ?? data?.description);
+            if (originalImage || thumbnail || starCount) return { originalImage, thumbnail, starCount };
         } catch {
             continue;
         }
     }
-    return null;
+    return { originalImage: null, thumbnail: null, starCount: null };
+}
+
+async function fetchNEDData(galaxy) {
+    const names = [
+        galaxy.messierNr ? `M${galaxy.messierNr}` : null,
+        galaxy.sourceId ?? null,
+        galaxy.comname ?? null,
+    ].filter(Boolean);
+
+    for (const name of names) {
+        try {
+            const url = `${NED_URL}?name=${encodeURIComponent(name)}`;
+            const res = await fetch(url, { next: { revalidate: 60 * 60 * 24 * 7 } });
+            if (!res.ok) continue;
+            const data = await res.json();
+            const result = Array.isArray(data?.result) ? data.result[0] : data?.result ?? data;
+            if (!result) continue;
+
+            // Distance en Mpc → Mly (1 Mpc = 3.26156 Mly)
+            const distMpc = result.distance_metric ?? result.distance ?? null;
+            const distanceMly = distMpc != null ? distMpc * 3.26156 : null;
+
+            // Masse stellaire en masses solaires
+            const massSolarMasses = result.stellar_mass ?? result.mass ?? null;
+
+            if (distanceMly != null || massSolarMasses != null) {
+                return { distanceMly, massSolarMasses };
+            }
+        } catch {
+            continue;
+        }
+    }
+    return { distanceMly: null, massSolarMasses: null };
 }
 
 function buildFallbackGalaxies() {
@@ -191,18 +248,16 @@ function buildFallbackGalaxies() {
         messierNr: galaxy.sourceId.startsWith('M') ? Number.parseInt(galaxy.sourceId.slice(1), 10) : null,
         comname: galaxy.name,
         image: null,
-        orbitalImage: null,
     }));
 }
 
 export async function GET() {
     const query = `
-        SELECT TOP 250
+        SELECT TOP 500
             name, obj_type, constellation, maj_ax_deg, min_ax_deg, mag_v,
-            hubble_type, messier_nr, comname
+            hubble_type, messier_nr, comname, dist
         FROM openngc.data
         WHERE obj_type='G'
-          AND (messier_nr IS NOT NULL OR comname IS NOT NULL)
     `.replace(/\s+/g, ' ').trim();
 
     const body = new URLSearchParams({
@@ -220,6 +275,7 @@ export async function GET() {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: body.toString(),
             next: { revalidate: 60 * 60 * 24 },
+            signal: AbortSignal.timeout(12000),
         });
 
         if (res.ok) {
@@ -230,8 +286,12 @@ export async function GET() {
                 .filter((galaxy) => !/androm/i.test(galaxy.name))
                 .sort((a, b) => getPopularityScore(b) - getPopularityScore(a))
                 .slice(0, MAX_GALAXIES);
+            console.log(`[galaxies] OpenNGC: ${galaxies.length} galaxies chargées`);
+        } else {
+            console.warn(`[galaxies] OpenNGC HTTP ${res.status}`);
         }
-    } catch {
+    } catch (err) {
+        console.warn(`[galaxies] OpenNGC fetch échoué:`, err?.message ?? err);
         galaxies = [];
     }
 
@@ -239,13 +299,27 @@ export async function GET() {
         galaxies = buildFallbackGalaxies();
     }
 
+    // Enrichissement (image + données externes) limité aux TOP_ENRICHED les plus populaires
+    // pour éviter le timeout de 500 × 3 fetches simultanés
+    const TOP_ENRICHED = 120;
     const withImages = await Promise.all(
-        galaxies.map(async (galaxy) => {
-            const image = await fetchNasaImage(galaxy) ?? await fetchWikipediaImage(galaxy);
+        galaxies.map(async (galaxy, i) => {
+            if (i >= TOP_ENRICHED) return galaxy;
+            const [wikiData, nasaImage, nedData] = await Promise.all([
+                fetchWikipediaData(galaxy),
+                fetchNasaImage(galaxy),
+                fetchNEDData(galaxy),
+            ]);
+            const image = wikiData.originalImage ?? nasaImage ?? wikiData.thumbnail ?? null;
+            const distanceMly = nedData.distanceMly ?? galaxy.distanceMly ?? null;
+            const sizeKly = computePhysicalSizeKly(galaxy.majorAxisDeg, distanceMly);
             return {
                 ...galaxy,
                 image,
-                orbitalImage: image,
+                distanceMly,
+                sizeKly,
+                starCount: wikiData.starCount ?? galaxy.starCount ?? null,
+                massSolarMasses: nedData.massSolarMasses ?? null,
             };
         })
     );

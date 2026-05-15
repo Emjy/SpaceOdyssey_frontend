@@ -10,9 +10,53 @@
         linear-gradient(180deg, rgba(3, 7, 14, 0.2), rgba(3, 7, 14, 0.7));
 }
 
+.pageBackgroundCatalog {
+    background: #000;
+}
+
+.pageBackgroundOrbital {
+    background: #000;
+}
+
 .sceneLayer {
     position: absolute;
     inset: 0;
+}
+
+.externalGalaxyShell {
+    position: absolute;
+    inset: 0;
+    z-index: 12;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 96px 320px 72px 72px;
+}
+
+.externalGalaxyVignette {
+    width: min(72vw, 980px);
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 0 120px rgba(0, 0, 0, 0.34);
+}
+
+.externalGalaxyVignette::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 30%),
+        radial-gradient(circle at 50% 50%, transparent 30%, rgba(0,0,0,0.70) 60%, rgba(0,0,0,0.96) 75%, rgba(0,0,0,1) 100%);
+}
+
+.externalGalaxyImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
 .panel {
