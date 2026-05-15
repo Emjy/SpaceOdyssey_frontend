@@ -286,6 +286,28 @@
     font-family: var(--font-mono-ui, monospace);
 }
 
+.galaxyCarouselShell {
+    justify-content: center;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.galaxyCarouselShell .carouselStage {
+    min-height: min(72vh, 640px);
+}
+
+.galaxyCarouselShell .carouselItem {
+    top: 50%;
+    bottom: auto;
+    min-height: auto;
+    height: auto;
+    transform: translate3d(calc(-50% + var(--item-offset-x, 0px)), -50%, 0);
+}
+
+.galaxyCarouselShell .carouselCaption {
+    min-height: 0;
+}
+
 @media (max-width: 720px) {
     .carouselStage {
         height: calc(min(42vh, 300px) + 7rem);
@@ -430,6 +452,16 @@
     box-shadow: inset -6px -10px 18px rgba(0,0,0,0.54), inset 6px 6px 14px rgba(255,255,255,0.06);
 }
 
+.sphereTint {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    mix-blend-mode: color;
+    opacity: 0.38;
+    z-index: 1;
+}
+
 .sphereSurfaceGradient {
     animation: sphereScroll 18s linear infinite;
     background-size: 140% 140%;
@@ -515,6 +547,10 @@
 
 .sphereMoon .sphereSurface {
     box-shadow: inset -5px -8px 14px rgba(0,0,0,0.58), inset 2px 2px 6px rgba(255,255,255,0.05);
+}
+
+.sphereMoon .sphereTint {
+    opacity: 0.42;
 }
 
 .sphereWithRings {

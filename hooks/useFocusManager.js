@@ -3,15 +3,10 @@
 import { useState, useCallback, useMemo } from 'react';
 import { fetchBody, getMoonStubsFromPlanet } from '../lib/solarApi';
 import { EXTRA_STAR_SYSTEMS } from '../data/starSystems';
+import { GALAXIES } from '../data/galaxies';
 
 const SPECIAL_OBJECTS = {
-    milkyWay: {
-        id: 'milkyWay',
-        englishName: 'Milky Way',
-        bodyType: 'Galaxy',
-        numberOfStars: 100000000000,
-        numberOfPlanets: 100000000000,
-    },
+    milkyWay: GALAXIES.find((galaxy) => galaxy.id === 'milkyway'),
     sagittariusA: {
         id: 'sagittariusA',
         englishName: 'Sagittarius A*',
@@ -88,10 +83,26 @@ export default function useFocusManager(planets = [], asteroids = [], exoplanetS
         setFocusOnPlanet(false);
         setFocusOnAsteroid(false);
         setSelectedMilkyWay(null);
+        setSelectedSolarSystem(null);
         setFocusOneMoon(false);
         setSelectedPlanet(null);
         setSelectedAsteroid(null);
         setMoons([]);
+        setNbMoons(0);
+    }, []);
+
+    const focusCatalogGalaxy = useCallback((galaxy) => {
+        setInfos(galaxy);
+        setSelectedMoon(null);
+        setSelectedPlanet(null);
+        setSelectedAsteroid(null);
+        setFocusOnPlanet(false);
+        setFocusOnAsteroid(false);
+        setFocusOneMoon(false);
+        setSelectedMilkyWay(`galaxy:${galaxy.id}`);
+        setSelectedSolarSystem(null);
+        setMoons([]);
+        setNbMoons(0);
     }, []);
 
     const focusSagittarusA = useCallback(() => {
@@ -238,6 +249,7 @@ export default function useFocusManager(planets = [], asteroids = [], exoplanetS
         allExtraSystems,
 
         focusMilkyWay,
+        focusCatalogGalaxy,
         focusSagittarusA,
         focusOnSolarSystem,
         focusStarSystem,

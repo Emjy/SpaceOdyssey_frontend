@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import styles from '../styles/Informations.module.css';
 import useWikipedia from '../hooks/useWikipedia';
+import useNasaMedia from '../hooks/useNasaMedia';
 
 const EARTH = { massKg: 5.972e24, radiusKm: 6371 };
 const SUN   = { massKg: 1.989e30, radiusKm: 696340 };
@@ -37,6 +38,14 @@ function fmtOrbit(v) {
     return `${fmt(v * 24, 1)} h`;
 }
 
+function fmtAngularSize(majorDeg, minorDeg) {
+    if (!Number.isFinite(majorDeg) || majorDeg <= 0) return null;
+    const toArcmin = (deg) => deg * 60;
+    const major = toArcmin(majorDeg);
+    const minor = Number.isFinite(minorDeg) && minorDeg > 0 ? toArcmin(minorDeg) : null;
+    return minor ? `${fmt(major, 1)}′ × ${fmt(minor, 1)}′` : `${fmt(major, 1)}′`;
+}
+
 const BODY_TYPE_FR = {
     'Star': 'Étoile', 'Exoplanet': 'Exoplanète', 'Planet': 'Planète',
     'Moon': 'Lune', 'Asteroid': 'Astéroïde', 'Black Hole': 'Trou noir', 'Galaxy': 'Galaxie',
@@ -45,6 +54,7 @@ const BODY_TYPE_FR = {
 // Noms français connus pour les objets spéciaux
 const FR_NAMES = {
     milkyWay: 'Voie Lactée',
+    andromeda: "Galaxie d'Andromède",
     soleil: 'Soleil',
     sagittariusA: 'Sagittarius A*',
 };
@@ -68,6 +78,9 @@ function buildRows(infos) {
     }
     if (infos.numberOfStars)   add('Étoiles', infos.numberOfStars.toLocaleString('fr-FR'));
     if (infos.numberOfPlanets) add('Planètes', infos.numberOfPlanets.toLocaleString('fr-FR'));
+    if (infos.bodyType === 'Galaxy' && infos.majorAxisDeg) {
+        add('Taille apparente', fmtAngularSize(infos.majorAxisDeg, infos.minorAxisDeg));
+    }
     if (infos.discoveredBy)    add('Découvert par', infos.discoveredBy);
     if (infos.discoveryDate)   add('Découverte', infos.discoveryDate);
     if (infos.sy_dist)         add('Distance', `${fmt(infos.sy_dist, 1)} pc`);
@@ -87,6 +100,24 @@ function getWikiNames(infos) {
 
     if (bodyType === 'Planet' && englishName) {
         return { frName: FR_NAMES[infos.id] ?? infos.name ?? null, enName: englishName };
+    }
+
+    if (bodyType === 'Galaxy' && englishName) {
+        if (infos.id === 'milkyway') {
+            return { frName: 'Voie Lactée', enName: 'Milky Way' };
+        }
+        if (infos.id === 'andromeda' || englishName === 'Andromeda') {
+            return { frName: "Galaxie d'Andromède", enName: 'Andromeda Galaxy' };
+        }
+        const sourceId = infos.sourceId?.trim() || null;
+        const displayName = infos.name?.trim() || null;
+        const frenchName = displayName?.toLowerCase().startsWith('galaxie ')
+            ? displayName
+            : (FR_NAMES[infos.id] ?? displayName);
+        return {
+            frName: frenchName,
+            enName: sourceId || (englishName.includes('Galaxy') ? englishName : `${englishName} Galaxy`),
+        };
     }
 
     const frName = FR_NAMES[infos.id]
@@ -127,7 +158,11 @@ export default function Informations({ infos }) {
 
     const { frName, enName } = useMemo(() => getWikiNames(infos), [infos]);
     const { result: wiki, loading: wikiLoading } = useWikipedia(frName, enName);
+    const { result: nasaMedia, loading: nasaLoading } = useNasaMedia(infos);
     const nasaUrl = useMemo(() => getNasaUrl(infos), [infos]);
+    const mediaThumb = infos.bodyType === 'Galaxy'
+        ? (nasaMedia?.thumbnail ?? wiki?.thumbnail ?? infos.image ?? null)
+        : wiki?.thumbnail;
 
     return (
         <div className={styles.container}>
@@ -168,23 +203,33 @@ export default function Informations({ infos }) {
                 </div>
             )}
 
-            {(wiki || wikiLoading || nasaUrl) && (
+            {(wiki || wikiLoading || nasaUrl || nasaMedia || nasaLoading) && (
                 <div className={styles.wikiSection}>
-                    {wiki?.thumbnail && (
+                    {mediaThumb && (
                         <img
                             className={styles.wikiThumb}
-                            src={wiki.thumbnail}
+                            src={mediaThumb}
                             alt=""
                             aria-hidden="true"
                         />
                     )}
-                    {wikiLoading && !wiki && (
+                    {(wikiLoading || nasaLoading) && !mediaThumb && !wiki && (
                         <div className={styles.wikiSkeleton} />
                     )}
                     {wiki?.extract && (
                         <p className={styles.wikiExtract}>{wiki.extract}</p>
                     )}
                     <div className={styles.wikiLinks}>
+                        {nasaMedia?.url && (
+                            <a
+                                href={nasaMedia.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={styles.wikiLink}
+                            >
+                                NASA Image Library →
+                            </a>
+                        )}
                         {wiki?.url && (
                             <a
                                 href={wiki.url}

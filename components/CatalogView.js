@@ -4,6 +4,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import styles from '../styles/CatalogView.module.css';
 import { getMoonStubsFromPlanet, fetchBody } from '../lib/solarApi';
+import { GALAXIES, isGalaxyOverviewSelection } from '../data/galaxies';
+import useNasaMedia from '../hooks/useNasaMedia';
+import useWikipedia from '../hooks/useWikipedia';
 
 const StarCanvas = dynamic(() => import('./StarCanvas'), { ssr: false });
 
@@ -135,6 +138,48 @@ function getMoonStretch(body) {
     return null;
 }
 
+function getMoonCatalogTone(body) {
+    const density = body?.density;
+    const avgTemp = body?.avgTemp;
+
+    let r = 0.69, g = 0.65, b = 0.62;
+
+    if (Number.isFinite(density) && density > 0) {
+        if (density < 1.3) {
+            r = 0.80; g = 0.88; b = 0.95;
+        } else if (density < 1.8) {
+            r = 0.65; g = 0.68; b = 0.72;
+        } else if (density < 2.5) {
+            r = 0.58; g = 0.55; b = 0.52;
+        } else if (density < 3.5) {
+            r = 0.60; g = 0.58; b = 0.55;
+        } else {
+            r = 0.50; g = 0.47; b = 0.43;
+        }
+    }
+
+    if (Number.isFinite(avgTemp) && avgTemp > 0) {
+        if (avgTemp < 100) {
+            r -= 0.06; b += 0.06;
+        } else if (avgTemp > 240) {
+            r += 0.05; g += 0.02; b -= 0.05;
+        }
+    }
+
+    const clamp = (v) => Math.max(0, Math.min(1, v));
+    const toHex = (rv, gv, bv) => {
+        const ri = Math.round(clamp(rv) * 255);
+        const gi = Math.round(clamp(gv) * 255);
+        const bi = Math.round(clamp(bv) * 255);
+        return `#${ri.toString(16).padStart(2, '0')}${gi.toString(16).padStart(2, '0')}${bi.toString(16).padStart(2, '0')}`;
+    };
+
+    return {
+        tint: toHex(r, g, b),
+        glow: toHex(r * 0.22, g * 0.22, b * 0.22),
+    };
+}
+
 function getBodyVisual(body, kind) {
     const name = body?.id ?? body?.name ?? body?.englishName ?? '';
     const normalized = normalizeAssetName(name);
@@ -165,10 +210,12 @@ function getBodyVisual(body, kind) {
     }
 
     if (kind === 'moon') {
+        const tone = getMoonCatalogTone(body);
         return {
             variant: 'moon',
             texture: `${MOON_TEXTURE_BASE}/${normalized}.jpg`,
-            glowColor: '#a6b6c8',
+            glowColor: tone.glow,
+            tintColor: tone.tint,
         };
     }
 
@@ -737,20 +784,38 @@ function BodyVisual({ body, kind = 'planet', size = 64, className = '' }) {
                 className={`${styles.sphereSurface} ${useTexture ? styles.sphereSurfaceImage : styles.sphereSurfaceGradient}`}
                 style={useTexture ? { backgroundImage: `url(${visual.texture})` } : { background: visual.background ?? fallbackBg }}
             />
+            {visual.variant === 'moon' && visual.tintColor && (
+                <div
+                    className={styles.sphereTint}
+                    style={{ background: visual.tintColor }}
+                />
+            )}
             {hasRings && <RingCanvas sphereSize={size} ringData={visual.ringData} />}
         </div>
     );
 }
 
-function GalaxyVisual() {
+function GalaxyVisual({ galaxy }) {
+    const imageSrc = galaxy.image ?? galaxy.orbitalImage ?? null;
     return (
         <div className={styles.galaxyHero}>
-            <img
-                className={styles.galaxyHeroImage}
-                src="/milkyway.jpeg"
-                alt="Voie Lactée"
-                loading="lazy"
-            />
+            {imageSrc ? (
+                <img
+                    className={styles.galaxyHeroImage}
+                    src={imageSrc}
+                    alt={galaxy.name}
+                    loading="lazy"
+                />
+            ) : (
+                <div
+                    className={styles.galaxyHeroImage}
+                    aria-label={galaxy.name}
+                    style={{
+                        background:
+                            'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.28) 0%, rgba(120,170,255,0.12) 18%, rgba(16,26,56,0.94) 52%, rgba(5,8,18,1) 100%)',
+                    }}
+                />
+            )}
             <div className={styles.galaxyHeroOverlay} />
         </div>
     );
@@ -785,6 +850,37 @@ function getNiceScaleKm(rawKm) {
     else niceNormalized = 1;
 
     return niceNormalized * base;
+}
+
+function formatGalaxyAngularSize(galaxy) {
+    const major = galaxy?.majorAxisDeg;
+    const minor = galaxy?.minorAxisDeg;
+    if (!Number.isFinite(major) || major <= 0) return null;
+
+    const toArcmin = (deg) => deg * 60;
+    const majorArcmin = toArcmin(major);
+    const minorArcmin = Number.isFinite(minor) && minor > 0 ? toArcmin(minor) : null;
+
+    if (minorArcmin) {
+        return `${majorArcmin.toFixed(1)}′ × ${minorArcmin.toFixed(1)}′`;
+    }
+    return `${majorArcmin.toFixed(1)}′`;
+}
+
+function formatGalaxyStarCount(galaxy) {
+    if (!Number.isFinite(galaxy?.numberOfStars) || galaxy.numberOfStars <= 0) return null;
+    return `${galaxy.numberOfStars.toLocaleString('fr-FR')} étoiles`;
+}
+
+function getGalaxyWikiNames(galaxy) {
+    if (!galaxy || galaxy.bodyType !== 'Galaxy') return { frName: null, enName: null };
+    if (galaxy.id === 'milkyway') return { frName: 'Voie Lactée', enName: 'Milky Way' };
+    const sourceId = galaxy.sourceId?.trim() || null;
+    const displayName = galaxy.name?.trim() || null;
+    const englishName = galaxy.englishName?.trim() || displayName || null;
+    const frName = displayName?.toLowerCase().startsWith('galaxie ') ? displayName : displayName;
+    const enName = sourceId || englishName;
+    return { frName, enName };
 }
 
 function formatScaleExponent(value) {
@@ -849,6 +945,7 @@ function CarouselRow({
     visibleRadius = CAROUSEL_VISIBLE_RADIUS_DEFAULT,
     edgeGap = CAROUSEL_STEP_GAP,
     centerShift = 0,
+    shellClassName = '',
 }) {
     const shellRef = useRef(null);
     const wheelLockRef = useRef(false);
@@ -1030,7 +1127,7 @@ function CarouselRow({
     return (
         <div
             ref={shellRef}
-            className={styles.carouselShell}
+            className={[styles.carouselShell, shellClassName].filter(Boolean).join(' ')}
             style={{
                 '--carousel-focus-diameter': `${focusDiameter}px`,
                 '--carousel-edge-gap': `${edgeGap}px`,
@@ -1129,12 +1226,15 @@ function CarouselRow({
 
 export default function CatalogView({
     allExtraSystems,
+    galaxies = [],
+    infos = null,
     solarPlanets,
     moons,
     selectedMilkyWay,
     selectedPlanet,
     selectedMoon,
     focusMilkyWay,
+    focusCatalogGalaxy,
     focusStarSystem,
     focusOnSolarSystem,
     focusPlanet,
@@ -1143,6 +1243,7 @@ export default function CatalogView({
     const overlayRef = useRef(null);
     const skipMilkyWaySyncRef = useRef(false);
     const skipPlanetSyncRef   = useRef(null);
+    const skipGalaxyFallbackRef = useRef(false);
     const [level, setLevel]               = useState('galaxies');
     const [activeSystemId, setActiveSystemId] = useState(null);
     const [activePlanetName, setActivePlanetName] = useState(null);
@@ -1161,6 +1262,36 @@ export default function CatalogView({
         try { return JSON.parse(localStorage.getItem('spaceodyssey_favorites') ?? '[]'); }
         catch { return []; }
     });
+    const [runtimeGalaxyImages, setRuntimeGalaxyImages] = useState({});
+    const { result: activeGalaxyMedia } = useNasaMedia(infos?.bodyType === 'Galaxy' ? infos : null);
+    const { frName: activeGalaxyFrName, enName: activeGalaxyEnName } = useMemo(
+        () => getGalaxyWikiNames(infos),
+        [infos]
+    );
+    const { result: activeGalaxyWiki } = useWikipedia(activeGalaxyFrName, activeGalaxyEnName);
+
+    const catalogGalaxies = useMemo(() => {
+        const knownIds = new Set(GALAXIES.map((galaxy) => galaxy.id));
+        const merged = [
+            ...GALAXIES,
+            ...galaxies.filter((galaxy) => !knownIds.has(galaxy.id)),
+        ];
+        return merged.map((galaxy) => {
+            const runtimeImage = runtimeGalaxyImages[galaxy.id];
+            return runtimeImage ? { ...galaxy, image: galaxy.image ?? runtimeImage, orbitalImage: galaxy.orbitalImage ?? runtimeImage } : galaxy;
+        });
+    }, [galaxies, runtimeGalaxyImages]);
+
+    useEffect(() => {
+        if (infos?.bodyType !== 'Galaxy' || !infos?.id) return;
+        const preferredImage = activeGalaxyMedia?.thumbnail ?? activeGalaxyWiki?.thumbnail ?? null;
+        if (!preferredImage) return;
+        setRuntimeGalaxyImages((current) => (
+            current[infos.id] === preferredImage
+                ? current
+                : { ...current, [infos.id]: preferredImage }
+        ));
+    }, [infos, activeGalaxyMedia, activeGalaxyWiki]);
     const toggleFavorite = (id) => {
         setFavorites(prev => {
             const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
@@ -1194,13 +1325,21 @@ export default function CatalogView({
     useEffect(() => {
         if (!selectedMilkyWay) return;
         if (skipMilkyWaySyncRef.current) { skipMilkyWaySyncRef.current = false; return; }
+        if (String(selectedMilkyWay).startsWith('galaxy:')) {
+            setActiveSystemId(null);
+            setActivePlanetName(null);
+            setLevel('galaxies');
+            return;
+        }
         if (selectedMilkyWay === 'Solar System') {
             setActiveSystemId('solar');
+            setActivePlanetName(null);
             setLevel('stars');
         } else {
             const sys = allExtraSystems.find(s => s.milkyWayKey === selectedMilkyWay);
             if (sys) {
                 setActiveSystemId(sys.id);
+                setActivePlanetName(null);
                 setLevel('stars');
             }
         }
@@ -1238,13 +1377,30 @@ export default function CatalogView({
     }, [selectedMoon, solarMoonMap]);
 
     useEffect(() => {
+        if (selectedMoon) return;
+
+        if (selectedPlanet) {
+            setLevel('planets');
+            return;
+        }
+
+        if (selectedMilkyWay && !isGalaxyOverviewSelection(selectedMilkyWay)) {
+            setLevel('stars');
+            setActivePlanetName(null);
+            return;
+        }
+
+        if (skipGalaxyFallbackRef.current) {
+            skipGalaxyFallbackRef.current = false;
+            setLevel('stars');
+            setActivePlanetName(null);
+            return;
+        }
+
         setLevel('galaxies');
         setActiveSystemId(null);
         setActivePlanetName(null);
-        skipMilkyWaySyncRef.current = false;
-        skipPlanetSyncRef.current = null;
-        focusMilkyWay?.();
-    }, [focusMilkyWay]);
+    }, [selectedMilkyWay, selectedPlanet, selectedMoon]);
 
     // ── Système actif ────────────────────────────────────────────────────
 
@@ -1384,10 +1540,20 @@ export default function CatalogView({
 
     // ── Handlers ─────────────────────────────────────────────────────────
 
-    function goGalaxy() {
-        focusMilkyWay?.();
-        setLevel('stars');
+    function focusGalaxyOnly(galaxy) {
+        if (galaxy.id === 'milkyway') focusMilkyWay?.();
+        else focusCatalogGalaxy?.(galaxy);
+        setLevel('galaxies');
         setActiveSystemId(null);
+        setActivePlanetName(null);
+    }
+
+    function goGalaxy(galaxy) {
+        focusGalaxyOnly(galaxy);
+        if (galaxy.hasStars) {
+            skipGalaxyFallbackRef.current = true;
+            setLevel('stars');
+        }
     }
 
     function goStar(sys) {
@@ -1466,25 +1632,33 @@ export default function CatalogView({
                 <>
                     <div className={styles.sectionHeader}>
                         <span className={styles.sectionTitle}>Galaxies</span>
-                        <span className={styles.count}>1 répertoriée</span>
+                        <span className={styles.count}>{catalogGalaxies.length} répertoriées</span>
                     </div>
                     <CarouselRow
-                        items={[{ id: 'milkyway', name: 'Voie Lactée' }]}
+                        items={catalogGalaxies}
                         getKey={(galaxy) => galaxy.id}
-                        onFocusItem={goGalaxy}
+                        activeKey={infos?.bodyType === 'Galaxy' ? infos.id : 'milkyway'}
+                        onFocusItem={focusGalaxyOnly}
                         onSelect={goGalaxy}
-                        getPhysicalDiameterKm={() => 946073047258080}
+                        shellClassName={styles.galaxyCarouselShell}
+                        getPhysicalDiameterKm={(galaxy) => galaxy.id === 'milkyway' ? 946073047258080 : 2081172703967776}
                         focusDiameter={360}
                         getRenderedSize={() => 360}
                         renderItem={(galaxy, { isCentered }) => (
                             <>
                                 <div className={styles.carouselCaption}>
-                                    <GalaxyVisual />
+                                    <GalaxyVisual galaxy={galaxy} />
                                     <div className={styles.carouselTitle}>{galaxy.name}</div>
                                     <div className={`${styles.carouselInfo} ${isCentered ? styles.carouselInfoVisible : ''}`}>
-                                        <div className={styles.carouselMeta}>Galaxie spirale barrée</div>
-                                        <div className={styles.carouselAccent}>~200–400 Md étoiles</div>
-                                        <div className={styles.carouselMeta}>100 000 al de diamètre</div>
+                                        <div className={styles.carouselMeta}>{galaxy.subtitle}</div>
+                                        <div className={styles.carouselAccent}>{galaxy.accent}</div>
+                                        {formatGalaxyStarCount(galaxy) && (
+                                            <div className={styles.carouselMeta}>{formatGalaxyStarCount(galaxy)}</div>
+                                        )}
+                                        {formatGalaxyAngularSize(galaxy) && (
+                                            <div className={styles.carouselMeta}>{formatGalaxyAngularSize(galaxy)}</div>
+                                        )}
+                                        <div className={styles.carouselMeta}>{galaxy.meta}</div>
                                     </div>
                                 </div>
                             </>

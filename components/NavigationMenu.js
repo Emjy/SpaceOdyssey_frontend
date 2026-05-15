@@ -3,6 +3,7 @@
 import React, { useMemo, useState, memo, useEffect, useRef, useCallback } from 'react';
 import { MdChevronRight, MdKeyboardArrowDown, MdSearch } from 'react-icons/md';
 import styles from '../styles/HomePage.module.css';
+import { GALAXIES, isGalaxyOverviewSelection } from '../data/galaxies';
 
 // ─── Dropdown générique avec recherche ───────────────────────────────────────
 
@@ -97,12 +98,15 @@ const NavigationMenu = memo(({
     asteroids = [],
     moons = [],
     exoplanetSystems = [],
+    galaxies = [],
+    infos,
     selectedMilkyWay,
     selectedSolarSystem,
     selectedPlanet,
     selectedAsteroid,
     selectedMoon,
     focusMilkyWay,
+    focusCatalogGalaxy,
     focusSagittarusA,
     focusOnSolarSystem,
     focusStarSystem,
@@ -132,6 +136,13 @@ const NavigationMenu = memo(({
         [exoplanetSystems, activeSystemId]
     );
 
+    const isMilkyWayGalaxyActive = useMemo(() => {
+        if (infos?.bodyType === 'Galaxy') {
+            return infos.id === 'milkyway';
+        }
+        return selectedMilkyWay == null;
+    }, [infos, selectedMilkyWay]);
+
     const closeMenu = useCallback(() => setOpenMenu(null), []);
 
     const toggleMenu = useCallback((id) => {
@@ -157,32 +168,42 @@ const NavigationMenu = memo(({
 
     // ── Niveau 1 : Voie Lactée ────────────────────────────────────────────────
 
-    const galaxyLabel = selectedMilkyWay === 'Sagittarius A' ? 'Sagittarius A*' : 'Voie Lactée';
+    const catalogGalaxies = useMemo(() => {
+        const knownIds = new Set(GALAXIES.map((galaxy) => galaxy.id));
+        return [
+            ...GALAXIES,
+            ...galaxies.filter((galaxy) => !knownIds.has(galaxy.id)),
+        ];
+    }, [galaxies]);
 
-    const galaxyItems = [
-        {
-            id: 'galaxy-overview',
-            label: 'Voie Lactée',
-            active: selectedMilkyWay === null,
-            onClick: focusMilkyWay,
-        },
-        {
-            id: 'sagittarius',
-            label: 'Sagittarius A*',
-            active: selectedMilkyWay === 'Sagittarius A',
-            dot: '#ff6633',
-            meta: 'Trou noir',
-            onClick: () => { setSelectedMilkyWay('Sagittarius A'); focusSagittarusA(); },
-        },
-    ];
+    const galaxyLabel = useMemo(() => {
+        if (infos?.bodyType === 'Galaxy' && infos?.name) return infos.name;
+        return 'Voie Lactée';
+    }, [infos, selectedMilkyWay]);
+
+    const galaxyItems = useMemo(() => catalogGalaxies.map((galaxy) => ({
+        id: galaxy.id,
+        label: galaxy.name,
+        active:
+            galaxy.selectionValue == null
+                ? (infos?.bodyType === 'Galaxy'
+                    ? infos?.id === galaxy.id
+                    : (selectedMilkyWay == null && galaxy.id === 'milkyway'))
+                : selectedMilkyWay === galaxy.selectionValue,
+        onClick:
+            galaxy.id === 'milkyway'
+                ? focusMilkyWay
+                : () => focusCatalogGalaxy?.(galaxy),
+    })), [catalogGalaxies, infos, selectedMilkyWay, focusMilkyWay, focusCatalogGalaxy]);
 
     // ── Niveau 2 : Étoile ────────────────────────────────────────────────────
 
     const starLabel = useMemo(() => {
-        if (!selectedMilkyWay || selectedMilkyWay === 'Sagittarius A') return 'Étoile';
+        if (isMilkyWayGalaxyActive) return 'Étoiles';
+        if (isGalaxyOverviewSelection(selectedMilkyWay)) return 'Étoile';
         if (selectedMilkyWay === 'Solar System') return 'Soleil';
         return selectedMilkyWay; // hostname de l'exoétoile
-    }, [selectedMilkyWay]);
+    }, [selectedMilkyWay, isMilkyWayGalaxyActive]);
 
     const starItems = useMemo(() => [
         {
@@ -284,8 +305,12 @@ const NavigationMenu = memo(({
             { id: 'galaxy', label: galaxyLabel, items: galaxyItems },
         ];
 
-        // Niveau étoile : visible si on n'est pas sur Sagittarius A
-        if (selectedMilkyWay !== 'Sagittarius A') {
+        // Niveau étoile : visible seulement quand un système stellaire est actif
+        if (
+            isMilkyWayGalaxyActive
+            || selectedMilkyWay === 'Solar System'
+            || (!!selectedMilkyWay && !isGalaxyOverviewSelection(selectedMilkyWay))
+        ) {
             list.push({ id: 'star', label: starLabel, items: starItems });
         }
 
@@ -302,7 +327,7 @@ const NavigationMenu = memo(({
         return list;
     }, [
         galaxyLabel, galaxyItems,
-        selectedMilkyWay, starLabel, starItems,
+        selectedMilkyWay, starLabel, starItems, isMilkyWayGalaxyActive,
         activeSystemId, planetLabel, planetItems,
         moonDropItems, moonLabel,
     ]);

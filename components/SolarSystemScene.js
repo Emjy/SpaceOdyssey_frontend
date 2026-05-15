@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { fetchBody, getMoonStubsFromPlanet } from '../lib/solarApi';
 import { EXTRA_STAR_SYSTEMS } from '../data/starSystems';
+import { getGalaxyBySelection } from '../data/galaxies';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -1122,6 +1123,8 @@ export default function SolarSystemScene({
     planets = [],
     asteroids = [],
     exoplanetSystems = [],
+    galaxies = [],
+    infos = null,
     focusOnPlanet = false,
     resetViewNonce = 0,
     selectedMilkyWay,
@@ -1163,6 +1166,9 @@ export default function SolarSystemScene({
     const moonTexCacheRef = useRef({});    // id → THREE.Texture (textures spécifiques par lune)
     const galaxySpinRef   = useRef({ momentum: 0, lastX: null }); // drag-to-spin galaxy
     const galaxyStarsRef = useRef({});    // systemId → mesh
+    const galaxyExternalPlaneRef = useRef(null);
+    const galaxyAnnotationPlaneRef = useRef(null);
+    const galaxyVignettePlaneRef = useRef(null);
     const extraSystemsRef = useRef({});   // systemId → { root, planets[], hzRings[] }
     const solarHZRingsRef = useRef([]);
     const showHZRef = useRef(showHZ);
@@ -1170,6 +1176,7 @@ export default function SolarSystemScene({
     const viewModeRef = useRef('orbital');
     const catalogSortRef = useRef('distance');
     const focusStarSystemRef = useRef(null);
+    const selectedExternalGalaxyRef = useRef(null);
     const tooltipTextRef = useRef(null);
     const hoveredRingRef = useRef(null);
 
@@ -1185,6 +1192,7 @@ export default function SolarSystemScene({
     const solarStarRef = useRef(null);
     const galaxyRootRef = useRef(null);
     const galaxySunRef = useRef(null);
+    const galaxyPlaneRef = useRef(null);
     const isMilkyWayModeRef = useRef(
         selectedMilkyWay !== 'Solar System'
         && !allStarSystems.some((system) => system.milkyWayKey === selectedMilkyWay)
@@ -1222,10 +1230,49 @@ export default function SolarSystemScene({
         ? 'solar'
         : allStarSystems.find((system) => system.milkyWayKey === selectedMilkyWay)?.id ?? null;
     const isMilkyWayMode = activeStarSystem === null;
+    const selectedExternalGalaxy = useMemo(() => (
+        infos?.bodyType === 'Galaxy' && infos?.id !== 'milkyway' ? infos : null
+    ), [infos]);
 
     useEffect(() => {
         isMilkyWayModeRef.current = isMilkyWayMode;
     }, [isMilkyWayMode]);
+
+    useEffect(() => {
+        selectedExternalGalaxyRef.current = selectedExternalGalaxy;
+    }, [selectedExternalGalaxy]);
+
+    useEffect(() => {
+        const galaxyPlane = galaxyPlaneRef.current;
+        const galaxyExternalPlane = galaxyExternalPlaneRef.current;
+        if (!galaxyPlane?.material || !galaxyExternalPlane?.material) return;
+
+        const dynamicGalaxy = selectedExternalGalaxy ?? getGalaxyBySelection(selectedMilkyWay, galaxies);
+        const isExternalGalaxy = !!dynamicGalaxy && dynamicGalaxy.id !== 'milkyway';
+        const milkyWayTexture = new THREE.TextureLoader().load('/milkyway_background.png');
+        const externalTexture = isExternalGalaxy
+            ? new THREE.TextureLoader().load(dynamicGalaxy.orbitalImage ?? dynamicGalaxy.image ?? '/milkyway.jpeg')
+            : null;
+
+        galaxyPlane.material.map = milkyWayTexture;
+        galaxyPlane.material.needsUpdate = true;
+        galaxyPlane.visible = !isExternalGalaxy;
+
+        if (externalTexture) {
+            galaxyExternalPlane.material.map = externalTexture;
+            galaxyExternalPlane.material.needsUpdate = true;
+        }
+        galaxyExternalPlane.visible = isExternalGalaxy;
+        if (galaxyAnnotationPlaneRef.current) galaxyAnnotationPlaneRef.current.visible = !isExternalGalaxy;
+        if (galaxyVignettePlaneRef.current) galaxyVignettePlaneRef.current.visible = !isExternalGalaxy;
+        if (galaxyRootRef.current?._floatStars) galaxyRootRef.current._floatStars.visible = !isExternalGalaxy;
+        if (galaxyRootRef.current?._escStars) galaxyRootRef.current._escStars.visible = !isExternalGalaxy;
+
+        if (galaxySunRef.current) galaxySunRef.current.visible = !isExternalGalaxy;
+        Object.values(galaxyStarsRef.current).forEach((star) => {
+            if (star) star.visible = !isExternalGalaxy;
+        });
+    }, [selectedMilkyWay, selectedExternalGalaxy, galaxies]);
 
     useEffect(() => {
         activeStarSystemRef.current = activeStarSystem;
@@ -2262,6 +2309,32 @@ export default function SolarSystemScene({
             );
             galaxyPlane.rotation.x = -Math.PI / 2;
             galaxyDisk.add(galaxyPlane);
+            galaxyPlaneRef.current = galaxyPlane;
+
+            const externalGalaxyPlane = new THREE.Mesh(
+                new THREE.PlaneGeometry(300, 196),
+                new THREE.MeshBasicMaterial({
+                    transparent: true,
+                    depthWrite: false,
+                    side: THREE.DoubleSide,
+                })
+            );
+            externalGalaxyPlane.rotation.x = -Math.PI / 2;
+            externalGalaxyPlane.position.y = 0.02;
+            externalGalaxyPlane.visible = false;
+            galaxyDisk.add(externalGalaxyPlane);
+            galaxyExternalPlaneRef.current = externalGalaxyPlane;
+
+            const initialExternalGalaxy = selectedExternalGalaxyRef.current ?? getGalaxyBySelection(selectedMilkyWay, galaxies);
+            if (initialExternalGalaxy?.id && initialExternalGalaxy.id !== 'milkyway') {
+                const initialImage = initialExternalGalaxy.orbitalImage ?? initialExternalGalaxy.image ?? null;
+                if (initialImage) {
+                    externalGalaxyPlane.material.map = new THREE.TextureLoader().load(initialImage);
+                    externalGalaxyPlane.material.needsUpdate = true;
+                    externalGalaxyPlane.visible = true;
+                    galaxyPlane.visible = false;
+                }
+            }
 
             // ── Canvas d'annotation ───────────────────────────────────────────
             const ANN = 2048;
@@ -2383,22 +2456,24 @@ export default function SolarSystemScene({
                 annCtx.fillText(`${ly / 1000}k ly`, CX - r2 * Math.sin(Lr2) + 6, CY - r2 * Math.cos(Lr2));
             });
 
-            // Marqueur du Soleil
-            const sunPt3d = getArmCenterPoint(armDefinitions[0], GALAXY_SUN_ORBIT_RADIUS);
-            const sCx = CX + sunPt3d.x * SCALE;
-            const sCy = CY + sunPt3d.z * SCALE;
-            annCtx.beginPath();
-            annCtx.arc(sCx, sCy, 7, 0, Math.PI * 2);
-            annCtx.fillStyle = 'rgba(255,245,160,0.92)';
-            annCtx.fill();
-            annCtx.strokeStyle = 'rgba(255,245,160,0.45)';
-            annCtx.lineWidth = 1.5;
-            annCtx.stroke();
-            annCtx.font = `bold 22px ${fontBase}`;
-            annCtx.fillStyle = 'rgba(255,250,190,0.88)';
-            annCtx.textAlign = 'center';
-            annCtx.textBaseline = 'top';
-            annCtx.fillText('Sun', sCx, sCy + 13);
+            if (!selectedExternalGalaxy) {
+                // Marqueur du Soleil
+                const sunPt3d = getArmCenterPoint(armDefinitions[0], GALAXY_SUN_ORBIT_RADIUS);
+                const sCx = CX + sunPt3d.x * SCALE;
+                const sCy = CY + sunPt3d.z * SCALE;
+                annCtx.beginPath();
+                annCtx.arc(sCx, sCy, 7, 0, Math.PI * 2);
+                annCtx.fillStyle = 'rgba(255,245,160,0.92)';
+                annCtx.fill();
+                annCtx.strokeStyle = 'rgba(255,245,160,0.45)';
+                annCtx.lineWidth = 1.5;
+                annCtx.stroke();
+                annCtx.font = `bold 22px ${fontBase}`;
+                annCtx.fillStyle = 'rgba(255,250,190,0.88)';
+                annCtx.textAlign = 'center';
+                annCtx.textBaseline = 'top';
+                annCtx.fillText('Sun', sCx, sCy + 13);
+            }
 
             const annTex = new THREE.CanvasTexture(annCanvas);
             const annPlane = new THREE.Mesh(
@@ -2409,7 +2484,9 @@ export default function SolarSystemScene({
             );
             annPlane.rotation.x = -Math.PI / 2;
             annPlane.position.y = 0.05;
+            if (selectedExternalGalaxyRef.current) annPlane.visible = false;
             galaxyDisk.add(annPlane);
+            galaxyAnnotationPlaneRef.current = annPlane;
 
             // ── Vignette : fondu radial noir sur les bords de la galaxie ─────────
             const vigSize = 1024;
@@ -2435,7 +2512,9 @@ export default function SolarSystemScene({
             );
             vigPlane.rotation.x = -Math.PI / 2;
             vigPlane.position.y = 0.06;
+            if (selectedExternalGalaxyRef.current) vigPlane.visible = false;
             galaxyDisk.add(vigPlane);
+            galaxyVignettePlaneRef.current = vigPlane;
 
             // Halo dummy
             halo = new THREE.Group();
@@ -2473,6 +2552,7 @@ export default function SolarSystemScene({
                 depthWrite: false, alphaTest: 0.02,
             }));
             galaxyRoot.add(escStars);
+            galaxyRootRef.current._escStars = escStars;
 
             // ── Étoiles flottantes (effet de profondeur / parallaxe) ─────────
             const FLOAT_COUNT = 160;
@@ -2515,6 +2595,7 @@ export default function SolarSystemScene({
         const galaxySun = makeSphere(0.9, '#fff3b0', '#ffcf66', 20);
         galaxySun.position.set(galaxySunPoint.x, 0.16, galaxySunPoint.z);
         galaxySun.userData = { type: 'galaxy-star', systemId: 'solar', label: 'Soleil' };
+        galaxySun.visible = selectedMilkyWay !== 'Andromeda';
         galaxyDisk.add(galaxySun);
         galaxySunRef.current = galaxySun;
         galaxyStarsRef.current['solar'] = galaxySun;
@@ -2527,6 +2608,7 @@ export default function SolarSystemScene({
             star.material.emissiveIntensity = 1.0;
             star.position.set(pt.x, 0.12, pt.z);
             star.userData = { type: 'galaxy-star', systemId: sys.id, label: sys.name };
+            star.visible = selectedMilkyWay !== 'Andromeda';
             galaxyDisk.add(star);
             galaxyStarsRef.current[sys.id] = star;
 
@@ -2966,7 +3048,7 @@ export default function SolarSystemScene({
         let galaxyDragActive = false;
         let galaxyDragLastX  = 0;
         const onGalaxyPointerDown = (e) => {
-            if (!isMilkyWayModeRef.current || USE_3D_GALAXY) return;
+            if (!isMilkyWayModeRef.current || USE_3D_GALAXY || selectedExternalGalaxyRef.current) return;
             galaxyDragActive = true;
             galaxyDragLastX  = e.clientX;
         };
@@ -3024,12 +3106,17 @@ export default function SolarSystemScene({
             });
 
             if (isMilkyWay) {
-                // Rotation horaire (vue du dessus)
-                galaxyDisk.rotation.y -= GALAXY_ROTATION_SPEED * deltaFrames;
-                if (halo) halo.rotation.y -= GALAXY_HALO_ROTATION_SPEED * deltaFrames;
+                if (!selectedExternalGalaxyRef.current) {
+                    // Rotation horaire (vue du dessus)
+                    galaxyDisk.rotation.y -= GALAXY_ROTATION_SPEED * deltaFrames;
+                    if (halo) halo.rotation.y -= GALAXY_HALO_ROTATION_SPEED * deltaFrames;
+                } else {
+                    galaxyDisk.rotation.y = 0;
+                    if (halo) halo.rotation.y = 0;
+                }
 
                 // Mode image : float stars + labels
-                if (!USE_3D_GALAXY) {
+                if (!USE_3D_GALAXY && !selectedExternalGalaxyRef.current) {
                     // Float stars
                     const fr = galaxyRootRef.current;
                     if (fr && fr._floatStars) {

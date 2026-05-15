@@ -25,7 +25,7 @@ export default function HomePage() {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const settingsRef = useRef(null);
 
-    const { planets, asteroids, exoplanetSystems, loading } = useSpaceData();
+    const { planets, asteroids, exoplanetSystems, galaxies, loading } = useSpaceData();
 
     const {
         setFocusOnPlanet,
@@ -47,6 +47,8 @@ export default function HomePage() {
         allExtraSystems,
 
         focusMilkyWay,
+        focusAndromeda,
+        focusCatalogGalaxy,
         focusSagittarusA,
         focusOnSolarSystem,
         focusStarSystem,
@@ -124,6 +126,8 @@ export default function HomePage() {
                     planets={planets}
                     asteroids={asteroids}
                     exoplanetSystems={exoplanetSystems}
+                    galaxies={galaxies}
+                    infos={infos}
                     focusOnPlanet={focusOnPlanet}
                     resetViewNonce={resetViewNonce}
                     selectedMilkyWay={selectedMilkyWay}
@@ -148,12 +152,16 @@ export default function HomePage() {
             {isCatalog && (
                 <CatalogView
                     allExtraSystems={allExtraSystems}
+                    galaxies={galaxies}
+                    infos={infos}
                     solarPlanets={planets}
                     moons={moons}
                     selectedMilkyWay={selectedMilkyWay}
                     selectedPlanet={selectedPlanet}
                     selectedMoon={selectedMoon}
                     focusMilkyWay={focusMilkyWay}
+                    focusAndromeda={focusAndromeda}
+                    focusCatalogGalaxy={focusCatalogGalaxy}
                     focusStarSystem={focusStarSystem}
                     focusOnSolarSystem={focusOnSolarSystem}
                     focusPlanet={focusPlanet}
@@ -166,12 +174,16 @@ export default function HomePage() {
                 asteroids={asteroids}
                 moons={moons}
                 exoplanetSystems={exoplanetSystems}
+                galaxies={galaxies}
+                infos={infos}
                 selectedMilkyWay={selectedMilkyWay}
                 selectedSolarSystem={selectedSolarSystem}
                 selectedPlanet={selectedPlanet}
                 selectedAsteroid={selectedAsteroid}
                 selectedMoon={selectedMoon}
                 focusMilkyWay={focusMilkyWay}
+                focusAndromeda={focusAndromeda}
+                focusCatalogGalaxy={focusCatalogGalaxy}
                 focusSagittarusA={focusSagittarusA}
                 focusOnSolarSystem={focusOnSolarSystem}
                 focusStarSystem={focusStarSystem}
