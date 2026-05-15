@@ -140,10 +140,25 @@ function getBodyVisual(body, kind) {
     };
 }
 
+function getSpectralClass(teff) {
+    if (!teff) return '?';
+    if (teff < 3500) return 'M';
+    if (teff < 5000) return 'K';
+    if (teff < 6000) return 'G';
+    if (teff < 7500) return 'F';
+    if (teff < 10000) return 'A';
+    if (teff < 30000) return 'B';
+    return 'O';
+}
+
 // ── Composants visuels ────────────────────────────────────────────────────
 
 function BodyVisual({ body, kind = 'planet', size = 64, className = '' }) {
     const visual = getBodyVisual(body, kind);
+    const [textureOk, setTextureOk] = React.useState(true);
+    React.useEffect(() => { setTextureOk(true); }, [visual.texture]);
+    const useTexture = !!visual.texture && textureOk;
+    const fallbackBg = `radial-gradient(circle at 42% 36%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 28%), radial-gradient(circle at 50% 50%, ${visual.glowColor ?? '#888'}cc 0%, rgba(0,0,0,0.85) 120%)`;
     return (
         <div
             className={[
@@ -159,6 +174,16 @@ function BodyVisual({ body, kind = 'planet', size = 64, className = '' }) {
                 '--glow': `${visual.glowColor}88`,
             }}
         >
+            {visual.texture && (
+                <img
+                    key={visual.texture}
+                    src={visual.texture}
+                    alt=""
+                    aria-hidden="true"
+                    onError={() => setTextureOk(false)}
+                    style={{ display: 'none' }}
+                />
+            )}
             {visual.ringTexture && (
                 <img
                     className={styles.ringTexture}
@@ -174,8 +199,8 @@ function BodyVisual({ body, kind = 'planet', size = 64, className = '' }) {
                 />
             )}
             <div
-                className={`${styles.sphereSurface} ${visual.texture ? styles.sphereSurfaceImage : styles.sphereSurfaceGradient}`}
-                style={visual.texture ? { backgroundImage: `url(${visual.texture})` } : { background: visual.background }}
+                className={`${styles.sphereSurface} ${useTexture ? styles.sphereSurfaceImage : styles.sphereSurfaceGradient}`}
+                style={useTexture ? { backgroundImage: `url(${visual.texture})` } : { background: visual.background ?? fallbackBg }}
             />
         </div>
     );
@@ -551,7 +576,12 @@ export default function CatalogView({
     useEffect(() => {
         if (!selectedMoon) return;
         setLevel('moons');
-    }, [selectedMoon]);
+        setActiveSystemId('solar');
+        const entry = Object.entries(solarMoonMap).find(([, moons]) =>
+            moons.some(m => (m.id ?? m.englishName) === selectedMoon)
+        );
+        if (entry) setActivePlanetName(entry[0]);
+    }, [selectedMoon, solarMoonMap]);
 
     // ── Système actif ────────────────────────────────────────────────────
 
@@ -785,24 +815,38 @@ export default function CatalogView({
                             const scaled = 300 * Math.min(Math.max(relativeScale, 0.2), 0.6);
                             return Math.max(Math.round(scaled), 100);
                         }}
-                        renderItem={(sys, { isCentered, renderedSize }) => (
-                            <>
-                                <div className={styles.carouselVisualStage}>
-                                    <StarCanvas sys={sys} size={Math.round(renderedSize)} />
-                                </div>
-                                <div className={styles.carouselCaption}>
-                                    <div className={styles.carouselTitle}>{sys.name}</div>
-                                    <div className={`${styles.carouselInfo} ${isCentered ? styles.carouselInfoVisible : ''}`}>
-                                        <div className={styles.carouselMeta}>{sys.planets?.length ?? 0} planètes</div>
-                                        {sys.starInfo?.avgTemp && (
-                                            <div className={styles.carouselAccent}>
-                                                {sys.starInfo.avgTemp.toLocaleString('fr-FR')} K
-                                            </div>
-                                        )}
+                        renderItem={(sys, { isCentered, renderedSize }) => {
+                            const temp = sys.starInfo?.avgTemp ?? (sys.isSolar ? 5778 : null);
+                            const spectralClass = getSpectralClass(temp);
+                            const nbPlanetes = sys.planets?.length ?? 0;
+                            const radiusKm = sys.starInfo?.meanRadius ?? (sys.isSolar ? 695700 : null);
+                            const radiusSol = radiusKm ? (radiusKm / 695700).toFixed(2) : null;
+                            const dist = sys.sy_dist ? sys.sy_dist.toFixed(1) : null;
+                            return (
+                                <>
+                                    <div className={styles.carouselVisualStage}>
+                                        <StarCanvas sys={sys} size={Math.round(renderedSize)} />
                                     </div>
-                                </div>
-                            </>
-                        )}
+                                    <div className={styles.carouselCaption}>
+                                        <div className={styles.carouselTitle}>{sys.name}</div>
+                                        <div className={`${styles.carouselInfo} ${isCentered ? styles.carouselInfoVisible : ''}`}>
+                                            <div className={styles.carouselMeta}>Type {spectralClass} · {nbPlanetes} planètes</div>
+                                            {temp && (
+                                                <div className={styles.carouselAccent}>
+                                                    {temp.toLocaleString('fr-FR')} K
+                                                </div>
+                                            )}
+                                            {radiusSol && (
+                                                <div className={styles.carouselMeta}>{radiusSol} R☉</div>
+                                            )}
+                                            {dist && (
+                                                <div className={styles.carouselMeta}>{dist} pc</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            );
+                        }}
                     />
                 </>
             )}
@@ -851,6 +895,12 @@ export default function CatalogView({
                             const tempC = planet.avgTemp != null ? `${(planet.avgTemp - 273.15).toFixed(0)} °C` : null;
                             const typeLabel = VISUAL_TYPE_LABELS[planet.visualType] ?? VISUAL_TYPE_LABELS[planet.bodyType] ?? 'Planète';
                             const sizeRatio = planet.size ?? (planet.meanRadius ? planet.meanRadius / 6371 : 0);
+                            const massLabel = planet.massEarth > 0 ? `${planet.massEarth.toFixed(2)} M⊕` : null;
+                            const orbitLabel = (() => {
+                                const v = planet.sideralOrbit;
+                                if (!v) return null;
+                                return v >= 730 ? `${(v / 365.25).toFixed(1)} ans` : `${v.toFixed(0)} j`;
+                            })();
                             return (
                                 <>
                                     <div className={styles.carouselVisualStage}>
@@ -863,7 +913,9 @@ export default function CatalogView({
                                             {sizeRatio > 0 && (
                                                 <div className={styles.carouselAccent}>{sizeRatio.toFixed(2)}× Terre</div>
                                             )}
+                                            {massLabel && <div className={styles.carouselMeta}>{massLabel}</div>}
                                             {tempC && <div className={styles.carouselMeta}>{tempC}</div>}
+                                            {orbitLabel && <div className={styles.carouselMeta}>{orbitLabel}</div>}
                                         </div>
                                     </div>
                                 </>
@@ -913,6 +965,12 @@ export default function CatalogView({
                                                 <div className={styles.carouselMeta}>Lune</div>
                                                 {sizeRatio && (
                                                     <div className={styles.carouselAccent}>{sizeRatio}× Terre</div>
+                                                )}
+                                                {moon.meanRadius && (
+                                                    <div className={styles.carouselMeta}>{moon.meanRadius.toLocaleString('fr-FR')} km</div>
+                                                )}
+                                                {moon.discoveredBy && (
+                                                    <div className={styles.carouselMeta}>Déc. {moon.discoveredBy}</div>
                                                 )}
                                             </div>
                                         </div>

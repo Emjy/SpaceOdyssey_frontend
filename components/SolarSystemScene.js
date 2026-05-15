@@ -1491,6 +1491,15 @@ export default function SolarSystemScene({
                 SOLAR_SYSTEM_DEFAULT_POSITION.z
             );
             camera.lookAt(0, 0, 0);
+        } else if (isMilkyWayModeRef.current) {
+            // En mode galactique : revenir au système solaire
+            controls.target.set(0, 0, 0);
+            camera.position.set(
+                SOLAR_SYSTEM_DEFAULT_POSITION.x,
+                SOLAR_SYSTEM_DEFAULT_POSITION.y,
+                SOLAR_SYSTEM_DEFAULT_POSITION.z
+            );
+            camera.lookAt(0, 0, 0);
         } else {
             // Vue orbitale du dessus centrée sur l'objet actuellement focusé
             const target = controls.target.clone();

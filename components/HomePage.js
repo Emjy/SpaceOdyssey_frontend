@@ -173,37 +173,41 @@ export default function HomePage() {
                 currentTarget={selectedPlanet || selectedAsteroid || selectedMoon || '—'}
             />
 
-            {/* Panneau infos + settings — masqué en mode catalogue */}
+            {/* Bouton settings — orbital uniquement, visible aussi sur mobile */}
+            {!isCatalog && (
+                <div className={styles.settingsShell} ref={settingsRef}>
+                    <button
+                        className={`${styles.settingsBtn} ${settingsOpen ? styles.settingsBtnOpen : ''}`}
+                        onClick={() => setSettingsOpen(v => !v)}
+                        type="button"
+                        aria-label="Options"
+                    >
+                        <MdSettings />
+                    </button>
+                    {settingsOpen && (
+                        <div className={styles.settingsDropdown}>
+                            <button
+                                className={styles.settingsItem}
+                                onClick={handleResetView}
+                                type="button"
+                            >
+                                Vue du dessus
+                            </button>
+                            <button
+                                className={`${styles.settingsItem} ${showHZ ? styles.settingsItemActive : ''}`}
+                                onClick={() => setShowHZ(v => !v)}
+                                type="button"
+                            >
+                                Zone habitable
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Panneau infos — masqué en mode catalogue */}
             {!isCatalog && (
                 <aside className={styles.rightDock}>
-                    <div className={styles.settingsShell} ref={settingsRef}>
-                        <button
-                            className={`${styles.settingsBtn} ${settingsOpen ? styles.settingsBtnOpen : ''}`}
-                            onClick={() => setSettingsOpen(v => !v)}
-                            type="button"
-                            aria-label="Options"
-                        >
-                            <MdSettings />
-                        </button>
-                        {settingsOpen && (
-                            <div className={styles.settingsDropdown}>
-                                <button
-                                    className={styles.settingsItem}
-                                    onClick={handleResetView}
-                                    type="button"
-                                >
-                                    Vue du dessus
-                                </button>
-                                <button
-                                    className={`${styles.settingsItem} ${showHZ ? styles.settingsItemActive : ''}`}
-                                    onClick={() => setShowHZ(v => !v)}
-                                    type="button"
-                                >
-                                    Zone habitable
-                                </button>
-                            </div>
-                        )}
-                    </div>
                     <div className={styles.rightContainer}>
                         {infos ? (
                             <Informations infos={infos} />
