@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { KNOWN_GALAXY_FALLBACKS } from '../../../data/galaxies';
 
-export const revalidate = 60 * 15;
+export const revalidate = 900;
 
 const OPENNGC_TAP_URL = 'https://dc.g-vo.org/tap/sync';
 const NASA_IMAGES_URL = 'https://images-api.nasa.gov/search';
