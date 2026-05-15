@@ -75,9 +75,23 @@ function buildRows(infos) {
 }
 
 function getWikiNames(infos) {
+    const englishName = infos.englishName ?? infos.name ?? null;
+    const bodyType = infos.bodyType ?? '';
+
+    if (bodyType === 'Moon' && englishName) {
+        const hostPlanet = infos.aroundPlanet?.planet ?? infos.aroundPlanet?.englishName ?? null;
+        const moonFr = hostPlanet ? `${englishName} (lune)` : `${englishName} (satellite naturel)`;
+        const moonEn = hostPlanet ? `${englishName} (moon)` : `${englishName} (natural satellite)`;
+        return { frName: moonFr, enName: moonEn };
+    }
+
+    if (bodyType === 'Planet' && englishName) {
+        return { frName: FR_NAMES[infos.id] ?? infos.name ?? null, enName: englishName };
+    }
+
     const frName = FR_NAMES[infos.id]
         ?? (infos.name && infos.name !== infos.englishName ? infos.name : null);
-    const enName = infos.englishName ?? infos.name ?? null;
+    const enName = englishName;
     return { frName, enName };
 }
 

@@ -82,6 +82,59 @@ function normalizeAssetName(value) {
         .replace(/[^a-z0-9]+/g, '');
 }
 
+function parseBodyDimensions(dimension) {
+    if (typeof dimension !== 'string') return null;
+    const values = dimension
+        .match(/-?\d+(?:[.,]\d+)?/g)
+        ?.map((value) => Number.parseFloat(value.replace(',', '.')))
+        .filter((value) => Number.isFinite(value) && value > 0);
+    if (!values || values.length < 3) return null;
+    return values.slice(0, 3);
+}
+
+function clampMoonStretch(x = 1, y = 1, z = 1) {
+    return {
+        x: Math.max(0.9, Math.min(1.1, x)),
+        y: Math.max(0.9, Math.min(1.1, y)),
+        z: Math.max(0.9, Math.min(1.1, z)),
+    };
+}
+
+function getMoonStretch(body) {
+    const parsedDimensions = parseBodyDimensions(body?.dimension);
+    const meanRadius = body?.meanRadius;
+    if (Number.isFinite(meanRadius) && meanRadius >= 300) return null;
+    const dampFactor = !Number.isFinite(meanRadius) ? 0.55 : meanRadius > 650 ? 0.28 : meanRadius > 350 ? 0.4 : 0.6;
+
+    if (parsedDimensions) {
+        const [x, y, z] = parsedDimensions;
+        const avg = (x + y + z) / 3;
+        if (avg > 0) {
+            const raw = {
+                x: 1 + ((x / avg) - 1) * dampFactor,
+                y: 1 + ((y / avg) - 1) * dampFactor,
+                z: 1 + ((z / avg) - 1) * dampFactor,
+            };
+            return clampMoonStretch(raw.x, raw.y, raw.z);
+        }
+    }
+
+    const equaRadius = body?.equaRadius;
+    const polarRadius = body?.polarRadius;
+    if (Number.isFinite(meanRadius) && meanRadius > 0) {
+        const equatorialRatio = Number.isFinite(equaRadius) && equaRadius > 0 ? equaRadius / meanRadius : 1;
+        const polarRatio = Number.isFinite(polarRadius) && polarRadius > 0 ? polarRadius / meanRadius : 1;
+        const raw = {
+            x: 1 + (equatorialRatio - 1) * dampFactor,
+            y: 1 + (polarRatio - 1) * dampFactor,
+            z: 1 + (equatorialRatio - 1) * dampFactor,
+        };
+        return clampMoonStretch(raw.x, raw.y, raw.z);
+    }
+
+    return null;
+}
+
 function getBodyVisual(body, kind) {
     const name = body?.id ?? body?.name ?? body?.englishName ?? '';
     const normalized = normalizeAssetName(name);
@@ -191,6 +244,16 @@ function drawExoPlanetCanvas(ctx, visualType, baseColor, seed, size) {
     const rng = _rng32(seed);
     const c = hexToRgbObj(baseColor);
     const shifted = (f) => _shift(c, f);
+    const addSoftBlob = (x, y, r, col, alpha = 0.18) => {
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+        grad.addColorStop(0, _rgba(col, alpha));
+        grad.addColorStop(0.55, _rgba(col, alpha * 0.45));
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+    };
 
     ctx.fillStyle = _rgba(c, 1);
     ctx.fillRect(0, 0, size, size);
@@ -201,18 +264,33 @@ function drawExoPlanetCanvas(ctx, visualType, baseColor, seed, size) {
             const yFrac = b / numBands;
             const bandH = (size / numBands) * (0.65 + rng() * 0.7);
             const col   = shifted(0.72 + rng() * 0.58);
-            const amp   = 4 + rng() * 10;
-            const freq  = 2 + rng() * 5;
+            const amp   = 5 + rng() * 12;
+            const freq  = 1.5 + rng() * 4.5;
             const phase = rng() * Math.PI * 2;
             ctx.beginPath();
             ctx.moveTo(0, yFrac * size);
-            for (let x = 0; x <= size; x += 2)
-                ctx.lineTo(x, yFrac * size + Math.sin((x / size) * freq * Math.PI * 2 + phase) * amp);
-            for (let x = size; x >= 0; x -= 2)
-                ctx.lineTo(x, yFrac * size + bandH + Math.sin((x / size) * freq * Math.PI * 2 + phase + 0.5) * amp);
+            for (let x = 0; x <= size; x += 2) {
+                const drift = Math.sin((x / size) * freq * Math.PI * 2 + phase) * amp;
+                const wobble = Math.sin((x / size) * (freq * 0.45) * Math.PI * 2 + phase * 0.7) * (amp * 0.45);
+                ctx.lineTo(x, yFrac * size + drift + wobble);
+            }
+            for (let x = size; x >= 0; x -= 2) {
+                const drift = Math.sin((x / size) * freq * Math.PI * 2 + phase + 0.5) * amp;
+                const wobble = Math.sin((x / size) * (freq * 0.45) * Math.PI * 2 + phase * 0.9) * (amp * 0.45);
+                ctx.lineTo(x, yFrac * size + bandH + drift + wobble);
+            }
             ctx.closePath();
             ctx.fillStyle = _rgba(col, 0.45 + rng() * 0.35);
             ctx.fill();
+        }
+        for (let i = 0; i < 14; i++) {
+            addSoftBlob(
+                rng() * size,
+                (0.12 + rng() * 0.76) * size,
+                10 + rng() * 34,
+                shifted(0.8 + rng() * 0.5),
+                0.08 + rng() * 0.12
+            );
         }
         if (rng() > 0.35) {
             const sx = rng() * size, sy = (0.25 + rng() * 0.5) * size;
@@ -224,6 +302,18 @@ function drawExoPlanetCanvas(ctx, visualType, baseColor, seed, size) {
             grad.addColorStop(1, 'rgba(0,0,0,0)');
             ctx.fillStyle = grad;
             ctx.beginPath(); ctx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+        }
+        for (let i = 0; i < 18; i++) {
+            const y = rng() * size;
+            const h = 4 + rng() * 18;
+            const alpha = 0.03 + rng() * 0.06;
+            const tone = shifted(0.78 + rng() * 0.5);
+            const grad = ctx.createLinearGradient(0, y, 0, y + h);
+            grad.addColorStop(0, 'rgba(0,0,0,0)');
+            grad.addColorStop(0.5, _rgba(tone, alpha));
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, y, size, h);
         }
     }
 
@@ -275,28 +365,85 @@ function drawExoPlanetCanvas(ctx, visualType, baseColor, seed, size) {
     if (visualType === 'temperate') {
         const landColor   = hexToRgbObj('#4a7830');
         const desertColor = hexToRgbObj('#c8a060');
+        const drawOrganicLandmass = (cx, cy, baseR, col, isDesert) => {
+            const nPts = 10 + Math.floor(rng() * 8);
+            const points = [];
+            for (let pi = 0; pi < nPts; pi++) {
+                const angle = (pi / nPts) * Math.PI * 2;
+                const longWave = 0.86 + Math.sin(angle * (1.2 + rng() * 0.5) + rng() * Math.PI * 2) * 0.12;
+                const midWave = 1 + Math.sin(angle * (2.2 + rng() * 1.4) + rng() * Math.PI * 2) * 0.16;
+                const noise = 0.78 + rng() * 0.48;
+                const r = baseR * longWave * midWave * noise;
+                points.push({
+                    x: cx + Math.cos(angle) * r,
+                    y: cy + Math.sin(angle) * r,
+                });
+            }
+
+            ctx.beginPath();
+            for (let i = 0; i < points.length; i++) {
+                const prev = points[(i - 1 + points.length) % points.length];
+                const curr = points[i];
+                const next = points[(i + 1) % points.length];
+                const cp1x = curr.x + (next.x - prev.x) * 0.16;
+                const cp1y = curr.y + (next.y - prev.y) * 0.16;
+                const midX = (curr.x + next.x) / 2;
+                const midY = (curr.y + next.y) / 2;
+                if (i === 0) ctx.moveTo(midX, midY);
+                ctx.quadraticCurveTo(cp1x, cp1y, midX, midY);
+            }
+            ctx.closePath();
+            ctx.fillStyle = _rgba(col, 0.92);
+            ctx.fill();
+
+            ctx.save();
+            ctx.clip();
+            for (let i = 0; i < 8; i++) {
+                const rx = cx + (rng() - 0.5) * baseR * 1.1;
+                const ry = cy + (rng() - 0.5) * baseR * 1.1;
+                const rr = baseR * (0.16 + rng() * 0.22);
+                addSoftBlob(
+                    rx,
+                    ry,
+                    rr,
+                    hexToRgbObj(isDesert ? '#efd39a' : '#6ea24b'),
+                    0.09 + rng() * 0.08
+                );
+            }
+            ctx.restore();
+
+            ctx.strokeStyle = _rgba(hexToRgbObj(isDesert ? '#efd8aa' : '#8fcf7a'), 0.16);
+            ctx.lineWidth = Math.max(1.2, baseR * 0.045);
+            ctx.stroke();
+
+            for (let i = 0; i < 4; i++) {
+                const coastX = cx + (rng() - 0.5) * baseR * 1.5;
+                const coastY = cy + (rng() - 0.5) * baseR * 1.5;
+                addSoftBlob(
+                    coastX,
+                    coastY,
+                    baseR * (0.14 + rng() * 0.12),
+                    hexToRgbObj('#d9eef7'),
+                    0.035 + rng() * 0.025
+                );
+            }
+        };
+
         for (let cont = 0; cont < 2 + Math.floor(rng() * 4); cont++) {
             const cx = rng() * size, cy = rng() * size;
-            const nPts = 7 + Math.floor(rng() * 6);
             const baseR = 18 + rng() * 48;
             const isDesert = rng() > 0.7;
             const col = isDesert ? desertColor : landColor;
-            ctx.beginPath();
-            for (let pi = 0; pi <= nPts; pi++) {
-                const angle = (pi / nPts) * Math.PI * 2;
-                const r = baseR * (0.45 + rng() * 0.75);
-                const x = cx + Math.cos(angle) * r, y = cy + Math.sin(angle) * r;
-                pi === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-            }
-            ctx.closePath(); ctx.fillStyle = _rgba(col, 0.88); ctx.fill();
-            for (let h = 0; h < 3; h++) {
-                const hx = cx + (rng() - 0.5) * baseR * 0.55, hy = cy + (rng() - 0.5) * baseR * 0.55;
-                const hr = baseR * (0.18 + rng() * 0.28);
-                const hCol = hexToRgbObj(isDesert ? '#e8c080' : '#6a9845');
-                const hGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
-                hGrad.addColorStop(0, _rgba(hCol, 0.42)); hGrad.addColorStop(1, 'rgba(0,0,0,0)');
-                ctx.fillStyle = hGrad; ctx.beginPath(); ctx.arc(hx, hy, hr, 0, Math.PI * 2); ctx.fill();
-            }
+            drawOrganicLandmass(cx, cy, baseR, col, isDesert);
+        }
+        for (let i = 0; i < 10; i++) {
+            addSoftBlob(
+                rng() * size,
+                rng() * size,
+                12 + rng() * 26,
+                hexToRgbObj('#d9eef7'),
+                0.06 + rng() * 0.08
+            );
         }
         const icePole = hexToRgbObj('#e8f4ff');
         [[0, 1], [size, -1]].forEach(([yEdge, dir]) => {
@@ -306,6 +453,25 @@ function drawExoPlanetCanvas(ctx, visualType, baseColor, seed, size) {
             ctx.fillStyle = grad;
             ctx.fillRect(0, dir > 0 ? 0 : size - poleH, size, poleH);
         });
+        for (let i = 0; i < 14; i++) {
+            const cx = rng() * size;
+            const cy = rng() * size;
+            const rx = 10 + rng() * 34;
+            const ry = rx * (0.28 + rng() * 0.35);
+            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rx);
+            grad.addColorStop(0, 'rgba(255,255,255,0.10)');
+            grad.addColorStop(0.45, 'rgba(255,255,255,0.05)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate((rng() - 0.5) * 1.2);
+            ctx.scale(1, ry / rx);
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(0, 0, rx, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
     }
 
     if (visualType === 'rocky') {
@@ -326,6 +492,23 @@ function drawExoPlanetCanvas(ctx, visualType, baseColor, seed, size) {
             grad.addColorStop(0, _rgba(shifted(0.82 + rng() * 0.36), 0.22)); grad.addColorStop(1, 'rgba(0,0,0,0)');
             ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
         }
+        for (let i = 0; i < 12; i++) {
+            const x = rng() * size;
+            const y = rng() * size;
+            const r = 10 + rng() * 30;
+            const tone = shifted(0.65 + rng() * 0.55);
+            addSoftBlob(x, y, r, tone, 0.06 + rng() * 0.08);
+        }
+    }
+
+    for (let i = 0; i < 24; i++) {
+        addSoftBlob(
+            rng() * size,
+            rng() * size,
+            4 + rng() * 14,
+            shifted(0.7 + rng() * 0.7),
+            0.03 + rng() * 0.05
+        );
     }
 
     // Assombrissement au limbe
@@ -388,21 +571,22 @@ function _drawRingHalf(ctx, canvasSize, sphereR, rd, half, img) {
     ctx.clearRect(0, 0, canvasSize, canvasSize);
     ctx.save();
 
-    // Clip en espace écran : top = avant (devant planète), bottom = arrière (derrière)
-    ctx.beginPath();
-    if (half === 'back') {
-        ctx.rect(0, cy, canvasSize, cy);
-    } else {
-        ctx.rect(0, 0, canvasSize, cy);
-    }
-    ctx.clip();
-
     // Centrer, appliquer le tilt axial, puis aplatir en ellipse via scale(1, RING_TILT).
     // Le gradient et la géométrie sont définis en espace circulaire — le scale
     // les projette en ellipse exactement comme le fait la perspective 3D.
     ctx.translate(cx, cy);
     ctx.rotate(tiltRad);
     ctx.scale(1, RING_TILT);
+
+    // Clip dans l'espace local des anneaux pour que la séparation avant/arrière
+    // suive bien l'orientation des anneaux et n'introduise pas de couture écran.
+    ctx.beginPath();
+    if (half === 'back') {
+        ctx.rect(-outerR * 2, 0, outerR * 4, outerR * 2);
+    } else {
+        ctx.rect(-outerR * 2, -outerR * 2, outerR * 4, outerR * 2);
+    }
+    ctx.clip();
 
     const col = hexToRgbObj(rd.color);
     if (img?.complete && img.naturalWidth > 0) {
@@ -436,7 +620,7 @@ function RingCanvas({ sphereSize, ringData }) {
     const frontRef = React.useRef(null);
     const imgRef = React.useRef(null);
     const sphereR = sphereSize / 2;
-    const canvasSize = Math.ceil(ringData.outerScale * 2.15 * sphereSize);
+    const canvasSize = Math.ceil(ringData.outerScale * sphereSize * 1.08);
 
     React.useEffect(() => {
         const back  = backRef.current;
@@ -491,6 +675,11 @@ function BodyVisual({ body, kind = 'planet', size = 64, className = '' }) {
     React.useEffect(() => { setTextureOk(true); }, [visual.texture]);
     const useTexture = !!visual.texture && textureOk;
     const hasRings = !!visual.ringData;
+    const moonStretch = kind === 'moon' ? getMoonStretch(body) : null;
+    const shapeStyle = moonStretch ? {
+        transform: `scale(${moonStretch.x}, ${moonStretch.y})`,
+        transformOrigin: 'center center',
+    } : undefined;
 
     // Exoplanètes : canvas génératif identique à la vue orbitale
     const isExo = kind === 'planet' && !visual.texture && EXO_VISUAL_TYPES.has(body?.visualType);
@@ -498,7 +687,7 @@ function BodyVisual({ body, kind = 'planet', size = 64, className = '' }) {
         return (
             <div
                 className={[styles.sphere, className, hasRings ? styles.sphereWithRings : ''].filter(Boolean).join(' ')}
-                style={{ width: size, height: size, '--glow': `${visual.glowColor}88` }}
+                style={{ width: size, height: size, '--glow': `${visual.glowColor}88`, ...shapeStyle }}
             >
                 <ExoPlanetSphere
                     visualType={body.visualType}
@@ -525,6 +714,7 @@ function BodyVisual({ body, kind = 'planet', size = 64, className = '' }) {
                 width: size,
                 height: size,
                 '--glow': `${visual.glowColor}88`,
+                ...shapeStyle,
             }}
         >
             {visual.texture && (
@@ -623,7 +813,7 @@ function getPlanetRelativeScale(planet, centeredKey, sortedPlanets) {
         (candidate.name ?? candidate.englishName ?? candidate.id) === centeredKey
     )) ?? planet;
     const focusedSize = focusedPlanet.size ?? (focusedPlanet.meanRadius ? focusedPlanet.meanRadius / 6371 : 0);
-    return getComparativeScale(sizeRatio, focusedSize, 0.1, 8, 0.5);
+    return getComparativeScale(sizeRatio, focusedSize, 0.08, 24, 1);
 }
 
 function getMoonRelativeScale(moon, centeredKey, visibleMoons) {
@@ -633,10 +823,16 @@ function getMoonRelativeScale(moon, centeredKey, visibleMoons) {
     return getComparativeScale(
         moon.meanRadius ?? 0,
         focusedMoon.meanRadius ?? 0,
-        0.1,
-        6,
-        0.5
+        0.06,
+        20,
+        1
     );
+}
+
+function getAdaptivePairGap(sizeA, sizeB, baseGap) {
+    void sizeA;
+    void sizeB;
+    return baseGap;
 }
 
 function CarouselRow({
@@ -648,9 +844,11 @@ function CarouselRow({
     renderItem,
     getRenderedSize,
     getPhysicalDiameterKm,
+    getItemFootprintSize,
     focusDiameter = 280,
     visibleRadius = CAROUSEL_VISIBLE_RADIUS_DEFAULT,
     edgeGap = CAROUSEL_STEP_GAP,
+    centerShift = 0,
 }) {
     const shellRef = useRef(null);
     const wheelLockRef = useRef(false);
@@ -664,8 +862,8 @@ function CarouselRow({
             return;
         }
         setCenteredKey((current) => {
-            if (activeKey && items.some((item) => getKey(item) === activeKey)) return activeKey;
             if (current && items.some((item) => getKey(item) === current)) return current;
+            if (activeKey && items.some((item) => getKey(item) === activeKey)) return activeKey;
             return getKey(items[0]);
         });
     }, [items, getKey, activeKey]);
@@ -782,6 +980,16 @@ function CarouselRow({
         ))
     ), [items, getRenderedSize, centeredKey, centeredIndex, focusDiameter]);
 
+    const footprintSizes = useMemo(() => (
+        items.map((item, index) => {
+            const renderedSize = renderedSizes[index] ?? focusDiameter;
+            return safeSize(
+                getItemFootprintSize?.(item, renderedSize) ?? renderedSize,
+                renderedSize
+            );
+        })
+    ), [items, renderedSizes, focusDiameter, getItemFootprintSize]);
+
     const visibleIndices = useMemo(() => {
         if (centeredIndex < 0) return [];
         const list = [];
@@ -826,6 +1034,7 @@ function CarouselRow({
             style={{
                 '--carousel-focus-diameter': `${focusDiameter}px`,
                 '--carousel-edge-gap': `${edgeGap}px`,
+                '--carousel-center-shift': `${centerShift}px`,
             }}
         >
             <div className={styles.carouselStage}>
@@ -835,16 +1044,18 @@ function CarouselRow({
                     const isCentered = centeredKey === key;
                     const isActive = activeKey != null && String(activeKey) === key;
                     const renderedSize = renderedSizes[index] ?? focusDiameter;
+                    const footprintSize = footprintSizes[index] ?? renderedSize;
                     const direction = index - centeredIndex;
                     let offsetX = 0;
 
                     if (direction !== 0) {
                         const step = direction > 0 ? 1 : -1;
-                        let previousSize = focusDiameter;
+                        let previousSize = footprintSizes[centeredIndex] ?? focusDiameter;
 
                         for (let cursor = centeredIndex + step; step > 0 ? cursor <= index : cursor >= index; cursor += step) {
-                            const currentSize = renderedSizes[cursor] ?? focusDiameter;
-                            offsetX += step * (((previousSize + currentSize) / 2) + edgeGap);
+                            const currentSize = footprintSizes[cursor] ?? (renderedSizes[cursor] ?? focusDiameter);
+                            const pairGap = getAdaptivePairGap(previousSize, currentSize, edgeGap);
+                            offsetX += step * (((previousSize + currentSize) / 2) + pairGap);
                             previousSize = currentSize;
                         }
                     }
@@ -860,7 +1071,7 @@ function CarouselRow({
                                 isActive ? styles.carouselItemActive : '',
                             ].filter(Boolean).join(' ')}
                             style={{
-                                width: `${Math.max(renderedSize, 180)}px`,
+                                width: `${Math.max(footprintSize, 180)}px`,
                                 '--item-size': `${renderedSize}px`,
                                 '--item-offset-x': `${offsetX}px`,
                             }}
@@ -931,7 +1142,7 @@ export default function CatalogView({
 }) {
     const overlayRef = useRef(null);
     const skipMilkyWaySyncRef = useRef(false);
-    const skipPlanetSyncRef   = useRef(false);
+    const skipPlanetSyncRef   = useRef(null);
     const [level, setLevel]               = useState('galaxies');
     const [activeSystemId, setActiveSystemId] = useState(null);
     const [activePlanetName, setActivePlanetName] = useState(null);
@@ -944,6 +1155,7 @@ export default function CatalogView({
     const [filterSpectral, setFilterSpectral] = useState(''); // 'O'|'B'|'A'|'F'|'G'|'K'|'M'|''
     const [filterHZ, setFilterHZ]             = useState(false);
     const [filterPlanetsMin, setFilterPlanetsMin] = useState(0);
+    const [moonDetails, setMoonDetails] = useState({});
 
     const [favorites, setFavorites] = useState(() => {
         try { return JSON.parse(localStorage.getItem('spaceodyssey_favorites') ?? '[]'); }
@@ -996,12 +1208,24 @@ export default function CatalogView({
 
     useEffect(() => {
         if (!selectedPlanet) return;
-        if (skipPlanetSyncRef.current) { skipPlanetSyncRef.current = false; return; }
+        if (skipPlanetSyncRef.current && skipPlanetSyncRef.current === selectedPlanet) {
+            skipPlanetSyncRef.current = null;
+            return;
+        }
         const exoSys = allExtraSystems.find(sys => sys.planets.some(p => p.name === selectedPlanet));
+        const solarPlanet = solarPlanets.find((planet) => (
+            planet.id === selectedPlanet
+            || planet.englishName === selectedPlanet
+            || planet.name === selectedPlanet
+        ));
         setActiveSystemId(exoSys ? exoSys.id : 'solar');
-        setActivePlanetName(selectedPlanet);
+        setActivePlanetName(
+            exoSys
+                ? selectedPlanet
+                : (solarPlanet?.englishName ?? solarPlanet?.name ?? solarPlanet?.id ?? selectedPlanet)
+        );
         setLevel('planets');
-    }, [selectedPlanet, allExtraSystems]);
+    }, [selectedPlanet, allExtraSystems, solarPlanets]);
 
     useEffect(() => {
         if (!selectedMoon) return;
@@ -1012,6 +1236,15 @@ export default function CatalogView({
         );
         if (entry) setActivePlanetName(entry[0]);
     }, [selectedMoon, solarMoonMap]);
+
+    useEffect(() => {
+        setLevel('galaxies');
+        setActiveSystemId(null);
+        setActivePlanetName(null);
+        skipMilkyWaySyncRef.current = false;
+        skipPlanetSyncRef.current = null;
+        focusMilkyWay?.();
+    }, [focusMilkyWay]);
 
     // ── Système actif ────────────────────────────────────────────────────
 
@@ -1099,6 +1332,40 @@ export default function CatalogView({
         return solarMoonMap[activePlanetName] ?? [];
     }, [activeSystemId, activePlanetName, solarMoonMap]);
 
+    const visibleMoonsDetailed = useMemo(() => (
+        visibleMoons.map((moon) => ({
+            ...moon,
+            ...(moonDetails[moon.id] ?? {}),
+        }))
+    ), [visibleMoons, moonDetails]);
+
+    useEffect(() => {
+        if (level !== 'moons' || visibleMoons.length === 0) return;
+        let cancelled = false;
+        const missingIds = visibleMoons
+            .map((moon) => moon.id)
+            .filter((id) => id && !moonDetails[id]);
+        if (missingIds.length === 0) return;
+
+        Promise.allSettled(missingIds.map((id) => fetchBody(id)))
+            .then((results) => {
+                if (cancelled) return;
+                setMoonDetails((current) => {
+                    const next = { ...current };
+                    results.forEach((result, index) => {
+                        if (result.status === 'fulfilled' && result.value) {
+                            next[missingIds[index]] = result.value;
+                        }
+                    });
+                    return next;
+                });
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [level, visibleMoons, moonDetails]);
+
     const activePlanetCarouselKey = useMemo(() => {
         const match = sortedPlanets.find((planet) => (
             selectedPlanet === planet.id
@@ -1107,6 +1374,13 @@ export default function CatalogView({
         ));
         return match ? (match.name ?? match.englishName ?? match.id) : null;
     }, [sortedPlanets, selectedPlanet]);
+
+    function getPlanetSelectionValue(planet) {
+        if (activeSystemId === 'solar') {
+            return planet.id ?? planet.englishName ?? planet.name;
+        }
+        return planet.name ?? planet.englishName ?? planet.id;
+    }
 
     // ── Handlers ─────────────────────────────────────────────────────────
 
@@ -1132,26 +1406,28 @@ export default function CatalogView({
 
     function goPlanet(planet) {
         const name = planet.name ?? planet.englishName ?? planet.id;
+        const selectionValue = getPlanetSelectionValue(planet);
         setActivePlanetName(name);
         if (activeSystemId === 'solar') {
             const planetMoons = solarMoonMap[name] ?? [];
             if (planetMoons.length > 0) {
-                skipPlanetSyncRef.current = true;
+                skipPlanetSyncRef.current = selectionValue;
                 setLevel('moons');
-                if (activePlanetCarouselKey !== name) focusPlanet?.(name, activeSystemId);
+                if (activePlanetCarouselKey !== name) focusPlanet?.(selectionValue, activeSystemId);
                 const firstMoon = planetMoons[0];
                 focusMoon?.(firstMoon.id ?? firstMoon.englishName, name);
                 return;
             }
         }
-        if (activePlanetCarouselKey !== name) focusPlanet?.(name, activeSystemId);
+        if (activePlanetCarouselKey !== name) focusPlanet?.(selectionValue, activeSystemId);
     }
 
     function focusPlanetOnly(planet) {
         const name = planet.name ?? planet.englishName ?? planet.id;
+        const selectionValue = getPlanetSelectionValue(planet);
         setActivePlanetName(name);
         if (activePlanetCarouselKey !== name) {
-            focusPlanet?.(name, activeSystemId);
+            focusPlanet?.(selectionValue, activeSystemId);
         }
     }
 
@@ -1381,13 +1657,19 @@ export default function CatalogView({
                         getPhysicalDiameterKm={(planet) => (
                             Number.isFinite(planet?.meanRadius) ? planet.meanRadius * 2 : null
                         )}
+                        getItemFootprintSize={(planet, renderedSize) => {
+                            const ringData = getBodyVisual(planet, 'planet')?.ringData;
+                            if (!ringData) return renderedSize;
+                            return (renderedSize * ringData.outerScale) + 36;
+                        }}
                         focusDiameter={280}
+                        edgeGap={72}
                         getRenderedSize={(planet, centeredKey, ctx) => {
                             const relativeScale = getPlanetRelativeScale(planet, centeredKey, sortedPlanets);
                             const distance = ctx?.distanceFromCenter ?? 0;
                             if (distance === 0) return 280;
                             const falloff = distance === 1 ? 1 : distance === 2 ? 0.88 : 0.74;
-                            return safeSize(280 * mixScale(relativeScale, 1, 0.18) * falloff, 280);
+                            return safeSize(280 * relativeScale * falloff, 280);
                         }}
                         renderItem={(planet, { isCentered, renderedSize }) => {
                             const name = planet.name ?? planet.englishName ?? planet.id;
@@ -1439,13 +1721,13 @@ export default function CatalogView({
                 <>
                     <div className={styles.sectionHeader}>
                         <span className={styles.sectionTitle}>Lunes de {activePlanetName}</span>
-                        <span className={styles.count}>{visibleMoons.length}</span>
+                        <span className={styles.count}>{visibleMoonsDetailed.length}</span>
                     </div>
-                    {visibleMoons.length === 0 ? (
+                    {visibleMoonsDetailed.length === 0 ? (
                         <div className={styles.empty}>Aucune lune répertoriée pour cette planète.</div>
                     ) : (
                         <CarouselRow
-                            items={visibleMoons}
+                            items={visibleMoonsDetailed}
                             getKey={(moon) => moon.id ?? moon.englishName ?? moon.name}
                             onFocusItem={goMoon}
                             onSelect={goMoon}
@@ -1454,11 +1736,11 @@ export default function CatalogView({
                             )}
                             focusDiameter={250}
                             getRenderedSize={(moon, centeredKey, ctx) => {
-                                const relativeScale = getMoonRelativeScale(moon, centeredKey, visibleMoons);
+                                const relativeScale = getMoonRelativeScale(moon, centeredKey, visibleMoonsDetailed);
                                 const distance = ctx?.distanceFromCenter ?? 0;
                                 if (distance === 0) return 250;
                                 const falloff = distance === 1 ? 1 : distance === 2 ? 0.88 : 0.74;
-                                return safeSize(250 * mixScale(relativeScale, 1, 0.18) * falloff, 250);
+                                return safeSize(250 * relativeScale * falloff, 250);
                             }}
                             renderItem={(moon, { isCentered, renderedSize }) => {
                                 const mName = moon.englishName ?? moon.name ?? moon.id;

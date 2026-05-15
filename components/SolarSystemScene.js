@@ -572,29 +572,39 @@ function parseBodyDimensions(dimension) {
 
 function normalizeStretch(x = 1, y = 1, z = 1) {
     return {
-        x: THREE.MathUtils.clamp(x, 0.65, 1.45),
-        y: THREE.MathUtils.clamp(y, 0.65, 1.45),
-        z: THREE.MathUtils.clamp(z, 0.65, 1.45),
+        x: THREE.MathUtils.clamp(x, 0.9, 1.1),
+        y: THREE.MathUtils.clamp(y, 0.9, 1.1),
+        z: THREE.MathUtils.clamp(z, 0.9, 1.1),
     };
 }
 
 function getMoonStretch(moonBody) {
     const parsedDimensions = parseBodyDimensions(moonBody?.dimension);
+    const meanRadius = moonBody?.meanRadius;
+    if (Number.isFinite(meanRadius) && meanRadius >= 300) return null;
+    const dampFactor = !Number.isFinite(meanRadius) ? 0.55 : meanRadius > 650 ? 0.28 : meanRadius > 350 ? 0.4 : 0.6;
     if (parsedDimensions) {
         const [x, y, z] = parsedDimensions;
         const avg = (x + y + z) / 3;
         if (avg > 0) {
-            return normalizeStretch(x / avg, y / avg, z / avg);
+            return normalizeStretch(
+                1 + ((x / avg) - 1) * dampFactor,
+                1 + ((y / avg) - 1) * dampFactor,
+                1 + ((z / avg) - 1) * dampFactor
+            );
         }
     }
 
-    const meanRadius = moonBody?.meanRadius;
     const equaRadius = moonBody?.equaRadius;
     const polarRadius = moonBody?.polarRadius;
     if (Number.isFinite(meanRadius) && meanRadius > 0) {
         const equatorialRatio = Number.isFinite(equaRadius) && equaRadius > 0 ? equaRadius / meanRadius : 1;
         const polarRatio = Number.isFinite(polarRadius) && polarRadius > 0 ? polarRadius / meanRadius : 1;
-        return normalizeStretch(equatorialRatio, polarRatio, equatorialRatio);
+        return normalizeStretch(
+            1 + (equatorialRatio - 1) * dampFactor,
+            1 + (polarRatio - 1) * dampFactor,
+            1 + (equatorialRatio - 1) * dampFactor
+        );
     }
 
     return null;
@@ -954,7 +964,11 @@ function makePlanetRings(planetRadius, rings = {}) {
         side: THREE.DoubleSide,
         transparent: true,
         opacity: rings.opacity ?? 0.75,
+        depthWrite: false,
     });
+    if (rings.texturePath) {
+        mat.blending = THREE.AdditiveBlending;
+    }
     const ring = new THREE.Mesh(geo, mat);
     ring.userData.baseOpacity = rings.opacity ?? 0.75;
     // Les anneaux sont dans le plan équatorial de la planète.
@@ -2820,7 +2834,13 @@ export default function SolarSystemScene({
                 const ring = planetsRef.current[cfg.name]?.ring;
                 if (!ring) return;
                 ring.material.map = tex;
-                ring.material.color.set(0xffffff);
+                if (cfg.name === 'saturne') {
+                    ring.material.color.set('#fff4d0');
+                    ring.material.opacity = 0.92;
+                    ring.userData.baseOpacity = 0.92;
+                } else {
+                    ring.material.color.set(0xffffff);
+                }
                 ring.material.alphaTest = 0.02;
                 ring.material.needsUpdate = true;
             });
