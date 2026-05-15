@@ -517,22 +517,17 @@
     overflow: visible;
 }
 
-.ringTexture {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 190%;
-    height: auto;
-    transform: translate(-50%, -50%) rotate(-16deg);
-    opacity: 0.92;
-    pointer-events: none;
-    z-index: 0;
+/* Les canvases d'anneaux sont positionnés en JS avec zIndex 1 (arrière) et 3 (avant) */
+
+.sphereWithRings .sphereSurface {
+    z-index: 2;
 }
 
-.sphereWithRings .sphereSurface,
+/* Le gloss (::before) reste au-dessus du ring front mais ne dépasse pas la zone circulaire */
 .sphereWithRings::before {
-    z-index: 1;
+    z-index: 4;
 }
+
 @keyframes galaxyShimmer {
     0%,100% { opacity: 0.85; }
     50%      { opacity: 1; }
@@ -546,35 +541,80 @@
     text-align: center;
 }
 
-.sphereWithRings {
-    overflow: visible;
+/* ── Filtres / recherche ── */
+.filtersBar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 24px 16px;
 }
 
-.ringTexture {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 190%;
-    height: auto;
-    transform: translate(-50%, -50%) rotate(-16deg);
-    opacity: 0.92;
-    pointer-events: none;
-    z-index: 0;
+.searchInput {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(162, 194, 255, 0.12);
+    border-radius: 999px;
+    padding: 8px 16px;
+    color: var(--text-main);
+    font-size: 0.85rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s ease;
+    width: 100%;
 }
 
-.sphereWithRings .sphereSurface,
-.sphereWithRings::before {
-    z-index: 1;
-}
-@keyframes galaxyShimmer {
-    0%,100% { opacity: 0.85; }
-    50%      { opacity: 1; }
+.searchInput:focus {
+    border-color: rgba(126, 231, 255, 0.32);
 }
 
-/* Empty / no moons */
-.empty {
-    color: var(--text-dim, #778);
-    font-size: 0.88rem;
-    padding: 48px 0;
-    text-align: center;
+.searchInput::placeholder {
+    color: rgba(162, 194, 255, 0.35);
+}
+
+.filterChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.filterChip {
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(162, 194, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-soft);
+    font-size: 0.75rem;
+    font-family: var(--font-mono-ui);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.filterChip:hover {
+    border-color: rgba(126, 231, 255, 0.24);
+    color: var(--text-main);
+}
+
+.filterChipActive {
+    border-color: rgba(126, 231, 255, 0.4);
+    background: rgba(126, 231, 255, 0.1);
+    color: var(--accent);
+}
+
+/* ── Favoris ── */
+.favBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 2px 6px;
+    color: rgba(162, 194, 255, 0.4);
+    transition: color 0.15s ease;
+    line-height: 1;
+}
+
+.favBtn:hover {
+    color: rgba(255, 210, 80, 0.8);
+}
+
+.favBtnActive {
+    color: #ffd050;
 }

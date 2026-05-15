@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import styles from '../styles/Informations.module.css';
+import useWikipedia from '../hooks/useWikipedia';
 
 const EARTH = { massKg: 5.972e24, radiusKm: 6371 };
 const SUN   = { massKg: 1.989e30, radiusKm: 696340 };
@@ -41,6 +42,13 @@ const BODY_TYPE_FR = {
     'Moon': 'Lune', 'Asteroid': 'Astéroïde', 'Black Hole': 'Trou noir', 'Galaxy': 'Galaxie',
 };
 
+// Noms français connus pour les objets spéciaux
+const FR_NAMES = {
+    milkyWay: 'Voie Lactée',
+    soleil: 'Soleil',
+    sagittariusA: 'Sagittarius A*',
+};
+
 function buildRows(infos) {
     const rows = [];
     const add = (label, value) => { if (value != null) rows.push({ label, value }); };
@@ -62,21 +70,69 @@ function buildRows(infos) {
     if (infos.numberOfPlanets) add('Planètes', infos.numberOfPlanets.toLocaleString('fr-FR'));
     if (infos.discoveredBy)    add('Découvert par', infos.discoveredBy);
     if (infos.discoveryDate)   add('Découverte', infos.discoveryDate);
-    if (infos.sy_dist)         add('Distance', `${fmt(infos.sy_dist, 1)} al`);
+    if (infos.sy_dist)         add('Distance', `${fmt(infos.sy_dist, 1)} pc`);
     return rows;
+}
+
+function getWikiNames(infos) {
+    const frName = FR_NAMES[infos.id]
+        ?? (infos.name && infos.name !== infos.englishName ? infos.name : null);
+    const enName = infos.englishName ?? infos.name ?? null;
+    return { frName, enName };
+}
+
+function buildEarthRows(infos) {
+    const rows = [];
+    const add = (label, value) => { if (value != null) rows.push({ label, value }); };
+    if (infos.meanRadius)      add('Rayon / Terre',   `${(infos.meanRadius / 6371).toFixed(2)}×`);
+    if (infos.mass?.massValue) {
+        const kg = infos.mass.massValue * Math.pow(10, infos.mass.massExponent);
+        add('Masse / Terre', `${(kg / 5.972e24).toFixed(2)}×`);
+    }
+    if (infos.gravity)         add('Gravité / Terre', `${(infos.gravity / 9.807).toFixed(2)}×`);
+    return rows;
+}
+
+function getNasaUrl(infos) {
+    if (infos.bodyType === 'Exoplanet') {
+        return `https://exoplanetarchive.ipac.caltech.edu/overview/${encodeURIComponent(infos.englishName)}`;
+    }
+    if (infos.bodyType === 'Star' && infos.isExoplanet) {
+        return `https://exoplanetarchive.ipac.caltech.edu/overview/${encodeURIComponent(infos.englishName)}`;
+    }
+    return null;
 }
 
 export default function Informations({ infos }) {
     const rows = useMemo(() => buildRows(infos), [infos]);
     const bodyTypeFr = BODY_TYPE_FR[infos.bodyType] ?? infos.bodyType ?? 'Objet';
 
+    const [compareEarth, setCompareEarth] = useState(false);
+    const earthRows = useMemo(() => compareEarth ? buildEarthRows(infos) : [], [compareEarth, infos]);
+    const showCompareToggle = !['Galaxy', 'Black Hole'].includes(infos.bodyType);
+
+    const { frName, enName } = useMemo(() => getWikiNames(infos), [infos]);
+    const { result: wiki, loading: wikiLoading } = useWikipedia(frName, enName);
+    const nasaUrl = useMemo(() => getNasaUrl(infos), [infos]);
+
     return (
         <div className={styles.container}>
             <div className={styles.header}>
                 <span className={styles.type}>{bodyTypeFr}</span>
                 <span className={styles.name}>{infos.englishName || infos.name}</span>
+                {showCompareToggle && (
+                    <button
+                        type="button"
+                        className={`${styles.compareBtn} ${compareEarth ? styles.compareBtnActive : ''}`}
+                        onClick={() => setCompareEarth(v => !v)}
+                        aria-label="Comparer à la Terre"
+                    >
+                        ⊕
+                    </button>
+                )}
             </div>
-            {rows.length > 0 && (
+
+            {(rows.length > 0 || earthRows.length > 0) && (
                 <div className={styles.rows}>
                     {rows.map(({ label, value }) => (
                         <div key={label} className={styles.row}>
@@ -84,6 +140,58 @@ export default function Informations({ infos }) {
                             <span className={styles.rowValue}>{value}</span>
                         </div>
                     ))}
+                    {earthRows.length > 0 && (
+                        <>
+                            <div className={styles.rowDivider} />
+                            {earthRows.map(({ label, value }) => (
+                                <div key={label} className={`${styles.row} ${styles.rowEarth}`}>
+                                    <span className={styles.rowLabel}>{label}</span>
+                                    <span className={styles.rowValue}>{value}</span>
+                                </div>
+                            ))}
+                        </>
+                    )}
+                </div>
+            )}
+
+            {(wiki || wikiLoading || nasaUrl) && (
+                <div className={styles.wikiSection}>
+                    {wiki?.thumbnail && (
+                        <img
+                            className={styles.wikiThumb}
+                            src={wiki.thumbnail}
+                            alt=""
+                            aria-hidden="true"
+                        />
+                    )}
+                    {wikiLoading && !wiki && (
+                        <div className={styles.wikiSkeleton} />
+                    )}
+                    {wiki?.extract && (
+                        <p className={styles.wikiExtract}>{wiki.extract}</p>
+                    )}
+                    <div className={styles.wikiLinks}>
+                        {wiki?.url && (
+                            <a
+                                href={wiki.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={styles.wikiLink}
+                            >
+                                Wikipédia {wiki.lang === 'fr' ? 'FR' : 'EN'} →
+                            </a>
+                        )}
+                        {nasaUrl && (
+                            <a
+                                href={nasaUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={styles.wikiLink}
+                            >
+                                NASA Exoplanet Archive →
+                            </a>
+                        )}
+                    </div>
                 </div>
             )}
         </div>

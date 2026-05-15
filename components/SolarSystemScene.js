@@ -17,9 +17,9 @@ const PLANET_DATA = [
     { name: 'terre',   r: 16, size: 0.38, color: '#4a80c0', emissive: '#0a2a50', speed: 0.07,  tilt:  23.44, rotDir:  1 },
     { name: 'mars',    r: 19, size: 0.22, color: '#d05010', emissive: '#501800', speed: 0.04,  tilt:  25.19, rotDir:  1 },
     { name: 'jupiter', r: 28, size: 1.40, color: '#d8a060', emissive: '#4a2800', speed: 0.016, tilt:   3.13, rotDir:  1 },
-    { name: 'saturne', r: 36, size: 1.20, color: '#ede0a0', emissive: '#504000', speed: 0.010, tilt:  26.73, rotDir:  1, rings: { innerScale: 1.11, outerScale: 2.32, color: '#d4c088', opacity: 0.75, texturePath: '/textures/planets/saturne_anneaux.png' } },
-    { name: 'uranus',  r: 45, size: 0.75, color: '#88eef0', emissive: '#104050', speed: 0.006, tilt:  97.77, rotDir: -1, rings: { innerScale: 1.58, outerScale: 2.05, color: '#c9efe6', opacity: 0.28 } },
-    { name: 'neptune', r: 52, size: 0.72, color: '#3355e8', emissive: '#0c1555', speed: 0.004, tilt:  28.32, rotDir:  1, rings: { innerScale: 1.82, outerScale: 2.18, color: '#8aa0c8', opacity: 0.24 } },
+    { name: 'saturne', r: 36, size: 1.20, color: '#ede0a0', emissive: '#504000', speed: 0.010, tilt:  26.73, rotDir:  1, rings: { innerScale: 1.11, outerScale: 2.32, color: '#d4c088', opacity: 1.00, texturePath: '/textures/planets/saturne_anneaux.png' } },
+    { name: 'uranus',  r: 45, size: 0.75, color: '#88eef0', emissive: '#104050', speed: 0.006, tilt:  97.77, rotDir: -1, rings: { innerScale: 1.58, outerScale: 2.05, color: '#c9efe6', opacity: 0.18 } },
+    { name: 'neptune', r: 52, size: 0.72, color: '#3355e8', emissive: '#0c1555', speed: 0.004, tilt:  28.32, rotDir:  1, rings: { innerScale: 1.82, outerScale: 2.18, color: '#8aa0c8', opacity: 0.14 } },
     { name: 'pluton',  r: 58, size: 0.12, color: '#9a8070', emissive: '#302520', speed: 0.002, tilt: 122.53, rotDir: -1 },
 ];
 
@@ -1124,6 +1124,8 @@ export default function SolarSystemScene({
     catalogSort = 'distance',
     focusStarNonce = 0,
     showHZ = true,
+    topDownNonce = 0,
+    sideViewNonce = 0,
 }) {
     // Combine systèmes statiques (Kepler, Sirius, Vega) + exoplanètes NASA dynamiques
     const allStarSystems = useMemo(
@@ -1483,6 +1485,7 @@ export default function SolarSystemScene({
         const controls = ctrlRef.current;
         if (!camera || !controls) return;
 
+        camera.up.set(0, 1, 0);
         if (resetViewNonce === 0) {
             controls.target.set(0, 0, 0);
             camera.position.set(
@@ -1519,6 +1522,40 @@ export default function SolarSystemScene({
         targetCamDistRef.current = camera.position.distanceTo(controls.target);
         controls.update();
     }, [resetViewNonce, setOverlayOpacity]);
+
+    useEffect(() => {
+        if (topDownNonce === 0) return;
+        const camera = cameraRef.current;
+        const controls = ctrlRef.current;
+        if (!camera || !controls) return;
+        controls.target.set(0, 0, 0);
+        camera.up.set(0, 0, -1);
+        camera.position.set(0, 110, 0);
+        camera.lookAt(0, 0, 0);
+        controls.enabled = true;
+        galaxyTransitionRef.current.phase = 'idle';
+        setOverlayOpacity(0);
+        minCamDistRef.current = getDistanceForScreenFraction(SUN_RADIUS, camera, 0.5);
+        targetCamDistRef.current = camera.position.distanceTo(controls.target);
+        controls.update();
+    }, [topDownNonce, setOverlayOpacity]);
+
+    useEffect(() => {
+        if (sideViewNonce === 0) return;
+        const camera = cameraRef.current;
+        const controls = ctrlRef.current;
+        if (!camera || !controls) return;
+        controls.target.set(0, 0, 0);
+        camera.up.set(0, 1, 0);
+        camera.position.set(0, 4, 90);
+        camera.lookAt(0, 0, 0);
+        controls.enabled = true;
+        galaxyTransitionRef.current.phase = 'idle';
+        setOverlayOpacity(0);
+        minCamDistRef.current = getDistanceForScreenFraction(SUN_RADIUS, camera, 0.5);
+        targetCamDistRef.current = camera.position.distanceTo(controls.target);
+        controls.update();
+    }, [sideViewNonce, setOverlayOpacity]);
 
     useEffect(() => {
         hideSunTooltip();
@@ -2721,6 +2758,19 @@ export default function SolarSystemScene({
             });
         });
 
+        // Ceinture d'astéroïdes — anneau diffus visible depuis la vue globale
+        const beltGeo = new THREE.RingGeometry(asteroidBeltInner, asteroidBeltOuter, 128);
+        const beltMat = new THREE.MeshBasicMaterial({
+            color: 0xa59a8a,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.03,
+            depthWrite: false,
+        });
+        const beltRingMesh = new THREE.Mesh(beltGeo, beltMat);
+        beltRingMesh.rotation.x = -Math.PI / 2;
+        solarSystemRoot.add(beltRingMesh);
+
         // Textures planètes
         const loader = new THREE.TextureLoader();
 
@@ -2771,6 +2821,7 @@ export default function SolarSystemScene({
                 if (!ring) return;
                 ring.material.map = tex;
                 ring.material.color.set(0xffffff);
+                ring.material.alphaTest = 0.02;
                 ring.material.needsUpdate = true;
             });
         });
@@ -3116,7 +3167,8 @@ export default function SolarSystemScene({
                 p.mesh.material.opacity = THREE.MathUtils.lerp(p.mesh.material.opacity, targetMeshOp, damp(0.06));
                 p.arc.material.opacity  = THREE.MathUtils.lerp(p.arc.material.opacity,  targetArcOp,  damp(0.06));
                 if (p.ring?.material) {
-                    const targetRingOp = sel ? (isSel ? 0.75 : 0) : 0.75;
+                    const baseOp = p.ring.userData.baseOpacity ?? p.ring.material.opacity;
+                    const targetRingOp = sel ? (isSel ? baseOp : 0) : baseOp;
                     p.ring.material.opacity = THREE.MathUtils.lerp(p.ring.material.opacity, targetRingOp, damp(0.06));
                 }
             });

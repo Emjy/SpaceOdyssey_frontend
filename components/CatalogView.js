@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import styles from '../styles/CatalogView.module.css';
-import { getMoonStubsFromPlanet } from '../lib/solarApi';
+import { getMoonStubsFromPlanet, fetchBody } from '../lib/solarApi';
 
 const StarCanvas = dynamic(() => import('./StarCanvas'), { ssr: false });
 
@@ -36,9 +36,15 @@ const PLANET_TEXTURE_BASE = '/textures/planets';
 const STAR_TEXTURE_BASE = '/textures/stars';
 const MOON_TEXTURE_BASE = '/textures/moons';
 
-const SOLAR_RING_MAP = {
-    saturne: '/textures/planets/saturne_anneaux.png',
+// Reprend exactement les données de PLANET_DATA dans SolarSystemScene.js
+const SOLAR_RING_DATA = {
+    saturne: { innerScale: 1.11, outerScale: 2.32, color: '#d4c088', opacity: 0.75, tilt: 26.73, banded: true, texturePath: '/textures/planets/saturne_anneaux.png' },
+    uranus:  { innerScale: 1.58, outerScale: 2.05, color: '#c9efe6', opacity: 0.28, tilt: 97.77 },
+    neptune: { innerScale: 1.82, outerScale: 2.18, color: '#8aa0c8', opacity: 0.24, tilt: 28.32 },
 };
+
+// Compression verticale simulant la perspective du système orbital (caméra à ~34° au-dessus)
+const RING_TILT = 0.38;
 
 const CAROUSEL_STEP_GAP = 92;
 const CAROUSEL_VISIBLE_RADIUS_DEFAULT = 2;
@@ -114,24 +120,19 @@ function getBodyVisual(body, kind) {
     }
 
     const visualType = body?.visualType ?? body?.bodyType ?? 'Planet';
-    const ringTexture = SOLAR_RING_MAP[normalized] ?? null;
+    const ringData = SOLAR_RING_DATA[normalized] ?? null;
     const color = body?.color ?? '#4488cc';
     const texture = body?.isSolar || body?.bodyType === 'Planet'
         ? `${PLANET_TEXTURE_BASE}/${normalized}.jpg`
         : null;
 
     if (texture) {
-        return {
-            variant: 'planet',
-            texture,
-            ringTexture,
-            glowColor: color,
-        };
+        return { variant: 'planet', texture, ringData, glowColor: color };
     }
 
     return {
         variant: 'planet',
-        ringTexture,
+        ringData,
         glowColor: color,
         background: [
             ...(EXO_TYPE_BACKGROUNDS[visualType] ?? EXO_TYPE_BACKGROUNDS.rocky),
@@ -141,7 +142,7 @@ function getBodyVisual(body, kind) {
 }
 
 function getSpectralClass(teff) {
-    if (!teff) return '?';
+    if (!teff) return '';
     if (teff < 3500) return 'M';
     if (teff < 5000) return 'K';
     if (teff < 6000) return 'G';
@@ -151,6 +152,337 @@ function getSpectralClass(teff) {
     return 'O';
 }
 
+// ── Génération de texture canvas (même algo que la vue orbitale) ──────────
+
+function _rng32(a) {
+    let s = a >>> 0;
+    return () => {
+        s = (s + 0x6D2B79F5) >>> 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function hexToRgbObj(hex) {
+    if (!hex || hex.length < 7) return { r: 0.5, g: 0.5, b: 0.5 };
+    return {
+        r: parseInt(hex.slice(1, 3), 16) / 255,
+        g: parseInt(hex.slice(3, 5), 16) / 255,
+        b: parseInt(hex.slice(5, 7), 16) / 255,
+    };
+}
+
+function _rgba(col, a) {
+    return `rgba(${Math.round(col.r * 255)},${Math.round(col.g * 255)},${Math.round(col.b * 255)},${a.toFixed(3)})`;
+}
+
+function _shift(col, factor) {
+    return { r: Math.min(1, col.r * factor), g: Math.min(1, col.g * factor), b: Math.min(1, col.b * factor) };
+}
+
+function hashStr(str) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffffffff;
+    return Math.abs(h);
+}
+
+function drawExoPlanetCanvas(ctx, visualType, baseColor, seed, size) {
+    const rng = _rng32(seed);
+    const c = hexToRgbObj(baseColor);
+    const shifted = (f) => _shift(c, f);
+
+    ctx.fillStyle = _rgba(c, 1);
+    ctx.fillRect(0, 0, size, size);
+
+    if (visualType === 'gas-giant') {
+        const numBands = 9 + Math.floor(rng() * 7);
+        for (let b = 0; b < numBands; b++) {
+            const yFrac = b / numBands;
+            const bandH = (size / numBands) * (0.65 + rng() * 0.7);
+            const col   = shifted(0.72 + rng() * 0.58);
+            const amp   = 4 + rng() * 10;
+            const freq  = 2 + rng() * 5;
+            const phase = rng() * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(0, yFrac * size);
+            for (let x = 0; x <= size; x += 2)
+                ctx.lineTo(x, yFrac * size + Math.sin((x / size) * freq * Math.PI * 2 + phase) * amp);
+            for (let x = size; x >= 0; x -= 2)
+                ctx.lineTo(x, yFrac * size + bandH + Math.sin((x / size) * freq * Math.PI * 2 + phase + 0.5) * amp);
+            ctx.closePath();
+            ctx.fillStyle = _rgba(col, 0.45 + rng() * 0.35);
+            ctx.fill();
+        }
+        if (rng() > 0.35) {
+            const sx = rng() * size, sy = (0.25 + rng() * 0.5) * size;
+            const rx = 14 + rng() * 26, ry = rx * (0.35 + rng() * 0.35);
+            const spotCol = shifted(rng() > 0.5 ? 0.5 : 1.55);
+            const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, rx);
+            grad.addColorStop(0, _rgba(spotCol, 0.7));
+            grad.addColorStop(0.6, _rgba(spotCol, 0.35));
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+        }
+    }
+
+    if (visualType === 'lava-world') {
+        const drawCrack = (x, y, angle, length, depth) => {
+            if (depth <= 0 || length < 3) return;
+            const ex = x + Math.cos(angle) * length, ey = y + Math.sin(angle) * length;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey);
+            ctx.strokeStyle = `rgba(255,${80 + depth * 20},0,${0.45 + depth * 0.12})`;
+            ctx.lineWidth = Math.max(0.4, depth * 0.7); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey);
+            ctx.strokeStyle = `rgba(255,60,0,${0.08 * depth})`;
+            ctx.lineWidth = depth * 3; ctx.stroke();
+            const branches = 1 + Math.floor(rng() * 2);
+            for (let i = 0; i < branches; i++)
+                drawCrack(ex, ey, angle + (rng() - 0.5) * 1.3, length * (0.45 + rng() * 0.38), depth - 1);
+        };
+        for (let i = 0; i < 4 + Math.floor(rng() * 6); i++)
+            drawCrack(rng() * size, rng() * size, rng() * Math.PI * 2, 22 + rng() * 42, 4);
+        for (let i = 0; i < 2 + Math.floor(rng() * 5); i++) {
+            const px = rng() * size, py = rng() * size, pr = 2 + rng() * 9;
+            const grad = ctx.createRadialGradient(px, py, 0, px, py, pr);
+            grad.addColorStop(0, 'rgba(255,200,60,0.95)');
+            grad.addColorStop(0.4, 'rgba(255,80,0,0.65)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
+        }
+    }
+
+    if (visualType === 'ice-world') {
+        ctx.fillStyle = 'rgba(210,235,255,0.25)'; ctx.fillRect(0, 0, size, size);
+        const iceBlue = hexToRgbObj('#4488bb');
+        for (let i = 0; i < 14 + Math.floor(rng() * 16); i++) {
+            const x1 = rng() * size, y1 = rng() * size, x2 = rng() * size, y2 = rng() * size;
+            const cpx = (x1 + x2) / 2 + (rng() - 0.5) * 50, cpy = (y1 + y2) / 2 + (rng() - 0.5) * 50;
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(cpx, cpy, x2, y2);
+            ctx.strokeStyle = _rgba(iceBlue, 0.08 + rng() * 0.18);
+            ctx.lineWidth = 0.5 + rng() * 2; ctx.stroke();
+        }
+        for (let i = 0; i < 35; i++) {
+            const x = rng() * size, y = rng() * size, r = 6 + rng() * 28;
+            const col = _shift(c, rng() > 0.5 ? 1.18 : 0.88);
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0, _rgba(col, 0.22)); grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        }
+    }
+
+    if (visualType === 'temperate') {
+        const landColor   = hexToRgbObj('#4a7830');
+        const desertColor = hexToRgbObj('#c8a060');
+        for (let cont = 0; cont < 2 + Math.floor(rng() * 4); cont++) {
+            const cx = rng() * size, cy = rng() * size;
+            const nPts = 7 + Math.floor(rng() * 6);
+            const baseR = 18 + rng() * 48;
+            const isDesert = rng() > 0.7;
+            const col = isDesert ? desertColor : landColor;
+            ctx.beginPath();
+            for (let pi = 0; pi <= nPts; pi++) {
+                const angle = (pi / nPts) * Math.PI * 2;
+                const r = baseR * (0.45 + rng() * 0.75);
+                const x = cx + Math.cos(angle) * r, y = cy + Math.sin(angle) * r;
+                pi === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.closePath(); ctx.fillStyle = _rgba(col, 0.88); ctx.fill();
+            for (let h = 0; h < 3; h++) {
+                const hx = cx + (rng() - 0.5) * baseR * 0.55, hy = cy + (rng() - 0.5) * baseR * 0.55;
+                const hr = baseR * (0.18 + rng() * 0.28);
+                const hCol = hexToRgbObj(isDesert ? '#e8c080' : '#6a9845');
+                const hGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
+                hGrad.addColorStop(0, _rgba(hCol, 0.42)); hGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = hGrad; ctx.beginPath(); ctx.arc(hx, hy, hr, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+        const icePole = hexToRgbObj('#e8f4ff');
+        [[0, 1], [size, -1]].forEach(([yEdge, dir]) => {
+            const poleH = 14 + rng() * 22;
+            const grad = ctx.createLinearGradient(0, yEdge, 0, yEdge + dir * poleH);
+            grad.addColorStop(0, _rgba(icePole, 0.85)); grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, dir > 0 ? 0 : size - poleH, size, poleH);
+        });
+    }
+
+    if (visualType === 'rocky') {
+        for (let i = 0; i < 6 + Math.floor(rng() * 14); i++) {
+            const cx = rng() * size, cy = rng() * size, cr = 3 + rng() * 22;
+            const rimGrad = ctx.createRadialGradient(cx, cy, cr * 0.72, cx, cy, cr * 1.12);
+            rimGrad.addColorStop(0, _rgba(shifted(1.18), 0.55)); rimGrad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = rimGrad; ctx.beginPath(); ctx.arc(cx, cy, cr * 1.12, 0, Math.PI * 2); ctx.fill();
+            const dGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, cr * 0.9);
+            dGrad.addColorStop(0, _rgba(shifted(0.55), 0.72));
+            dGrad.addColorStop(0.7, _rgba(shifted(0.72), 0.45));
+            dGrad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = dGrad; ctx.beginPath(); ctx.arc(cx, cy, cr * 0.9, 0, Math.PI * 2); ctx.fill();
+        }
+        for (let i = 0; i < 18; i++) {
+            const x = rng() * size, y = rng() * size, r = 6 + rng() * 18;
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0, _rgba(shifted(0.82 + rng() * 0.36), 0.22)); grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        }
+    }
+
+    // Assombrissement au limbe
+    const half = size / 2;
+    const lGrad = ctx.createRadialGradient(half, half, half * 0.22, half, half, half * 0.99);
+    lGrad.addColorStop(0, 'rgba(0,0,0,0)');
+    lGrad.addColorStop(0.65, 'rgba(0,0,0,0.05)');
+    lGrad.addColorStop(0.88, 'rgba(0,0,0,0.28)');
+    lGrad.addColorStop(1.0, 'rgba(0,0,0,0.62)');
+    ctx.fillStyle = lGrad; ctx.fillRect(0, 0, size, size);
+
+}
+
+const EXO_VISUAL_TYPES = new Set(['gas-giant', 'lava-world', 'ice-world', 'temperate', 'rocky']);
+
+function ExoPlanetSphere({ visualType, color, name, size }) {
+    const canvasRef = React.useRef(null);
+    const seed = React.useMemo(() => hashStr(name ?? 'unknown'), [name]);
+    React.useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        drawExoPlanetCanvas(canvas.getContext('2d'), visualType, color ?? '#888', seed, size);
+    }, [visualType, color, seed, size]);
+    return (
+        <canvas
+            ref={canvasRef}
+            width={size}
+            height={size}
+            style={{ borderRadius: '50%', width: size, height: size, display: 'block', boxShadow: 'inset -6px -10px 18px rgba(0,0,0,0.54), inset 6px 6px 14px rgba(255,255,255,0.06)' }}
+        />
+    );
+}
+
+// ── Anneaux canvas — rendu identique à la vue orbitale ────────────────────
+
+function _buildImgGradient(ctx, img, innerR, outerR, opacity) {
+    const N = 64;
+    const tmp = document.createElement('canvas');
+    tmp.width = N; tmp.height = 1;
+    const tctx = tmp.getContext('2d');
+    tctx.drawImage(img, 0, 0, N, 1);
+    const px = tctx.getImageData(0, 0, N, 1).data;
+    // U=0 → bord interne, U=1 → bord externe (même convention que les UVs 3D)
+    const grad = ctx.createRadialGradient(0, 0, innerR, 0, 0, outerR);
+    for (let i = 0; i < N; i++) {
+        const t = i / (N - 1);
+        const a = (px[i * 4 + 3] / 255) * (opacity ?? 0.75);
+        grad.addColorStop(t, `rgba(${px[i * 4]},${px[i * 4 + 1]},${px[i * 4 + 2]},${a})`);
+    }
+    return grad;
+}
+
+function _drawRingHalf(ctx, canvasSize, sphereR, rd, half, img) {
+    const cx = canvasSize / 2;
+    const cy = canvasSize / 2;
+    const innerR = sphereR * rd.innerScale;
+    const outerR = sphereR * rd.outerScale;
+    const tiltRad = ((rd.tilt ?? 0) * Math.PI) / 180;
+
+    ctx.clearRect(0, 0, canvasSize, canvasSize);
+    ctx.save();
+
+    // Clip en espace écran : top = avant (devant planète), bottom = arrière (derrière)
+    ctx.beginPath();
+    if (half === 'back') {
+        ctx.rect(0, cy, canvasSize, cy);
+    } else {
+        ctx.rect(0, 0, canvasSize, cy);
+    }
+    ctx.clip();
+
+    // Centrer, appliquer le tilt axial, puis aplatir en ellipse via scale(1, RING_TILT).
+    // Le gradient et la géométrie sont définis en espace circulaire — le scale
+    // les projette en ellipse exactement comme le fait la perspective 3D.
+    ctx.translate(cx, cy);
+    ctx.rotate(tiltRad);
+    ctx.scale(1, RING_TILT);
+
+    const col = hexToRgbObj(rd.color);
+    if (img?.complete && img.naturalWidth > 0) {
+        ctx.fillStyle = _buildImgGradient(ctx, img, innerR, outerR, rd.opacity);
+    } else if (rd.banded) {
+        const grad = ctx.createRadialGradient(0, 0, innerR, 0, 0, outerR);
+        grad.addColorStop(0,    _rgba(col, 0.1));
+        grad.addColorStop(0.06, _rgba(_shift(col, 0.72), rd.opacity * 0.85));
+        grad.addColorStop(0.18, _rgba(col, rd.opacity));
+        grad.addColorStop(0.32, _rgba(_shift(col, 1.18), rd.opacity * 0.9));
+        grad.addColorStop(0.48, _rgba(_shift(col, 0.88), rd.opacity * 0.95));
+        grad.addColorStop(0.62, _rgba(_shift(col, 1.12), rd.opacity));
+        grad.addColorStop(0.78, _rgba(_shift(col, 0.78), rd.opacity * 0.85));
+        grad.addColorStop(0.92, _rgba(col, rd.opacity * 0.6));
+        grad.addColorStop(1,    _rgba(col, 0.05));
+        ctx.fillStyle = grad;
+    } else {
+        ctx.fillStyle = _rgba(col, rd.opacity);
+    }
+
+    // Dessiner des cercles en espace circulaire — le scale(1, RING_TILT) les aplatit en ellipses
+    ctx.beginPath();
+    ctx.arc(0, 0, outerR, 0, Math.PI * 2);
+    ctx.arc(0, 0, innerR, 0, Math.PI * 2, true);
+    ctx.fill('evenodd');
+    ctx.restore();
+}
+
+function RingCanvas({ sphereSize, ringData }) {
+    const backRef = React.useRef(null);
+    const frontRef = React.useRef(null);
+    const imgRef = React.useRef(null);
+    const sphereR = sphereSize / 2;
+    const canvasSize = Math.ceil(ringData.outerScale * 2.15 * sphereSize);
+
+    React.useEffect(() => {
+        const back  = backRef.current;
+        const front = frontRef.current;
+        if (!back || !front) return;
+
+        const draw = (img) => {
+            _drawRingHalf(back.getContext('2d'),  canvasSize, sphereR, ringData, 'back',  img);
+            _drawRingHalf(front.getContext('2d'), canvasSize, sphereR, ringData, 'front', img);
+        };
+
+        if (ringData.texturePath) {
+            const cached = imgRef.current;
+            if (cached && cached.dataset.src === ringData.texturePath) {
+                if (cached.complete && cached.naturalWidth > 0) draw(cached);
+                else cached.addEventListener('load', () => draw(cached), { once: true });
+            } else {
+                const img = new Image();
+                img.dataset.src = ringData.texturePath;
+                imgRef.current = img;
+                img.addEventListener('load', () => draw(img), { once: true });
+                img.src = ringData.texturePath;
+            }
+        } else {
+            draw(null);
+        }
+    }, [canvasSize, sphereR, ringData]);
+
+    const pos = {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        pointerEvents: 'none',
+        width: canvasSize,
+        height: canvasSize,
+    };
+
+    return (
+        <>
+            <canvas ref={backRef}  width={canvasSize} height={canvasSize} style={{ ...pos, zIndex: 1 }} />
+            <canvas ref={frontRef} width={canvasSize} height={canvasSize} style={{ ...pos, zIndex: 3 }} />
+        </>
+    );
+}
+
 // ── Composants visuels ────────────────────────────────────────────────────
 
 function BodyVisual({ body, kind = 'planet', size = 64, className = '' }) {
@@ -158,6 +490,27 @@ function BodyVisual({ body, kind = 'planet', size = 64, className = '' }) {
     const [textureOk, setTextureOk] = React.useState(true);
     React.useEffect(() => { setTextureOk(true); }, [visual.texture]);
     const useTexture = !!visual.texture && textureOk;
+    const hasRings = !!visual.ringData;
+
+    // Exoplanètes : canvas génératif identique à la vue orbitale
+    const isExo = kind === 'planet' && !visual.texture && EXO_VISUAL_TYPES.has(body?.visualType);
+    if (isExo) {
+        return (
+            <div
+                className={[styles.sphere, className, hasRings ? styles.sphereWithRings : ''].filter(Boolean).join(' ')}
+                style={{ width: size, height: size, '--glow': `${visual.glowColor}88` }}
+            >
+                <ExoPlanetSphere
+                    visualType={body.visualType}
+                    color={body.color ?? visual.glowColor}
+                    name={body.name ?? body.englishName ?? body.id ?? 'unknown'}
+                    size={size}
+                />
+                {hasRings && <RingCanvas sphereSize={size} ringData={visual.ringData} />}
+            </div>
+        );
+    }
+
     const fallbackBg = `radial-gradient(circle at 42% 36%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 28%), radial-gradient(circle at 50% 50%, ${visual.glowColor ?? '#888'}cc 0%, rgba(0,0,0,0.85) 120%)`;
     return (
         <div
@@ -166,7 +519,7 @@ function BodyVisual({ body, kind = 'planet', size = 64, className = '' }) {
                 className,
                 visual.variant === 'star' ? styles.sphereStar : '',
                 visual.variant === 'moon' ? styles.sphereMoon : '',
-                visual.ringTexture ? styles.sphereWithRings : '',
+                hasRings ? styles.sphereWithRings : '',
             ].filter(Boolean).join(' ')}
             style={{
                 width: size,
@@ -184,14 +537,6 @@ function BodyVisual({ body, kind = 'planet', size = 64, className = '' }) {
                     style={{ display: 'none' }}
                 />
             )}
-            {visual.ringTexture && (
-                <img
-                    className={styles.ringTexture}
-                    src={visual.ringTexture}
-                    alt=""
-                    aria-hidden="true"
-                />
-            )}
             {visual.variant === 'star' && visual.starBackground && (
                 <div
                     className={styles.starCore}
@@ -202,6 +547,7 @@ function BodyVisual({ body, kind = 'planet', size = 64, className = '' }) {
                 className={`${styles.sphereSurface} ${useTexture ? styles.sphereSurfaceImage : styles.sphereSurfaceGradient}`}
                 style={useTexture ? { backgroundImage: `url(${visual.texture})` } : { background: visual.background ?? fallbackBg }}
             />
+            {hasRings && <RingCanvas sphereSize={size} ringData={visual.ringData} />}
         </div>
     );
 }
@@ -346,6 +692,39 @@ function CarouselRow({
         };
     }, [centeredIndex, items]);
 
+    useEffect(() => {
+        const shell = shellRef.current;
+        if (!shell) return undefined;
+        let startX = 0;
+        let startY = 0;
+        let swiping = false;
+        const onTouchStart = (e) => {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            swiping = false;
+        };
+        const onTouchMove = (e) => {
+            const dx = e.touches[0].clientX - startX;
+            const dy = e.touches[0].clientY - startY;
+            if (!swiping && Math.abs(dy) > Math.abs(dx)) return; // scroll vertical
+            swiping = true;
+            e.preventDefault(); // bloquer le scroll de page
+        };
+        const onTouchEnd = (e) => {
+            if (!swiping) return;
+            const dx = e.changedTouches[0].clientX - startX;
+            if (Math.abs(dx) > 40) moveByStep(dx < 0 ? 1 : -1);
+        };
+        shell.addEventListener('touchstart', onTouchStart, { passive: true });
+        shell.addEventListener('touchmove', onTouchMove, { passive: false });
+        shell.addEventListener('touchend', onTouchEnd);
+        return () => {
+            shell.removeEventListener('touchstart', onTouchStart);
+            shell.removeEventListener('touchmove', onTouchMove);
+            shell.removeEventListener('touchend', onTouchEnd);
+        };
+    }, [centeredIndex, items]); // mêmes deps que le useEffect wheel
+
     const onFocusItemRef = useRef(onFocusItem);
     onFocusItemRef.current = onFocusItem;
 
@@ -470,9 +849,10 @@ function CarouselRow({
                         }
                     }
                     return (
-                        <button
+                        <div
                             key={key}
-                            type="button"
+                            role="button"
+                            tabIndex={0}
                             data-carousel-key={key}
                             className={[
                                 styles.carouselItem,
@@ -493,9 +873,16 @@ function CarouselRow({
                                 setCenteredKey(key);
                                 onFocusItem?.(item);
                             }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    if (isCentered) { onFocusItem?.(item); onSelect?.(item); }
+                                    else { setCenteredKey(key); onFocusItem?.(item); }
+                                }
+                            }}
                         >
                             {renderItem(item, { isCentered, isActive, centeredKey, renderedSize, index, centeredIndex })}
-                        </button>
+                        </div>
                     );
                 })}
             </div>
@@ -543,6 +930,8 @@ export default function CatalogView({
     focusMoon,
 }) {
     const overlayRef = useRef(null);
+    const skipMilkyWaySyncRef = useRef(false);
+    const skipPlanetSyncRef   = useRef(false);
     const [level, setLevel]               = useState('galaxies');
     const [activeSystemId, setActiveSystemId] = useState(null);
     const [activePlanetName, setActivePlanetName] = useState(null);
@@ -551,10 +940,48 @@ export default function CatalogView({
     const [starSort, setStarSort]         = useState('temperature'); // temperature | size | planets | name
     const [starSortDir, setStarSortDir]   = useState('asc');
 
+    const [searchQuery, setSearchQuery]       = useState('');
+    const [filterSpectral, setFilterSpectral] = useState(''); // 'O'|'B'|'A'|'F'|'G'|'K'|'M'|''
+    const [filterHZ, setFilterHZ]             = useState(false);
+    const [filterPlanetsMin, setFilterPlanetsMin] = useState(0);
+
+    const [favorites, setFavorites] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('spaceodyssey_favorites') ?? '[]'); }
+        catch { return []; }
+    });
+    const toggleFavorite = (id) => {
+        setFavorites(prev => {
+            const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+            localStorage.setItem('spaceodyssey_favorites', JSON.stringify(next));
+            return next;
+        });
+    };
+
+    // ── Reset filtres étoiles quand on quitte le niveau stars ───────────
+
+    useEffect(() => {
+        if (level !== 'stars') {
+            setSearchQuery('');
+            setFilterSpectral('');
+            setFilterHZ(false);
+            setFilterPlanetsMin(0);
+        }
+    }, [level]);
+
+    // ── solarMoonMap — doit être avant les useEffect de sync ────────────
+
+    const solarMoonMap = useMemo(() => Object.fromEntries(
+        solarPlanets.map((planet) => [
+            planet.englishName ?? planet.id,
+            getMoonStubsFromPlanet(planet),
+        ])
+    ), [solarPlanets]);
+
     // ── Sync depuis la nav bar ───────────────────────────────────────────
 
     useEffect(() => {
         if (!selectedMilkyWay) return;
+        if (skipMilkyWaySyncRef.current) { skipMilkyWaySyncRef.current = false; return; }
         if (selectedMilkyWay === 'Solar System') {
             setActiveSystemId('solar');
             setLevel('stars');
@@ -569,9 +996,12 @@ export default function CatalogView({
 
     useEffect(() => {
         if (!selectedPlanet) return;
+        if (skipPlanetSyncRef.current) { skipPlanetSyncRef.current = false; return; }
+        const exoSys = allExtraSystems.find(sys => sys.planets.some(p => p.name === selectedPlanet));
+        setActiveSystemId(exoSys ? exoSys.id : 'solar');
         setActivePlanetName(selectedPlanet);
         setLevel('planets');
-    }, [selectedPlanet]);
+    }, [selectedPlanet, allExtraSystems]);
 
     useEffect(() => {
         if (!selectedMoon) return;
@@ -644,15 +1074,25 @@ export default function CatalogView({
         }
         if (starSortDir === 'desc') systems.reverse();
 
-        return systems;
-    }, [allSystems, starSort, starSortDir]);
-
-    const solarMoonMap = useMemo(() => Object.fromEntries(
-        solarPlanets.map((planet) => [
-            planet.englishName ?? planet.id,
-            getMoonStubsFromPlanet(planet),
-        ])
-    ), [solarPlanets]);
+        let result = systems;
+        if (searchQuery.trim()) {
+            const q = searchQuery.trim().toLowerCase();
+            result = result.filter(s => s.name?.toLowerCase().includes(q));
+        }
+        if (filterSpectral) {
+            result = result.filter(s => {
+                const teff = s?.starInfo?.avgTemp ?? (s.isSolar ? 5778 : null);
+                return getSpectralClass(teff) === filterSpectral;
+            });
+        }
+        if (filterHZ) {
+            result = result.filter(s => s.habitableZone ?? s.isSolar);
+        }
+        if (filterPlanetsMin > 0) {
+            result = result.filter(s => (s.planets?.length ?? 0) >= filterPlanetsMin);
+        }
+        return result;
+    }, [allSystems, starSort, starSortDir, searchQuery, filterSpectral, filterHZ, filterPlanetsMin]);
 
     const visibleMoons = useMemo(() => {
         if (activeSystemId !== 'solar' || !activePlanetName) return [];
@@ -677,29 +1117,34 @@ export default function CatalogView({
     }
 
     function goStar(sys) {
+        skipMilkyWaySyncRef.current = true;
+        setActiveSystemId(sys.id);
+        setLevel('planets');
         if (sys.id === 'solar') focusOnSolarSystem?.();
         else focusStarSystem?.(sys.id);
     }
 
     function focusStarOnly(sys) {
+        setActiveSystemId(sys.id);
         if (sys.id === 'solar') focusOnSolarSystem?.();
         else focusStarSystem?.(sys.id);
     }
 
     function goPlanet(planet) {
         const name = planet.name ?? planet.englishName ?? planet.id;
-        if (activePlanetCarouselKey !== name) {
-            focusPlanet?.(name, activeSystemId);
-        }
         setActivePlanetName(name);
         if (activeSystemId === 'solar') {
             const planetMoons = solarMoonMap[name] ?? [];
             if (planetMoons.length > 0) {
+                skipPlanetSyncRef.current = true;
                 setLevel('moons');
+                if (activePlanetCarouselKey !== name) focusPlanet?.(name, activeSystemId);
                 const firstMoon = planetMoons[0];
                 focusMoon?.(firstMoon.id ?? firstMoon.englishName, name);
+                return;
             }
         }
+        if (activePlanetCarouselKey !== name) focusPlanet?.(name, activeSystemId);
     }
 
     function focusPlanetOnly(planet) {
@@ -788,8 +1233,51 @@ export default function CatalogView({
                                         else { setStarSort(key); setStarSortDir('asc'); }
                                     }}
                                     type="button"
+                                    aria-label={`Trier par ${label}`}
                                 >
                                     {label}{starSort === key ? (starSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className={styles.filtersBar}>
+                        <input
+                            className={styles.searchInput}
+                            type="text"
+                            placeholder="Rechercher…"
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            aria-label="Rechercher un système"
+                        />
+                        <div className={styles.filterChips}>
+                            {['M','K','G','F','A','B','O'].map(cls => (
+                                <button
+                                    key={cls}
+                                    type="button"
+                                    className={`${styles.filterChip} ${filterSpectral === cls ? styles.filterChipActive : ''}`}
+                                    onClick={() => setFilterSpectral(v => v === cls ? '' : cls)}
+                                    aria-label={`Type spectral ${cls}`}
+                                >
+                                    {cls}
+                                </button>
+                            ))}
+                            <button
+                                type="button"
+                                className={`${styles.filterChip} ${filterHZ ? styles.filterChipActive : ''}`}
+                                onClick={() => setFilterHZ(v => !v)}
+                                aria-label="Zone habitable"
+                            >
+                                HZ
+                            </button>
+                            {[2, 5, 8].map(n => (
+                                <button
+                                    key={n}
+                                    type="button"
+                                    className={`${styles.filterChip} ${filterPlanetsMin === n ? styles.filterChipActive : ''}`}
+                                    onClick={() => setFilterPlanetsMin(v => v === n ? 0 : n)}
+                                    aria-label={`Au moins ${n} planètes`}
+                                >
+                                    {n}+ ♁
                                 </button>
                             ))}
                         </div>
@@ -830,7 +1318,7 @@ export default function CatalogView({
                                     <div className={styles.carouselCaption}>
                                         <div className={styles.carouselTitle}>{sys.name}</div>
                                         <div className={`${styles.carouselInfo} ${isCentered ? styles.carouselInfoVisible : ''}`}>
-                                            <div className={styles.carouselMeta}>Type {spectralClass} · {nbPlanetes} planètes</div>
+                                            <div className={styles.carouselMeta}>Type {spectralClass || '?'} · {nbPlanetes} planètes</div>
                                             {temp && (
                                                 <div className={styles.carouselAccent}>
                                                     {temp.toLocaleString('fr-FR')} K
@@ -843,6 +1331,16 @@ export default function CatalogView({
                                                 <div className={styles.carouselMeta}>{dist} pc</div>
                                             )}
                                         </div>
+                                        {isCentered && (
+                                            <button
+                                                type="button"
+                                                className={`${styles.favBtn} ${favorites.includes(sys.id) ? styles.favBtnActive : ''}`}
+                                                onClick={e => { e.stopPropagation(); toggleFavorite(sys.id); }}
+                                                aria-label={favorites.includes(sys.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                                            >
+                                                {favorites.includes(sys.id) ? '★' : '☆'}
+                                            </button>
+                                        )}
                                     </div>
                                 </>
                             );
@@ -867,6 +1365,7 @@ export default function CatalogView({
                                         else { setSort(key); setSortDir('asc'); }
                                     }}
                                     type="button"
+                                    aria-label={`Trier par ${label}`}
                                 >
                                     {label}{sort === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                                 </button>
@@ -917,6 +1416,16 @@ export default function CatalogView({
                                             {tempC && <div className={styles.carouselMeta}>{tempC}</div>}
                                             {orbitLabel && <div className={styles.carouselMeta}>{orbitLabel}</div>}
                                         </div>
+                                        {isCentered && (
+                                            <button
+                                                type="button"
+                                                className={`${styles.favBtn} ${favorites.includes(planet.name ?? planet.id) ? styles.favBtnActive : ''}`}
+                                                onClick={e => { e.stopPropagation(); toggleFavorite(planet.name ?? planet.id); }}
+                                                aria-label={favorites.includes(planet.name ?? planet.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                                            >
+                                                {favorites.includes(planet.name ?? planet.id) ? '★' : '☆'}
+                                            </button>
+                                        )}
                                     </div>
                                 </>
                             );

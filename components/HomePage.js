@@ -18,6 +18,8 @@ const SolarSystemScene = dynamic(() => import('./SolarSystemScene'), { ssr: fals
 export default function HomePage() {
     const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
     const [resetViewNonce, setResetViewNonce] = useState(0);
+    const [topDownNonce, setTopDownNonce] = useState(0);
+    const [sideViewNonce, setSideViewNonce] = useState(0);
     const [viewMode, setViewMode] = useState('orbital'); // 'orbital' | 'catalog'
     const [showHZ, setShowHZ] = useState(true);
     const [settingsOpen, setSettingsOpen] = useState(false);
@@ -64,6 +66,21 @@ export default function HomePage() {
         document.addEventListener('mousedown', onClickOutside);
         return () => document.removeEventListener('mousedown', onClickOutside);
     }, [settingsOpen]);
+
+    // Raccourcis clavier globaux
+    useEffect(() => {
+        function onKeyDown(e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.key === 'r' || e.key === 'R') {
+                if (viewMode === 'orbital') setResetViewNonce(v => v + 1);
+            }
+            if (e.key === 'h' || e.key === 'H') {
+                if (viewMode === 'orbital') setShowHZ(v => !v);
+            }
+        }
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [viewMode]);
 
     if (loading) {
         return (
@@ -122,6 +139,8 @@ export default function HomePage() {
                     focusMoon={focusMoon}
                     focusStarNonce={focusStarNonce}
                     showHZ={showHZ}
+                    topDownNonce={topDownNonce}
+                    sideViewNonce={sideViewNonce}
                 />
             </div>
 
@@ -191,6 +210,20 @@ export default function HomePage() {
                                 onClick={handleResetView}
                                 type="button"
                             >
+                                Vue par défaut
+                            </button>
+                            <button
+                                className={styles.settingsItem}
+                                onClick={() => { setSideViewNonce(v => v + 1); setSettingsOpen(false); }}
+                                type="button"
+                            >
+                                Vue de face
+                            </button>
+                            <button
+                                className={styles.settingsItem}
+                                onClick={() => { setTopDownNonce(v => v + 1); setSettingsOpen(false); }}
+                                type="button"
+                            >
                                 Vue du dessus
                             </button>
                             <button
@@ -205,43 +238,39 @@ export default function HomePage() {
                 </div>
             )}
 
-            {/* Panneau infos — masqué en mode catalogue */}
-            {!isCatalog && (
-                <aside className={styles.rightDock}>
-                    <div className={styles.rightContainer}>
-                        {infos ? (
-                            <Informations infos={infos} />
-                        ) : (
-                            <div className={`${styles.panel} ${styles.emptyInfo}`}>
-                                Sélectionne un objet depuis la scène ou le menu pour afficher sa fiche.
-                            </div>
-                        )}
-                    </div>
-                </aside>
-            )}
+            {/* Panneau infos — visible dans les deux modes */}
+            <aside className={`${styles.rightDock} ${isCatalog ? styles.rightDockCatalog : ''}`}>
+                <div className={styles.rightContainer}>
+                    {infos ? (
+                        <Informations infos={infos} />
+                    ) : (
+                        <div className={`${styles.panel} ${styles.emptyInfo}`}>
+                            Sélectionne un objet depuis la scène ou le menu pour afficher sa fiche.
+                        </div>
+                    )}
+                </div>
+            </aside>
 
             {/* Mobile info panel */}
-            {!isCatalog && (
-                <>
-                    <div className={`${styles.mobileInfoPanel} ${!mobileInfoOpen ? styles.mobileInfoPanelHidden : ''}`}>
-                        {infos ? (
-                            <Informations infos={infos} />
-                        ) : (
-                            <div className={`${styles.panel} ${styles.emptyInfo}`}>
-                                Sélectionne un objet pour afficher sa fiche.
-                            </div>
-                        )}
-                    </div>
-                    <button
-                        className={styles.mobileInfoFab}
-                        onClick={() => { setMobileInfoOpen(v => !v); }}
-                        type="button"
-                        aria-label="Informations"
-                    >
-                        {mobileInfoOpen ? <MdInfo /> : <MdInfoOutline />}
-                    </button>
-                </>
-            )}
+            <>
+                <div className={`${styles.mobileInfoPanel} ${!mobileInfoOpen ? styles.mobileInfoPanelHidden : ''}`}>
+                    {infos ? (
+                        <Informations infos={infos} />
+                    ) : (
+                        <div className={`${styles.panel} ${styles.emptyInfo}`}>
+                            Sélectionne un objet pour afficher sa fiche.
+                        </div>
+                    )}
+                </div>
+                <button
+                    className={styles.mobileInfoFab}
+                    onClick={() => { setMobileInfoOpen(v => !v); }}
+                    type="button"
+                    aria-label="Informations"
+                >
+                    {mobileInfoOpen ? <MdInfo /> : <MdInfoOutline />}
+                </button>
+            </>
 
         </div>
     );

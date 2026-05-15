@@ -32,10 +32,51 @@
     color: var(--text-main);
 }
 
+.compareBtn {
+    align-self: flex-end;
+    margin-top: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(162, 194, 255, 0.16);
+    background: transparent;
+    color: rgba(162, 194, 255, 0.45);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+    font-family: var(--font-mono-ui);
+}
+
+.compareBtn:hover {
+    border-color: rgba(126, 231, 255, 0.3);
+    color: var(--text-soft);
+}
+
+.compareBtnActive {
+    border-color: rgba(126, 231, 255, 0.4);
+    color: var(--accent);
+    background: rgba(126, 231, 255, 0.07);
+}
+
 .rows {
     display: flex;
     flex-direction: column;
-    padding: 8px 0 12px;
+    padding: 8px 0 10px;
+    border-bottom: 1px solid rgba(162, 194, 255, 0.06);
+}
+
+.rowDivider {
+    height: 1px;
+    background: rgba(126, 231, 255, 0.08);
+    margin: 4px 16px;
+}
+
+.rowEarth .rowLabel {
+    color: rgba(126, 231, 255, 0.55);
+}
+
+.rowEarth .rowValue {
+    color: var(--accent);
+    opacity: 0.85;
 }
 
 .row {
@@ -43,7 +84,7 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 12px;
-    padding: 6px 16px;
+    padding: 5px 16px;
 }
 
 .row:hover {
@@ -63,4 +104,62 @@
     font-size: 0.85rem;
     text-align: right;
     word-break: break-word;
+}
+
+/* ── Section Wikipedia ───────────────────────────────────────── */
+
+.wikiSection {
+    padding: 12px 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.wikiThumb {
+    width: 100%;
+    max-height: 90px;
+    object-fit: cover;
+    border-radius: 8px;
+    opacity: 0.82;
+}
+
+.wikiSkeleton {
+    width: 100%;
+    height: 56px;
+    border-radius: 8px;
+    background: linear-gradient(90deg, rgba(162, 194, 255, 0.06) 25%, rgba(162, 194, 255, 0.12) 50%, rgba(162, 194, 255, 0.06) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease infinite;
+}
+
+@keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.wikiExtract {
+    margin: 0;
+    color: var(--text-soft);
+    font-size: 0.82rem;
+    line-height: 1.55;
+}
+
+.wikiLinks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.wikiLink {
+    font-size: 0.75rem;
+    font-family: var(--font-mono-ui);
+    color: var(--accent);
+    opacity: 0.75;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+    transition: opacity 0.15s ease;
+}
+
+.wikiLink:hover {
+    opacity: 1;
 }
