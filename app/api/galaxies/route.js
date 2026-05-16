@@ -13,6 +13,38 @@ const H0 = 70;         // km/s/Mpc (constante de Hubble)
 const C_KMS = 299792;  // vitesse de la lumière en km/s
 const MPC_TO_MLY = 3.26156;
 
+// Noms communs français/anglais pour les galaxies sans comname dans OpenNGC.
+// Clé = nom NGC/IC exact (champ `name` d'OpenNGC).
+const GALAXY_COMMON_NAMES = {
+    'NGC0224': { fr: "Galaxie d'Andromède",        en: 'Andromeda Galaxy' },
+    'NGC0221': { fr: 'M32',                         en: 'Messier 32' },
+    'NGC0598': { fr: 'Galaxie du Triangle',         en: 'Triangulum Galaxy' },
+    'NGC0205': { fr: 'M110',                        en: 'Messier 110' },
+    'NGC4486': { fr: 'Virgo A',                     en: 'Virgo A' },
+    'NGC5194': { fr: 'Galaxie du Tourbillon',       en: 'Whirlpool Galaxy' },
+    'NGC4594': { fr: 'Galaxie du Sombrero',         en: 'Sombrero Galaxy' },
+    'NGC3031': { fr: 'Galaxie de Bode',             en: "Bode's Galaxy" },
+    'NGC3034': { fr: 'Galaxie du Cigare',           en: 'Cigar Galaxy' },
+    'NGC5457': { fr: 'Galaxie du Moulinet',         en: 'Pinwheel Galaxy' },
+    'NGC4826': { fr: "Galaxie de l'Œil noir",       en: 'Black Eye Galaxy' },
+    'NGC5236': { fr: 'Galaxie du Moulinet austral', en: 'Southern Pinwheel Galaxy' },
+    'NGC4565': { fr: "Galaxie de l'Aiguille",       en: 'Needle Galaxy' },
+    'NGC4631': { fr: 'Galaxie de la Baleine',       en: 'Whale Galaxy' },
+    'NGC4038': { fr: 'Les Antennes',                en: 'Antennae Galaxies' },
+    'NGC4656': { fr: 'Crosse de hockey',            en: 'Hockey Stick Galaxy' },
+    'NGC4449': { fr: 'NGC 4449',                    en: 'NGC 4449' },
+    'NGC2403': { fr: 'NGC 2403',                    en: 'NGC 2403' },
+    'NGC0300': { fr: 'NGC 300',                     en: 'NGC 300' },
+    'IC0342':  { fr: 'IC 342',                      en: 'IC 342' },
+    'NGC4258': { fr: 'NGC 4258',                    en: 'NGC 4258' },
+    'NGC5055': { fr: 'Galaxie du Tournesol',        en: 'Sunflower Galaxy' },
+    'NGC4736': { fr: "Galaxie de l'Œil du Crocodile", en: "Cat's Eye Galaxy" },
+    'NGC3621': { fr: 'NGC 3621',                    en: 'NGC 3621' },
+    'NGC1316': { fr: 'Fornax A',                    en: 'Fornax A' },
+    'NGC1365': { fr: 'NGC 1365',                    en: 'NGC 1365' },
+    'NGC1672': { fr: 'NGC 1672',                    en: 'NGC 1672' },
+};
+
 function parseTapJson(json) {
     const cols = json.columns?.map((c) => c.name) ?? [];
     return (json.data ?? []).map((row) => Object.fromEntries(cols.map((col, i) => [col, row[i] ?? null])));
@@ -63,11 +95,19 @@ function distanceFromKinematic(ngcName, rv, z) {
 }
 
 function toGalaxyObject(row) {
-    const commonName = pickCommonName(row);
-    const messier = row.messier_nr ? `M${row.messier_nr}` : null;
     const ngcName = row.name?.trim() || null;
-    const displayName = commonName || messier || ngcName;
-    if (!displayName || !ngcName) return null;
+    if (!ngcName) return null;
+
+    const knownNames = GALAXY_COMMON_NAMES[ngcName] ?? null;
+    const comname = row.comname?.trim() || null;
+    const messier = row.messier_nr ? `M${row.messier_nr}` : null;
+
+    // Nom français : comname OpenNGC > table connue > code Messier > code NGC
+    const frName = comname || knownNames?.fr || messier || ngcName;
+    // Nom anglais pour Wikipedia : table connue > code Messier > code NGC
+    const enName = knownNames?.en || messier || ngcName;
+
+    if (!frName) return null;
 
     const majorAxisDeg = parseNumber(row.maj_ax_deg);
     const rv = parseNumber(row.rv);
@@ -78,8 +118,8 @@ function toGalaxyObject(row) {
     return {
         id: `openngc-${ngcName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
         sourceId: ngcName,
-        name: displayName,
-        englishName: displayName,
+        name: frName,
+        englishName: enName,
         bodyType: 'Galaxy',
         selectionValue: null,
         hasStars: false,
@@ -93,7 +133,7 @@ function toGalaxyObject(row) {
         sizeKly,
         hubbleType: row.hubble_type?.trim() || null,
         messierNr: row.messier_nr ? Number.parseInt(row.messier_nr, 10) : null,
-        comname: row.comname?.trim() || null,
+        comname,
         starCount: null,
         image: null,
     };
@@ -311,7 +351,6 @@ export async function GET() {
             galaxies = rows
                 .map(toGalaxyObject)
                 .filter(Boolean)
-                .filter((galaxy) => !/androm/i.test(galaxy.name))
                 .sort((a, b) => getPopularityScore(b) - getPopularityScore(a))
                 .slice(0, MAX_GALAXIES);
             console.log(`[galaxies] OpenNGC: ${galaxies.length} galaxies chargées`);
