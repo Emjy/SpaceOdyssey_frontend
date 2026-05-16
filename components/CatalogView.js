@@ -882,10 +882,26 @@ function formatGalaxyAngularSize(galaxy) {
 }
 
 function formatGalaxyStarCount(galaxy) {
-    if (!Number.isFinite(galaxy?.numberOfStars) || galaxy.numberOfStars <= 0) return null;
-    return `${galaxy.numberOfStars.toLocaleString('fr-FR')} étoiles`;
+    const n = galaxy?.starCount ?? galaxy?.numberOfStars;
+    if (!Number.isFinite(n) || n <= 0) return null;
+    if (n >= 1e12) return `${(n / 1e12).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} billion d'étoiles`;
+    if (n >= 1e9)  return `${Math.round(n / 1e9).toLocaleString('fr-FR')} milliard${n >= 2e9 ? 's' : ''} d'étoiles`;
+    if (n >= 1e6)  return `${Math.round(n / 1e6).toLocaleString('fr-FR')} million${n >= 2e6 ? 's' : ''} d'étoiles`;
+    return `${n.toLocaleString('fr-FR')} étoiles`;
 }
 
+function formatGalaxySizeKly(galaxy) {
+    const kly = galaxy?.sizeKly;
+    if (!Number.isFinite(kly) || kly <= 0) return null;
+    return `${Math.round(kly).toLocaleString('fr-FR')} kly`;
+}
+
+function formatGalaxyDistance(galaxy) {
+    const mly = galaxy?.distanceMly;
+    if (!Number.isFinite(mly) || mly <= 0) return null;
+    if (mly >= 1000) return `${(mly / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} Gly`;
+    return `${mly.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mly`;
+}
 
 function formatScaleExponent(value) {
     if (!Number.isFinite(value) || value <= 0) return null;
@@ -1249,6 +1265,15 @@ export default function CatalogView({
     const skipPlanetSyncRef   = useRef(null);
     const skipGalaxyFallbackRef = useRef(false);
     const skipMoonsLevelRevertRef = useRef(false);
+    const [isMobile, setIsMobile] = useState(false);
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 720px)');
+        setIsMobile(mq.matches);
+        const handler = (e) => setIsMobile(e.matches);
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
+    }, []);
+
     const [level, setLevel]               = useState('galaxies');
     const [activeSystemId, setActiveSystemId] = useState(null);
     const [activePlanetName, setActivePlanetName] = useState(null);
@@ -1628,9 +1653,9 @@ export default function CatalogView({
                         onFocusItem={focusGalaxyOnly}
                         onSelect={goGalaxy}
                         shellClassName={styles.galaxyCarouselShell}
-                        getPhysicalDiameterKm={(galaxy) => galaxy.id === 'milkyway' ? 946073047258080 : 2081172703967776}
-                        focusDiameter={360}
-                        getRenderedSize={() => 360}
+                        getPhysicalDiameterKm={(galaxy) => galaxy?.id === 'milkyway' ? 946073047258080 : 2081172703967776}
+                        focusDiameter={isMobile ? 200 : 360}
+                        getRenderedSize={() => isMobile ? 200 : 360}
                         renderItem={(galaxy, { isCentered }) => (
                             <>
                                 <div className={styles.carouselCaption}>
@@ -1641,6 +1666,12 @@ export default function CatalogView({
                                         <div className={styles.carouselAccent}>{galaxy.accent}</div>
                                         {formatGalaxyStarCount(galaxy) && (
                                             <div className={styles.carouselMeta}>{formatGalaxyStarCount(galaxy)}</div>
+                                        )}
+                                        {formatGalaxySizeKly(galaxy) && (
+                                            <div className={styles.carouselMeta}>{formatGalaxySizeKly(galaxy)} de diamètre</div>
+                                        )}
+                                        {formatGalaxyDistance(galaxy) && (
+                                            <div className={styles.carouselMeta}>{formatGalaxyDistance(galaxy)}</div>
                                         )}
                                         {formatGalaxyAngularSize(galaxy) && (
                                             <div className={styles.carouselMeta}>{formatGalaxyAngularSize(galaxy)}</div>

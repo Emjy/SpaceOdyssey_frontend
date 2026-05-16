@@ -20,20 +20,32 @@ export default function useSpaceData() {
     const [asteroids, setAsteroids] = useState([]);
     const [exoplanetSystems, setExoplanetSystems] = useState([]);
     const [galaxies, setGalaxies] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [loadingPlanets, setLoadingPlanets] = useState(true);
+    const [loadingExo, setLoadingExo] = useState(true);
+    const [loadingGalaxies, setLoadingGalaxies] = useState(true);
 
     useEffect(() => {
-        Promise.all([fetchPlanets(), fetchAsteroids(), fetchExoplanetSystems(), fetchGalaxies()])
-            .then(([planetData, asteroidData, exoData, galaxyData]) => {
-                setPlanets(planetData);
-                setAsteroids(asteroidData);
-                setExoplanetSystems(Array.isArray(exoData) ? exoData : []);
-                setGalaxies(Array.isArray(galaxyData) ? galaxyData : []);
-            })
-            .catch(setError)
-            .finally(() => setLoading(false));
+        fetchPlanets()
+            .then(setPlanets)
+            .catch(console.error)
+            .finally(() => setLoadingPlanets(false));
+
+        fetchAsteroids()
+            .then(setAsteroids)
+            .catch(console.error);
+
+        fetchExoplanetSystems()
+            .then((data) => setExoplanetSystems(Array.isArray(data) ? data : []))
+            .catch(console.error)
+            .finally(() => setLoadingExo(false));
+
+        fetchGalaxies()
+            .then((data) => setGalaxies(Array.isArray(data) ? data : []))
+            .catch(console.error)
+            .finally(() => setLoadingGalaxies(false));
     }, []);
 
-    return { planets, asteroids, exoplanetSystems, galaxies, loading, error };
+    const loading = loadingPlanets || loadingExo || loadingGalaxies;
+
+    return { planets, asteroids, exoplanetSystems, galaxies, loading, error: null };
 }

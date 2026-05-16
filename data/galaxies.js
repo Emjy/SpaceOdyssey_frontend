@@ -11,8 +11,13 @@ export const GALAXIES = [
         subtitle: 'Galaxie spirale barrée',
         accent: '~200–400 Md étoiles',
         meta: '100 000 al de diamètre',
-        numberOfStars: 100000000000,
+        numberOfStars: 200000000000,
         numberOfPlanets: 100000000000,
+        starCount: 200000000000,
+        sizeKly: 100,
+        hubbleType: 'SBbc',
+        majorAxisDeg: null,
+        distanceMly: null,
     },
 ];
 

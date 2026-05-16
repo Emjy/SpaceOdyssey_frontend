@@ -309,6 +309,10 @@
 }
 
 @media (max-width: 720px) {
+    .overlay {
+        padding: 52px 16px 12px;
+    }
+
     .carouselStage {
         height: calc(min(42vh, 300px) + 7rem);
     }
@@ -326,6 +330,49 @@
         bottom: -4px;
         min-width: 120px;
         padding: 8px 10px;
+    }
+
+    /* Galaxy carousel : réduit la taille pour tenir dans l'écran */
+    .galaxyHero {
+        width: min(60vw, 240px);
+        height: min(60vw, 240px);
+    }
+
+    .galaxyCarouselShell .carouselStage {
+        min-height: min(56vh, 420px);
+    }
+
+    .carouselCaption {
+        min-height: 0;
+    }
+
+    .sectionHeader {
+        flex-wrap: nowrap;
+        gap: 8px;
+    }
+
+    .sortControls {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .sortBtn {
+        font-size: 0.68rem;
+        padding: 3px 8px;
+    }
+
+    .filtersBar {
+        padding: 0 0 12px;
+    }
+
+    .grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 8px;
+    }
+
+    .card {
+        padding: 14px 10px 12px;
+        gap: 8px;
     }
 }
 

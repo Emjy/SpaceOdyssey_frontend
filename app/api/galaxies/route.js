@@ -9,15 +9,13 @@ const WIKIPEDIA_SUMMARY_URL = 'https://en.wikipedia.org/api/rest_v1/page/summary
 const NED_URL = 'https://ned.ipac.caltech.edu/api/get_summary';
 const MAX_GALAXIES = 500;
 
-function parseTsv(text) {
-    const lines = text.trim().split('\n').filter(Boolean);
-    if (lines.length < 2) return [];
-    const headers = lines[0].split('\t');
+const H0 = 70;         // km/s/Mpc (constante de Hubble)
+const C_KMS = 299792;  // vitesse de la lumière en km/s
+const MPC_TO_MLY = 3.26156;
 
-    return lines.slice(1).map((line) => {
-        const values = line.split('\t');
-        return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? '']));
-    });
+function parseTapJson(json) {
+    const cols = json.columns?.map((c) => c.name) ?? [];
+    return (json.data ?? []).map((row) => Object.fromEntries(cols.map((col, i) => [col, row[i] ?? null])));
 }
 
 function parseNumber(value) {
@@ -33,8 +31,35 @@ function pickCommonName(row) {
 
 function computePhysicalSizeKly(majorAxisDeg, distMly) {
     if (!Number.isFinite(majorAxisDeg) || !Number.isFinite(distMly) || distMly <= 0) return null;
-    // Loi des petits angles : taille = 2 * sin(θ/2) * d ≈ θ_rad * d
     return majorAxisDeg * (Math.PI / 180) * distMly * 1000;
+}
+
+// Distances mesurées directement (parallaxe, Céphéides…) pour galaxies trop proches
+// pour que la loi de Hubble soit fiable (< 20 Mly).
+const MEASURED_DISTANCES_MLY = {
+    'NGC0224': 2.537,   // M31 Andromède
+    'NGC0221': 2.490,   // M32
+    'NGC0598': 2.730,   // M33 Triangulum
+    'NGC0205': 2.690,   // M110
+    'NGC3031': 11.80,   // M81 Galaxie de Bode
+    'NGC3034': 11.40,   // M82 Galaxie du Cigare
+    'NGC5457': 20.87,   // M101 Galaxie du Moulinet
+    'NGC5194': 23.00,   // M51 Galaxie du Tourbillon
+    'NGC4258': 23.50,   // M106
+    'NGC4736': 14.40,   // M94
+    'NGC2403': 10.40,   // NGC2403
+    'NGC4449': 12.40,   // NGC4449
+    'NGC4214': 9.80,    // NGC4214
+    'IC0342':  10.70,   // IC342
+};
+
+// Calcule la distance en Mly depuis la vitesse radiale ou le redshift (loi de Hubble).
+// Seuil de 300 km/s : en-dessous, les vitesses propres dominent le flux de Hubble.
+function distanceFromKinematic(ngcName, rv, z) {
+    if (MEASURED_DISTANCES_MLY[ngcName] != null) return MEASURED_DISTANCES_MLY[ngcName];
+    if (rv != null && rv > 300) return rv / H0 * MPC_TO_MLY;
+    if (z != null && z > 0.001) return z * C_KMS / H0 * MPC_TO_MLY;
+    return null;
 }
 
 function toGalaxyObject(row) {
@@ -45,7 +70,9 @@ function toGalaxyObject(row) {
     if (!displayName || !ngcName) return null;
 
     const majorAxisDeg = parseNumber(row.maj_ax_deg);
-    const distMly = parseNumber(row.dist);
+    const rv = parseNumber(row.rv);
+    const z = parseNumber(row.z);
+    const distMly = distanceFromKinematic(ngcName, rv, z);
     const sizeKly = computePhysicalSizeKly(majorAxisDeg, distMly);
 
     return {
@@ -253,17 +280,18 @@ function buildFallbackGalaxies() {
 
 export async function GET() {
     const query = `
-        SELECT TOP 500
+        SELECT TOP 1000
             name, obj_type, constellation, maj_ax_deg, min_ax_deg, mag_v,
-            hubble_type, messier_nr, comname, dist
+            hubble_type, messier_nr, comname, rv, z
         FROM openngc.data
         WHERE obj_type='G'
+        ORDER BY messier_nr, maj_ax_deg DESC
     `.replace(/\s+/g, ' ').trim();
 
     const body = new URLSearchParams({
         REQUEST: 'doQuery',
         LANG: 'ADQL',
-        FORMAT: 'tsv',
+        FORMAT: 'json',
         QUERY: query,
     });
 
@@ -279,7 +307,7 @@ export async function GET() {
         });
 
         if (res.ok) {
-            const rows = parseTsv(await res.text());
+            const rows = parseTapJson(await res.json());
             galaxies = rows
                 .map(toGalaxyObject)
                 .filter(Boolean)
