@@ -1310,6 +1310,7 @@ export default function SolarSystemScene({
         galaxyPlane.visible = !isExternalGalaxy;
 
         if (isExternalGalaxy && dynamicGalaxy.image) {
+            galaxyExternalPlane.visible = false;
             new THREE.TextureLoader().load(dynamicGalaxy.image, (tex) => {
                 if (!galaxyExternalPlane) return;
                 const aspect = tex.image.naturalWidth / tex.image.naturalHeight || 1;
@@ -1323,9 +1324,16 @@ export default function SolarSystemScene({
                 tex.center.set(0.5, 0.5);
                 galaxyExternalPlane.material.map = tex;
                 galaxyExternalPlane.material.needsUpdate = true;
+                galaxyExternalPlane.visible = true;
             });
+        } else {
+            if (galaxyExternalPlane.material.map) {
+                galaxyExternalPlane.material.map.dispose();
+                galaxyExternalPlane.material.map = null;
+                galaxyExternalPlane.material.needsUpdate = true;
+            }
+            galaxyExternalPlane.visible = false;
         }
-        galaxyExternalPlane.visible = isExternalGalaxy;
         if (galaxyAnnotationPlaneRef.current) galaxyAnnotationPlaneRef.current.visible = !isExternalGalaxy;
         if (galaxyVignettePlaneRef.current) galaxyVignettePlaneRef.current.visible = !isExternalGalaxy;
         if (galaxyRootRef.current?._floatStars) galaxyRootRef.current._floatStars.visible = !isExternalGalaxy;
