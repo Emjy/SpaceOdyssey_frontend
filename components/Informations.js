@@ -17,9 +17,9 @@ function fmtMass(v) {
     const kg = v.massValue * Math.pow(10, v.massExponent);
     const isStar = v.massExponent >= 29;
     const ref = isStar ? SUN.massKg : EARTH.massKg;
-    const refName = isStar ? 'M☉' : 'M⊕';
+    const refName = isStar ? 'fois la masse du Soleil' : 'fois la masse de la Terre';
     const ratio = kg / ref;
-    if (ratio < 0.001) return `${fmt(ratio * 1000, 2)}‰ ${refName}`;
+    if (ratio < 0.001) return `${fmt(ratio * 1000, 2)}‰ de la masse de la Terre`;
     if (ratio < 1000) return `${fmt(ratio, 2)} ${refName}`;
     return `${fmt(ratio, 0)} ${refName}`;
 }
@@ -27,10 +27,10 @@ function fmtMass(v) {
 function fmtRadius(v, bodyType) {
     const isStar = bodyType === 'Star';
     const ref = isStar ? SUN.radiusKm : EARTH.radiusKm;
-    const refName = isStar ? 'R☉' : 'R⊕';
+    const refName = isStar ? 'fois le rayon du Soleil' : 'fois la taille de la Terre';
     const ratio = v / ref;
-    const ratioStr = ratio < 0.01 ? `${fmt(ratio * 1000, 1)}‰` : `${fmt(ratio, 2)}`;
-    return `${v.toLocaleString('fr-FR')} km  ·  ${ratioStr} ${refName}`;
+    const ratioStr = ratio < 0.01 ? `${fmt(ratio * 1000, 1)}‰` : fmt(ratio, 2);
+    return `${v.toLocaleString('fr-FR')} km  (${ratioStr} ${refName})`;
 }
 
 function fmtOrbit(v) {
@@ -40,10 +40,11 @@ function fmtOrbit(v) {
 }
 
 function fmtGalaxyMass(m) {
-    if (m >= 1e12) return `${fmt(m / 1e12, 2)} billion M☉`;
-    if (m >= 1e9)  return `${fmt(m / 1e9, 0)} milliard${m >= 2e9 ? 's' : ''} M☉`;
-    if (m >= 1e6)  return `${fmt(m / 1e6, 0)} million${m >= 2e6 ? 's' : ''} M☉`;
-    return `${m.toLocaleString('fr-FR')} M☉`;
+    const ref = 'fois la masse du Soleil';
+    if (m >= 1e12) return `${fmt(m / 1e12, 2)} billions de ${ref}`;
+    if (m >= 1e9)  return `${fmt(m / 1e9, 0)} milliard${m >= 2e9 ? 's' : ''} de ${ref}`;
+    if (m >= 1e6)  return `${fmt(m / 1e6, 0)} million${m >= 2e6 ? 's' : ''} de ${ref}`;
+    return `${m.toLocaleString('fr-FR')} ${ref}`;
 }
 
 function fmtStarCount(n) {
@@ -54,16 +55,21 @@ function fmtStarCount(n) {
 }
 
 function fmtDistance(mly) {
-    if (mly >= 1000) return `${fmt(mly / 1000, 2)} Gly`;
-    return `${fmt(mly, 1)} Mly`;
+    if (mly >= 1000) return `${fmt(mly / 1000, 2)} milliards d'années-lumière`;
+    return `${fmt(mly, 1)} millions d'années-lumière`;
 }
 
 function fmtAngularSize(majorDeg, minorDeg) {
     if (!Number.isFinite(majorDeg) || majorDeg <= 0) return null;
-    const toArcmin = (deg) => deg * 60;
-    const major = toArcmin(majorDeg);
-    const minor = Number.isFinite(minorDeg) && minorDeg > 0 ? toArcmin(minorDeg) : null;
-    return minor ? `${fmt(major, 1)}′ × ${fmt(minor, 1)}′` : `${fmt(major, 1)}′`;
+    // La Lune pleine mesure environ 0,5° de diamètre apparent
+    const moonRatio = majorDeg / 0.5;
+    const major = majorDeg * 60;
+    const minor = Number.isFinite(minorDeg) && minorDeg > 0 ? minorDeg * 60 : null;
+    const arcStr = minor ? `${fmt(major, 1)}′ × ${fmt(minor, 1)}′` : `${fmt(major, 1)}′`;
+    if (moonRatio >= 0.1) {
+        return `${fmt(moonRatio, 1)}× la Lune pleine (${arcStr})`;
+    }
+    return arcStr;
 }
 
 const BODY_TYPE_FR = {
@@ -89,8 +95,8 @@ function buildRows(infos) {
     }
     if (infos.meanRadius)    add('Rayon', fmtRadius(infos.meanRadius, infos.bodyType));
     if (infos.mass?.massValue) add('Masse', fmtMass(infos.mass));
-    if (infos.gravity)       add('Gravité', `${infos.gravity} m/s²`);
-    if (infos.density)       add('Densité', `${Number(infos.density).toFixed(2)} g/cm³`);
+    if (infos.gravity)       add('Gravité', `${infos.gravity} m/s²  (${fmt(infos.gravity / 9.807, 2)}× Terre)`);
+    if (infos.density)       add('Densité', `${Number(infos.density).toFixed(2)} g/cm³  (eau = 1,00)`);
     if (infos.sideralOrbit)  add('Période orb.', fmtOrbit(infos.sideralOrbit));
     if (infos.sideralRotation) {
         const h = infos.sideralRotation;
@@ -102,12 +108,18 @@ function buildRows(infos) {
         if (infos.starCount != null) add('Étoiles', fmtStarCount(infos.starCount));
         if (infos.massSolarMasses != null) add('Masse', fmtGalaxyMass(infos.massSolarMasses));
         if (infos.distanceMly != null) add('Distance', fmtDistance(infos.distanceMly));
-        if (infos.sizeKly != null) add('Taille physique', `${fmt(infos.sizeKly, 0)} kly`);
+        if (infos.sizeKly != null) {
+            const ly = infos.sizeKly * 1000;
+            const sizeStr = ly >= 1e6
+                ? `${fmt(ly / 1e6, 2)} millions d'années-lumière`
+                : `${fmt(ly / 1000, 0)} milliers d'années-lumière`;
+            add('Taille physique', sizeStr);
+        }
         if (infos.majorAxisDeg) add('Taille apparente', fmtAngularSize(infos.majorAxisDeg, infos.minorAxisDeg));
     }
     if (infos.discoveredBy)    add('Découvert par', infos.discoveredBy);
     if (infos.discoveryDate)   add('Découverte', infos.discoveryDate);
-    if (infos.sy_dist)         add('Distance', `${fmt(infos.sy_dist, 1)} pc`);
+    if (infos.sy_dist)         add('Distance', `${fmt(infos.sy_dist * 3.2616, 0)} années-lumière`);
     return rows;
 }
 

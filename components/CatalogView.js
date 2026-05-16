@@ -240,6 +240,16 @@ function getBodyVisual(body, kind) {
     };
 }
 
+const SPECTRAL_LABELS = {
+    M: 'Naine rouge',
+    K: 'Naine orange',
+    G: 'Naine jaune',
+    F: 'Étoile jaune-blanc',
+    A: 'Étoile blanche',
+    B: 'Géante bleue',
+    O: 'Supergéante bleue',
+};
+
 function getSpectralClass(teff) {
     if (!teff) return '';
     if (teff < 3500) return 'M';
@@ -868,17 +878,13 @@ function getNiceScaleKm(rawKm) {
 
 function formatGalaxyAngularSize(galaxy) {
     const major = galaxy?.majorAxisDeg;
-    const minor = galaxy?.minorAxisDeg;
     if (!Number.isFinite(major) || major <= 0) return null;
-
-    const toArcmin = (deg) => deg * 60;
-    const majorArcmin = toArcmin(major);
-    const minorArcmin = Number.isFinite(minor) && minor > 0 ? toArcmin(minor) : null;
-
-    if (minorArcmin) {
-        return `${majorArcmin.toFixed(1)}′ × ${minorArcmin.toFixed(1)}′`;
+    // La Lune pleine mesure ~0,5° de diamètre apparent
+    const moonRatio = major / 0.5;
+    if (moonRatio >= 0.1) {
+        return `${moonRatio.toFixed(1)}× la Lune pleine dans le ciel`;
     }
-    return `${majorArcmin.toFixed(1)}′`;
+    return `${(major * 60).toFixed(1)}′ (plus petit que la Lune)`;
 }
 
 function formatGalaxyStarCount(galaxy) {
@@ -893,14 +899,16 @@ function formatGalaxyStarCount(galaxy) {
 function formatGalaxySizeKly(galaxy) {
     const kly = galaxy?.sizeKly;
     if (!Number.isFinite(kly) || kly <= 0) return null;
-    return `${Math.round(kly).toLocaleString('fr-FR')} kly`;
+    const ly = kly * 1000;
+    if (ly >= 1e6) return `${(ly / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} millions d'années-lumière`;
+    return `${Math.round(ly / 1000).toLocaleString('fr-FR')} milliers d'années-lumière`;
 }
 
 function formatGalaxyDistance(galaxy) {
     const mly = galaxy?.distanceMly;
     if (!Number.isFinite(mly) || mly <= 0) return null;
-    if (mly >= 1000) return `${(mly / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} Gly`;
-    return `${mly.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mly`;
+    if (mly >= 1000) return `à ${(mly / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} milliards d'années-lumière`;
+    return `à ${mly.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} millions d'années-lumière`;
 }
 
 function formatScaleExponent(value) {
@@ -1671,7 +1679,7 @@ export default function CatalogView({
                                             <div className={styles.carouselMeta}>{formatGalaxySizeKly(galaxy)} de diamètre</div>
                                         )}
                                         {formatGalaxyDistance(galaxy) && (
-                                            <div className={styles.carouselMeta}>{formatGalaxyDistance(galaxy)}</div>
+                                            <div className={styles.carouselMeta}>Distante {formatGalaxyDistance(galaxy)}</div>
                                         )}
                                         {formatGalaxyAngularSize(galaxy) && (
                                             <div className={styles.carouselMeta}>{formatGalaxyAngularSize(galaxy)}</div>
@@ -1776,8 +1784,9 @@ export default function CatalogView({
                             const spectralClass = getSpectralClass(temp);
                             const nbPlanetes = sys.planets?.length ?? 0;
                             const radiusKm = sys.starInfo?.meanRadius ?? (sys.isSolar ? 695700 : null);
-                            const radiusSol = radiusKm ? (radiusKm / 695700).toFixed(2) : null;
-                            const dist = sys.sy_dist ? sys.sy_dist.toFixed(1) : null;
+                            const radiusSol = radiusKm ? radiusKm / 695700 : null;
+                            const distLy = sys.sy_dist ? Math.round(sys.sy_dist * 3.2616) : null;
+                            const tempC = temp ? Math.round(temp - 273.15) : null;
                             return (
                                 <>
                                     <div className={styles.carouselVisualStage}>
@@ -1786,17 +1795,17 @@ export default function CatalogView({
                                     <div className={styles.carouselCaption}>
                                         <div className={styles.carouselTitle}>{sys.name}</div>
                                         <div className={`${styles.carouselInfo} ${isCentered ? styles.carouselInfoVisible : ''}`}>
-                                            <div className={styles.carouselMeta}>Type {spectralClass || '?'} · {nbPlanetes} planètes</div>
-                                            {temp && (
+                                            <div className={styles.carouselMeta}>{SPECTRAL_LABELS[spectralClass] || 'Étoile'} · {nbPlanetes} planète{nbPlanetes !== 1 ? 's' : ''}</div>
+                                            {tempC != null && (
                                                 <div className={styles.carouselAccent}>
-                                                    {temp.toLocaleString('fr-FR')} K
+                                                    {tempC.toLocaleString('fr-FR')} °C
                                                 </div>
                                             )}
-                                            {radiusSol && (
-                                                <div className={styles.carouselMeta}>{radiusSol} R☉</div>
+                                            {radiusSol != null && (
+                                                <div className={styles.carouselMeta}>{radiusSol.toFixed(2)}× le Soleil</div>
                                             )}
-                                            {dist && (
-                                                <div className={styles.carouselMeta}>{dist} pc</div>
+                                            {distLy && (
+                                                <div className={styles.carouselMeta}>à {distLy.toLocaleString('fr-FR')} années-lumière</div>
                                             )}
                                         </div>
                                         {isCentered && (
@@ -1868,7 +1877,7 @@ export default function CatalogView({
                             const tempC = planet.avgTemp != null ? `${(planet.avgTemp - 273.15).toFixed(0)} °C` : null;
                             const typeLabel = VISUAL_TYPE_LABELS[planet.visualType] ?? VISUAL_TYPE_LABELS[planet.bodyType] ?? 'Planète';
                             const sizeRatio = planet.size ?? (planet.meanRadius ? planet.meanRadius / 6371 : 0);
-                            const massLabel = planet.massEarth > 0 ? `${planet.massEarth.toFixed(2)} M⊕` : null;
+                            const massLabel = planet.massEarth > 0 ? `${planet.massEarth.toFixed(2)}× la masse de la Terre` : null;
                             const orbitLabel = (() => {
                                 const v = planet.sideralOrbit;
                                 if (!v) return null;
